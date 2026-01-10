@@ -1,0 +1,144 @@
+"use client";
+
+/**
+ * Dashboard Sidebar Navigation
+ * Session 16: Dashboard - Home & Calls
+ * Spec Reference: Part 7, Lines 657-664
+ * 
+ * Navigation structure:
+ * 📊 Dashboard
+ * 📞 Calls
+ * 📅 Appointments
+ * 🧠 Koya's Knowledge
+ * ⚙️ Settings
+ */
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  LayoutDashboard,
+  Phone,
+  Calendar,
+  Brain,
+  Settings,
+  Menu,
+  X,
+} from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+const navItems = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Calls",
+    href: "/calls",
+    icon: Phone,
+  },
+  {
+    label: "Appointments",
+    href: "/appointments",
+    icon: Calendar,
+  },
+  {
+    label: "Koya's Knowledge",
+    href: "/knowledge",
+    icon: Brain,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+  },
+];
+
+export function DashboardSidebar() {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname.startsWith(href);
+  };
+
+  return (
+    <>
+      {/* Mobile menu button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="fixed top-4 left-4 z-50 lg:hidden"
+        onClick={() => setMobileOpen(!mobileOpen)}
+      >
+        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
+
+      {/* Overlay for mobile */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-card transition-transform lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center border-b border-border px-6">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
+              <span className="text-lg font-bold text-white">K</span>
+            </div>
+            <span className="text-xl font-bold tracking-tight">Koya</span>
+          </Link>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex flex-col gap-1 p-4">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className={cn("h-5 w-5", active && "text-primary")} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Health Status */}
+        <div className="absolute bottom-0 left-0 right-0 border-t border-border p-4">
+          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
+            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-medium text-emerald-500">
+              Koya is active and ready
+            </span>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}

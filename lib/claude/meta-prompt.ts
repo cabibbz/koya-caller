@@ -1,0 +1,474 @@
+/**
+ * Koya Caller - Meta-Prompt for Voice AI System Prompts
+ * Session 14: Claude API Integration
+ * Spec Reference: Part 15, Lines 1760-1792
+ *
+ * This meta-prompt instructs Claude how to generate system prompts
+ * for Retell voice AI agents.
+ */
+
+import type { PromptGenerationInput } from "./types";
+
+// =============================================================================
+// Meta-Prompt Template
+// Spec Reference: Lines 1760-1792
+// =============================================================================
+
+/**
+ * The meta-prompt that instructs Claude how to write voice AI prompts.
+ * This is the "prompt for writing prompts".
+ */
+export const VOICE_AI_META_PROMPT = `You are an expert prompt engineer creating system prompts for voice AI agents.
+
+Your task is to generate a highly effective system prompt for a voice AI receptionist. The prompt you create will be used by a Retell.ai voice agent to handle real phone calls for a business.
+
+<business_context>
+Business Name: {BUSINESS_NAME}
+Industry: {INDUSTRY}
+Services: {SERVICES}
+AI Assistant Name: {AI_NAME}
+Personality: {PERSONALITY}
+Language: {LANGUAGE}
+</business_context>
+
+<output_structure>
+Generate the prompt with these exact sections:
+
+1. # Personality
+   Write 2-3 sentences defining who the AI is and their core traits.
+
+2. # Environment
+   Describe the context of interactions (phone calls, what callers expect).
+
+3. # Tone
+   Specific voice and speech guidelines based on the personality type.
+
+4. # Goal
+   Numbered workflow steps for handling calls. Mark critical steps with "This step is important."
+
+5. # Guardrails
+   Non-negotiable rules the AI must follow.
+
+6. # Tools
+   When and how to use each function (check_availability, book_appointment, transfer_call, take_message, send_sms, end_call).
+   Include error handling guidance.
+
+7. # Character Normalization
+   Rules for converting spoken words to written format (emails, phone numbers, dates).
+</output_structure>
+
+<constraints>
+- Keep total prompt under 1500 tokens
+- Use action-oriented language
+- Mark critical instructions with "This step is important."
+- Design for voice: responses should be 2-3 sentences max
+- Include natural filler words and acknowledgments appropriate to the personality
+- Never generate placeholder text - use actual business details
+</constraints>
+
+<function_definitions>
+The AI has access to these functions:
+- check_availability(date, service?) - Check available appointment times
+- book_appointment(date, time, customer_name, customer_phone, service, notes?) - Book an appointment
+- transfer_call(reason) - Transfer to business owner
+- take_message(caller_name, caller_phone, message, urgency) - Take a message
+- send_sms(message, to_number?) - Send SMS to caller
+- end_call(reason) - End the call politely
+</function_definitions>
+
+<additional_context>
+{ADDITIONAL_CONTEXT}
+</additional_context>
+
+Generate only the system prompt content. Do not include any preamble or explanation.`;
+
+// =============================================================================
+// Context Builders
+// =============================================================================
+
+/**
+ * Format business hours for the prompt
+ */
+function formatBusinessHours(hours: PromptGenerationInput["business"]["hours"]): string {
+  const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+  const formattedDays: string[] = [];
+
+  for (const day of days) {
+    const dayHours = hours[day];
+    if (dayHours) {
+      formattedDays.push(`${day.charAt(0).toUpperCase() + day.slice(1)}: ${dayHours.open} - ${dayHours.close}`);
+    } else {
+      formattedDays.push(`${day.charAt(0).toUpperCase() + day.slice(1)}: Closed`);
+    }
+  }
+
+  return formattedDays.join("\n");
+}
+
+/**
+ * Format services list for the prompt
+ */
+function formatServices(services: PromptGenerationInput["services"]): string {
+  if (services.length === 0) return "No specific services listed";
+
+  return services
+    .map((s) => {
+      let line = `- ${s.name}`;
+      if (s.duration_minutes) line += ` (${s.duration_minutes} min)`;
+      if (s.price) line += ` - $${s.price}`;
+      if (s.description) line += `: ${s.description}`;
+      return line;
+    })
+    .join("\n");
+}
+
+/**
+ * Format FAQs for the prompt
+ */
+function formatFAQs(faqs: PromptGenerationInput["faqs"]): string {
+  if (faqs.length === 0) return "No FAQs provided";
+
+  return faqs
+    .slice(0, 10) // Limit to 10 FAQs to stay within token limits
+    .map((f) => `Q: ${f.question}\nA: ${f.answer}`)
+    .join("\n\n");
+}
+
+/**
+ * Build additional context section
+ */
+function buildAdditionalContext(input: PromptGenerationInput): string {
+  const sections: string[] = [];
+
+  // Business details
+  if (input.business.serviceArea) {
+    sections.push(`Service Area: ${input.business.serviceArea}`);
+  }
+  if (input.business.differentiator) {
+    sections.push(`What makes this business special: ${input.business.differentiator}`);
+  }
+  if (input.business.website) {
+    sections.push(`Website: ${input.business.website}`);
+  }
+
+  // Business hours
+  sections.push(`\nBusiness Hours:\n${formatBusinessHours(input.business.hours)}`);
+  sections.push(`Timezone: ${input.business.hours.timezone}`);
+
+  // Services
+  sections.push(`\nServices Offered:\n${formatServices(input.services)}`);
+
+  // FAQs
+  if (input.faqs.length > 0) {
+    sections.push(`\nFrequently Asked Questions:\n${formatFAQs(input.faqs)}`);
+  }
+
+  // Additional knowledge
+  if (input.additionalKnowledge) {
+    sections.push(`\nAdditional Business Information:\n${input.additionalKnowledge}`);
+  }
+
+  // Things to never say
+  if (input.neverSay) {
+    sections.push(`\nNever say or discuss:\n${input.neverSay}`);
+  }
+
+  // Custom greeting
+  sections.push(`\nCustom Greeting: "${input.aiConfig.greeting}"`);
+
+  // Call handling capabilities
+  const capabilities: string[] = [];
+  if (input.bookingSettings.enabled) {
+    capabilities.push("Can book appointments");
+    if (input.bookingSettings.requireConfirmation) {
+      capabilities.push("Appointments require confirmation");
+    }
+    capabilities.push(`Can book up to ${input.bookingSettings.maxAdvanceDays} days in advance`);
+  } else {
+    capabilities.push("Appointment booking is NOT available - take messages instead");
+  }
+
+  if (input.callSettings.transferEnabled && input.callSettings.transferNumber) {
+    capabilities.push("Can transfer calls to owner");
+    if (input.callSettings.transferOnRequest) capabilities.push("Transfer when caller requests");
+    if (input.callSettings.transferOnEmergency) capabilities.push("Transfer for emergencies");
+    if (input.callSettings.transferOnUpset) capabilities.push("Transfer if caller is upset");
+  } else {
+    capabilities.push("Call transfer is NOT available - take messages for urgent matters");
+  }
+
+  sections.push(`\nCapabilities:\n${capabilities.map((c) => `- ${c}`).join("\n")}`);
+
+  // After hours behavior
+  if (input.callSettings.afterHoursEnabled) {
+    sections.push(`\nAfter Hours: The AI handles after-hours calls.`);
+    if (input.callSettings.afterHoursCanBook) {
+      sections.push("Can still book appointments after hours.");
+    } else {
+      sections.push("Cannot book appointments after hours - take messages only.");
+    }
+  }
+
+  // Minutes exhausted mode
+  if (input.isMinutesExhausted) {
+    sections.push(`\n⚠️ IMPORTANT: The business has exhausted their monthly minutes. 
+The AI should ONLY take messages. Do not attempt to book appointments or have extended conversations.
+Keep interactions brief and focus on capturing: caller name, phone number, and their message.`);
+  } else {
+    sections.push(`\nMinutes remaining: ${input.planMinutesRemaining}`);
+  }
+
+  return sections.join("\n");
+}
+
+// =============================================================================
+// Prompt Generation Functions
+// =============================================================================
+
+/**
+ * Build the complete prompt for Claude to generate an English system prompt
+ */
+export function buildEnglishPromptRequest(input: PromptGenerationInput): string {
+  const personalityDescriptions = {
+    professional: "formal, courteous, and business-appropriate",
+    friendly: "warm, approachable, and conversational",
+    casual: "relaxed, informal, and easy-going",
+  };
+
+  return VOICE_AI_META_PROMPT
+    .replace("{BUSINESS_NAME}", input.business.name)
+    .replace("{INDUSTRY}", input.business.type)
+    .replace("{SERVICES}", input.services.map((s) => s.name).join(", ") || "General services")
+    .replace("{AI_NAME}", input.aiConfig.name)
+    .replace("{PERSONALITY}", personalityDescriptions[input.aiConfig.personality])
+    .replace("{LANGUAGE}", "English")
+    .replace("{ADDITIONAL_CONTEXT}", buildAdditionalContext(input));
+}
+
+/**
+ * Build the complete prompt for Claude to generate a Spanish system prompt
+ * Spec Reference: Lines 1822-1842
+ */
+export function buildSpanishPromptRequest(input: PromptGenerationInput): string {
+  const personalityDescriptions = {
+    professional: "formal, cortés y apropiado para negocios (use 'usted')",
+    friendly: "cálido, accesible y conversacional",
+    casual: "relajado, informal y tranquilo",
+  };
+
+  // Create Spanish-specific context
+  const spanishContext = buildAdditionalContext(input);
+  
+  // Add Spanish-specific instructions
+  const spanishAdditions = `
+
+Spanish-Specific Guidelines:
+- Use "usted" form for professional tone, "tú" for casual
+- Localized for US Hispanic market
+- Natural Spanish expressions and idioms
+- ${input.aiConfig.greetingSpanish ? `Custom Spanish greeting: "${input.aiConfig.greetingSpanish}"` : "Translate the English greeting naturally"}`;
+
+  return VOICE_AI_META_PROMPT
+    .replace("{BUSINESS_NAME}", input.business.name)
+    .replace("{INDUSTRY}", input.business.type)
+    .replace("{SERVICES}", input.services.map((s) => s.name).join(", ") || "Servicios generales")
+    .replace("{AI_NAME}", input.aiConfig.name)
+    .replace("{PERSONALITY}", personalityDescriptions[input.aiConfig.personality])
+    .replace("{LANGUAGE}", "Spanish (US Hispanic market, use 'usted' formality for professional tone)")
+    .replace("{ADDITIONAL_CONTEXT}", spanishContext + spanishAdditions);
+}
+
+/**
+ * Build language detection/switching instructions
+ * Added to prompts when language mode is "auto" or "ask"
+ */
+export function buildLanguageSwitchingInstructions(mode: "auto" | "ask" | "spanish_default"): string {
+  switch (mode) {
+    case "auto":
+      return `
+# Language Detection
+Listen for the caller's language in their first response.
+- If they speak Spanish, respond in Spanish for the rest of the call.
+- If they speak English, respond in English for the rest of the call.
+- If unclear, default to English.
+This step is important.`;
+
+    case "ask":
+      return `
+# Language Selection
+After your initial greeting, ask: "Would you prefer to continue in English or Spanish? / ¿Prefiere continuar en inglés o español?"
+Then continue in whichever language they choose.
+This step is important.`;
+
+    case "spanish_default":
+      return `
+# Language
+Speak Spanish by default. If the caller responds in English, switch to English.
+This step is important.`;
+  }
+}
+
+// =============================================================================
+// Mock Prompt Generator (for development without API key)
+// =============================================================================
+
+/**
+ * Generate a mock English prompt for development/testing
+ */
+export function generateMockEnglishPrompt(input: PromptGenerationInput): string {
+  const personality = input.aiConfig.personality;
+  const traits = {
+    professional: {
+      tone: "formal, courteous, and business-appropriate",
+      examples: '"Certainly, I\'d be happy to help." | "Of course, let me check that for you."',
+    },
+    friendly: {
+      tone: "warm, approachable, and conversational",
+      examples: '"Sure thing! Let me help you with that." | "Absolutely! I can do that for you."',
+    },
+    casual: {
+      tone: "relaxed, informal, and easy-going",
+      examples: '"Yeah, totally! Let\'s get that sorted." | "Cool, let me check on that."',
+    },
+  };
+
+  return `# Personality
+You are ${input.aiConfig.name}, the AI receptionist for ${input.business.name}. You are ${traits[personality].tone}. You handle phone calls professionally while making callers feel welcome and heard.
+
+# Environment
+You are answering phone calls for ${input.business.name}, a ${input.business.type} business${input.business.serviceArea ? ` serving ${input.business.serviceArea}` : ""}. Callers expect quick, helpful service and may want to book appointments, ask questions, or speak with someone.
+
+# Tone
+- Keep responses to 2-3 sentences unless more detail is requested
+- Use conversational language, avoid jargon
+- Confirm understanding after complex information
+- Example phrases: ${traits[personality].examples}
+
+# Goal
+1. Greet the caller warmly using your custom greeting. This step is important.
+2. Listen to identify their need (booking, inquiry, or other)
+3. For bookings: collect name, preferred date/time, service type
+4. Check availability before confirming any appointment
+5. Confirm all details before finalizing. This step is important.
+6. Thank them and ask if there's anything else
+
+# Guardrails
+- Never make up availability—always use check_availability first
+- If unsure about something, say "Let me check on that" rather than guessing
+- Acknowledge frustration before problem-solving
+- Never discuss competitor businesses
+- Keep personal opinions out of conversations
+${input.neverSay ? `- Never mention: ${input.neverSay}` : ""}
+
+# Tools
+Use these functions during calls:
+- check_availability: ALWAYS call this before suggesting appointment times
+- book_appointment: Only after confirming all details with the caller
+- transfer_call: When caller requests human, emergencies, or complex issues
+- take_message: When transfer fails, after hours, or caller prefers
+- send_sms: To send confirmations or information that's hard to communicate verbally
+- end_call: After caller's needs are met and they're ready to hang up
+
+Error Handling:
+- If a function fails, apologize briefly and offer an alternative
+- "I'm having trouble checking that right now. Would you like me to take a message instead?"
+
+# Character Normalization
+Convert spoken words to proper format:
+- Email: "john at company dot com" → "john@company.com"
+- Phone: "five five five, one two three, four five six seven" → "555-123-4567"
+- Dates: "next Tuesday" → use actual date
+- Times: "two thirty pm" → "2:30 PM"
+
+# Dynamic Context
+Business: {{business_name}}
+Your name: {{ai_name}}
+Minutes exhausted: {{minutes_exhausted}}
+After hours: {{after_hours}}
+Can book: {{can_book}}
+Transfer enabled: {{transfer_enabled}}
+Today: {{today_date}}
+Time: {{current_time}}`;
+}
+
+/**
+ * Generate a mock Spanish prompt for development/testing
+ */
+export function generateMockSpanishPrompt(input: PromptGenerationInput): string {
+  const personality = input.aiConfig.personality;
+  const traits = {
+    professional: {
+      tone: "formal, cortés y profesional",
+      formality: "usted",
+      examples: '"Por supuesto, con mucho gusto le ayudo." | "Permítame verificar eso por usted."',
+    },
+    friendly: {
+      tone: "cálido, accesible y conversacional",
+      formality: "usted/tú",
+      examples: '"¡Claro que sí! Déjame ayudarte con eso." | "¡Por supuesto! Puedo hacer eso."',
+    },
+    casual: {
+      tone: "relajado, informal y tranquilo",
+      formality: "tú",
+      examples: '"¡Sí, claro! Vamos a arreglar eso." | "Dale, déjame revisar."',
+    },
+  };
+
+  return `# Personalidad
+Eres ${input.aiConfig.name}, el recepcionista virtual de ${input.business.name}. Eres ${traits[personality].tone}. Manejas las llamadas telefónicas profesionalmente mientras haces que los clientes se sientan bienvenidos.
+
+# Ambiente
+Estás contestando llamadas para ${input.business.name}, un negocio de ${input.business.type}${input.business.serviceArea ? ` que sirve a ${input.business.serviceArea}` : ""}. Los clientes esperan un servicio rápido y útil.
+
+# Tono
+- Mantén las respuestas en 2-3 oraciones a menos que se pida más detalle
+- Usa lenguaje conversacional, evita jerga técnica
+- Confirma la comprensión después de información compleja
+- Usa "${traits[personality].formality}" según el tono
+- Frases ejemplo: ${traits[personality].examples}
+
+# Objetivo
+1. Saluda al cliente calurosamente. Este paso es importante.
+2. Escucha para identificar su necesidad (cita, consulta, u otro)
+3. Para citas: obtén nombre, fecha/hora preferida, tipo de servicio
+4. Verifica disponibilidad antes de confirmar cualquier cita
+5. Confirma todos los detalles antes de finalizar. Este paso es importante.
+6. Agradece y pregunta si hay algo más en que puedas ayudar
+
+# Reglas Importantes
+- Nunca inventes disponibilidad—siempre usa check_availability primero
+- Si no estás seguro, di "Déjeme verificar eso" en lugar de adivinar
+- Reconoce la frustración antes de resolver problemas
+- Nunca discutas negocios de la competencia
+${input.neverSay ? `- Nunca menciones: ${input.neverSay}` : ""}
+
+# Herramientas
+Usa estas funciones durante las llamadas:
+- check_availability: SIEMPRE llámala antes de sugerir horarios
+- book_appointment: Solo después de confirmar todos los detalles
+- transfer_call: Cuando el cliente pide hablar con una persona, emergencias, o temas complejos
+- take_message: Cuando la transferencia falla, fuera de horario, o el cliente prefiere
+- send_sms: Para enviar confirmaciones o información difícil de comunicar verbalmente
+- end_call: Después de que las necesidades del cliente están satisfechas
+
+Manejo de Errores:
+- Si una función falla, discúlpate brevemente y ofrece una alternativa
+- "Tengo problemas para verificar eso ahora. ¿Le gustaría dejar un mensaje?"
+
+# Normalización de Caracteres
+Convierte palabras habladas al formato correcto:
+- Email: "juan arroba empresa punto com" → "juan@empresa.com"
+- Teléfono: "cinco cinco cinco, uno dos tres" → "555-123"
+- Fechas: "el próximo martes" → usa la fecha real
+- Horas: "dos y media de la tarde" → "2:30 PM"
+
+# Contexto Dinámico
+Negocio: {{business_name}}
+Tu nombre: {{ai_name}}
+Minutos agotados: {{minutes_exhausted}}
+Fuera de horario: {{after_hours}}
+Puede reservar: {{can_book}}
+Transferencia habilitada: {{transfer_enabled}}
+Hoy: {{today_date}}
+Hora: {{current_time}}`;
+}

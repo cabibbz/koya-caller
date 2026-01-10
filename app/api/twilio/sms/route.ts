@@ -1,0 +1,220 @@
+/**
+ * Koya Caller - SMS Webhook Handler
+ * Session 12: Full Twilio Integration
+ * 
+ * Handles:
+ * - Incoming SMS messages (from customers)
+ * - SMS delivery status callbacks
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { formatPhoneDisplay } from "@/lib/twilio";
+
+// Helper to parse Twilio form data
+async function parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
+  const text = await request.text();
+  const formData = new URLSearchParams(text);
+  const params: Record<string, string> = {};
+  formData.forEach((value, key) => {
+    params[key] = value;
+  });
+  return params;
+}
+
+// Helper to return TwiML response
+function twimlResponse(xml: string): Response {
+  return new Response(xml, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/xml",
+    },
+  });
+}
+
+/**
+ * POST /api/twilio/sms
+ * Handle incoming SMS or status callback
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const params = await parseTwilioParams(request);
+    
+    // Check if this is a status callback or incoming message
+    const messageStatus = params.MessageStatus;
+    const messageSid = params.MessageSid || params.SmsSid;
+    
+    if (messageStatus) {
+      // This is a status callback
+      return handleStatusCallback(params);
+    } else {
+      // This is an incoming message
+      return handleIncomingMessage(params);
+    }
+    
+  } catch (error) {
+    console.error("[Twilio SMS] Error:", error);
+    
+    // Return empty TwiML response (don't auto-reply on error)
+    return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+  }
+}
+
+/**
+ * Handle incoming SMS message
+ */
+async function handleIncomingMessage(params: Record<string, string>): Promise<Response> {
+  const fromNumber = params.From || "";
+  const toNumber = params.To || "";
+  const body = params.Body || "";
+  const messageSid = params.MessageSid || params.SmsSid || "";
+  
+  console.log("[Twilio SMS] Incoming message:", {
+    from: fromNumber,
+    to: toNumber,
+    body: body.substring(0, 50),
+  });
+  
+  const supabase = createAdminClient();
+  
+  // Look up business from phone number
+  const { data: phoneRecord } = await supabase
+    .from("phone_numbers")
+    .select("business_id")
+    .eq("number", toNumber)
+    .eq("is_active", true)
+    .single() as { data: { business_id: string } | null };
+  
+  if (!phoneRecord?.business_id) {
+    console.log("[Twilio SMS] No business found for number:", toNumber);
+    return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+  }
+  
+  // Store the incoming message
+  await (supabase as any)
+    .from("sms_messages")
+    .insert({
+      business_id: phoneRecord.business_id,
+      direction: "inbound",
+      message_type: "message_alert", // Generic type for inbound
+      from_number: fromNumber,
+      to_number: toNumber,
+      body: body,
+      twilio_sid: messageSid,
+      status: "delivered",
+    });
+  
+  // Check for CANCEL keyword (appointment cancellation)
+  const normalizedBody = body.trim().toUpperCase();
+  
+  if (normalizedBody === "CANCEL" || normalizedBody === "CANCELAR") {
+    // Look for recent appointments from this phone number
+    const { data: appointments } = await (supabase as any)
+      .from("appointments")
+      .select("id, service_name, scheduled_at")
+      .eq("business_id", phoneRecord.business_id)
+      .eq("customer_phone", fromNumber)
+      .eq("status", "confirmed")
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true })
+      .limit(1) as { data: Array<{ id: string; service_name: string; scheduled_at: string }> | null };
+    
+    if (appointments && appointments.length > 0) {
+      const appt = appointments[0];
+      
+      // Cancel the appointment
+      await (supabase as any)
+        .from("appointments")
+        .update({ status: "cancelled" })
+        .eq("id", appt.id);
+      
+      // Send confirmation reply
+      const formattedDate = new Date(appt.scheduled_at).toLocaleDateString();
+      return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>Your appointment for ${appt.service_name} on ${formattedDate} has been cancelled. Reply with any questions.</Message>
+</Response>`);
+    } else {
+      return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>No upcoming appointments found for this number. Reply with any questions.</Message>
+</Response>`);
+    }
+  }
+  
+  // Check for STOP keyword (unsubscribe - required for A2P compliance)
+  if (normalizedBody === "STOP" || normalizedBody === "UNSUBSCRIBE") {
+    // Twilio handles STOP automatically, but we log it
+    console.log("[Twilio SMS] STOP received from:", fromNumber);
+    // Don't reply - Twilio handles this
+    return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+  }
+  
+  // Check for HELP keyword (required for A2P compliance)
+  if (normalizedBody === "HELP" || normalizedBody === "AYUDA") {
+    // Get business name
+    const { data: business } = await (supabase as any)
+      .from("businesses")
+      .select("name")
+      .eq("id", phoneRecord.business_id)
+      .single() as { data: { name: string } | null };
+    
+    const businessName = business?.name || "Our business";
+    
+    return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>${businessName} SMS Service. Reply CANCEL to cancel appointments. Reply STOP to unsubscribe. Contact us for more help.</Message>
+</Response>`);
+  }
+  
+  // For other messages, don't auto-reply
+  // (Could potentially forward to business owner in future)
+  console.log("[Twilio SMS] Message stored, no auto-reply");
+  return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+}
+
+/**
+ * Handle SMS delivery status callback
+ */
+async function handleStatusCallback(params: Record<string, string>): Promise<Response> {
+  const messageSid = params.MessageSid || params.SmsSid || "";
+  const messageStatus = params.MessageStatus || "";
+  const errorCode = params.ErrorCode;
+  const errorMessage = params.ErrorMessage;
+  
+  console.log("[Twilio SMS] Status update:", {
+    sid: messageSid,
+    status: messageStatus,
+    errorCode,
+  });
+  
+  // Update message status in database
+  const supabase = createAdminClient();
+  
+  // Map Twilio status to our status
+  let dbStatus: "sent" | "delivered" | "failed" = "sent";
+  if (messageStatus === "delivered" || messageStatus === "read") {
+    dbStatus = "delivered";
+  } else if (messageStatus === "failed" || messageStatus === "undelivered") {
+    dbStatus = "failed";
+  }
+  
+  const { error } = await (supabase as any)
+    .from("sms_messages")
+    .update({ status: dbStatus })
+    .eq("twilio_sid", messageSid);
+  
+  if (error) {
+    console.error("[Twilio SMS] Failed to update status:", error);
+  }
+  
+  // Return empty response (status callbacks don't need TwiML)
+  return new Response("", { status: 200 });
+}
+
+export async function GET() {
+  return NextResponse.json(
+    { error: "Method not allowed" },
+    { status: 405 }
+  );
+}

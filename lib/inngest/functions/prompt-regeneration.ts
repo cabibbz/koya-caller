@@ -1,0 +1,373 @@
+/**
+ * Koya Caller - Prompt Regeneration Background Jobs
+ * Session 21: Background Jobs
+ * Spec Reference: Part 15, Lines 1890-1916
+ *
+ * Handles async prompt regeneration when business info is updated.
+ */
+
+import { inngest } from "../client";
+import { createServiceClient } from "@/lib/supabase/server";
+import { generatePrompts, buildPromptInputFromDatabase } from "@/lib/claude";
+
+// =============================================================================
+// Process Single Regeneration Request
+// =============================================================================
+
+/**
+ * Triggered when a business updates their info and needs prompt regeneration
+ */
+export const processPromptRegeneration = inngest.createFunction(
+  {
+    id: "prompt-regeneration",
+    name: "Process Prompt Regeneration",
+    retries: 3,
+  },
+  { event: "prompt/regeneration.requested" },
+  async ({ event, step }) => {
+    const { businessId, triggeredBy } = event.data;
+
+    // Step 1: Fetch business data
+    const businessData = await step.run("fetch-business-data", async () => {
+      const supabase = createServiceClient();
+      return await fetchBusinessData(supabase, businessId);
+    });
+
+    if (!businessData.success) {
+      throw new Error(`Failed to fetch business data: ${businessData.error}`);
+    }
+
+    // Step 2: Generate prompts using Claude
+    const prompts = await step.run("generate-prompts", async () => {
+      const promptInput = buildPromptInputFromDatabase(businessData.data);
+      return await generatePrompts(promptInput);
+    });
+
+    if (!prompts.success) {
+      throw new Error(`Failed to generate prompts: ${prompts.error}`);
+    }
+
+    // Step 3: Save prompts to database
+    const saveResult = await step.run("save-prompts", async () => {
+      const supabase = createServiceClient();
+      return await savePrompts(supabase, businessId, prompts.prompts!);
+    });
+
+    if (!saveResult.success) {
+      throw new Error(`Failed to save prompts: ${saveResult.error}`);
+    }
+
+    // Step 4: Update Retell agent if exists
+    if (saveResult.retellAgentId) {
+      await step.run("update-retell-agent", async () => {
+        const supabase = createServiceClient();
+        await updateRetellAgent(
+          supabase,
+          businessId,
+          saveResult.retellAgentId!,
+          prompts.prompts!.englishPrompt,
+          prompts.prompts!.spanishPrompt
+        );
+      });
+    }
+
+    return {
+      success: true,
+      businessId,
+      triggeredBy,
+      promptVersion: saveResult.newVersion,
+    };
+  }
+);
+
+// =============================================================================
+// Process Regeneration Queue (Scheduled)
+// =============================================================================
+
+/**
+ * Scheduled job to process any pending items in the queue
+ * Runs every 5 minutes
+ */
+export const processRegenerationQueue = inngest.createFunction(
+  {
+    id: "prompt-queue-processor",
+    name: "Process Prompt Regeneration Queue",
+  },
+  { cron: "*/5 * * * *" }, // Every 5 minutes
+  async ({ step }) => {
+    const supabase = createServiceClient();
+
+    // Get pending queue items
+    const queueItems = await step.run("fetch-pending-items", async () => {
+      const { data, error } = await (supabase as any)
+        .from("prompt_regeneration_queue")
+        .select("id, business_id, triggered_by")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(10);
+
+      if (error) throw new Error(`Failed to fetch queue: ${error.message}`);
+      return (data || []) as Array<{ id: string; business_id: string; triggered_by: string }>;
+    });
+
+    if (queueItems.length === 0) {
+      return { processed: 0, message: "No pending items" };
+    }
+
+    // Process each item by sending events
+    for (const item of queueItems) {
+      await step.run(`mark-processing-${item.id}`, async () => {
+        await (supabase as any)
+          .from("prompt_regeneration_queue")
+          .update({ status: "processing" })
+          .eq("id", item.id);
+      });
+
+      // Send event for individual processing
+      await step.sendEvent("send-regeneration-event", {
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId: item.business_id,
+          triggeredBy: item.triggered_by,
+        },
+      });
+
+      await step.run(`mark-completed-${item.id}`, async () => {
+        await (supabase as any)
+          .from("prompt_regeneration_queue")
+          .update({
+            status: "completed",
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
+      });
+    }
+
+    return { processed: queueItems.length };
+  }
+);
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+interface FetchResult {
+  success: boolean;
+  error?: string;
+  data?: any;
+}
+
+async function fetchBusinessData(
+  supabase: any,
+  businessId: string
+): Promise<FetchResult> {
+  try {
+    const { data: business, error: bizError } = await supabase
+      .from("businesses")
+      .select("name, type, address, website, service_area, differentiator, timezone, minutes_used, minutes_limit")
+      .eq("id", businessId)
+      .single();
+
+    if (bizError || !business) {
+      return { success: false, error: "Business not found" };
+    }
+
+    const { data: businessHours } = await supabase
+      .from("business_hours")
+      .select("day_of_week, open_time, close_time, is_closed")
+      .eq("business_id", businessId)
+      .order("day_of_week");
+
+    const { data: services } = await supabase
+      .from("services")
+      .select("name, description, duration_minutes, price")
+      .eq("business_id", businessId)
+      .eq("active", true);
+
+    const { data: faqs } = await supabase
+      .from("faqs")
+      .select("question, answer")
+      .eq("business_id", businessId)
+      .eq("active", true)
+      .order("display_order");
+
+    const { data: knowledge } = await supabase
+      .from("knowledge")
+      .select("additional_info, never_say")
+      .eq("business_id", businessId)
+      .single();
+
+    const { data: aiConfig } = await supabase
+      .from("ai_config")
+      .select(`
+        ai_name, personality,
+        greeting, greeting_spanish,
+        spanish_enabled, language_mode,
+        retell_agent_id, retell_agent_id_spanish,
+        system_prompt_version
+      `)
+      .eq("business_id", businessId)
+      .single();
+
+    const { data: callSettings } = await supabase
+      .from("call_settings")
+      .select(`
+        transfer_number,
+        transfer_on_request, transfer_on_emergency, transfer_on_upset,
+        after_hours_enabled, after_hours_can_book
+      `)
+      .eq("business_id", businessId)
+      .single();
+
+    const minutesRemaining = Math.max(
+      0,
+      (business.minutes_limit || 200) - (business.minutes_used || 0)
+    );
+
+    return {
+      success: true,
+      data: {
+        business,
+        businessHours: businessHours || [],
+        timezone: business.timezone || "America/New_York",
+        services: services || [],
+        faqs: faqs || [],
+        knowledge,
+        aiConfig: aiConfig || {
+          ai_name: "Koya",
+          personality: "professional",
+          greeting: null,
+          greeting_spanish: null,
+          spanish_enabled: false,
+          language_mode: "auto",
+        },
+        callSettings: callSettings || {
+          transfer_number: null,
+          transfer_on_request: true,
+          transfer_on_emergency: true,
+          transfer_on_upset: false,
+          after_hours_enabled: true,
+          after_hours_can_book: true,
+        },
+        minutesRemaining,
+        minutesExhausted: minutesRemaining <= 0,
+      },
+    };
+  } catch (error) {
+    console.error("[Fetch Business Data] Error:", error);
+    return { success: false, error: "Failed to fetch business data" };
+  }
+}
+
+async function savePrompts(
+  supabase: any,
+  businessId: string,
+  prompts: any
+): Promise<{ success: boolean; error?: string; retellAgentId?: string; newVersion?: number }> {
+  try {
+    const { data: current } = await supabase
+      .from("ai_config")
+      .select("system_prompt_version, retell_agent_id")
+      .eq("business_id", businessId)
+      .single();
+
+    const newVersion = (current?.system_prompt_version || 0) + 1;
+
+    const { error } = await supabase
+      .from("ai_config")
+      .update({
+        system_prompt: prompts.englishPrompt,
+        system_prompt_spanish: prompts.spanishPrompt || null,
+        system_prompt_version: newVersion,
+        system_prompt_generated_at: new Date().toISOString(),
+      })
+      .eq("business_id", businessId);
+
+    if (error) {
+      return { success: false, error: "Failed to save prompts" };
+    }
+
+    return {
+      success: true,
+      retellAgentId: current?.retell_agent_id,
+      newVersion,
+    };
+  } catch (error) {
+    return { success: false, error: "Failed to save prompts" };
+  }
+}
+
+async function updateRetellAgent(
+  supabase: any,
+  businessId: string,
+  agentId: string,
+  englishPrompt: string,
+  spanishPrompt?: string
+): Promise<void> {
+  try {
+    const RETELL_API_KEY = process.env.RETELL_API_KEY;
+
+    if (!RETELL_API_KEY) {
+      console.log("[Update Retell] Running in mock mode");
+      return;
+    }
+
+    const agentResponse = await fetch(
+      `https://api.retellai.com/v2/agent/${agentId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${RETELL_API_KEY}`,
+        },
+      }
+    );
+
+    if (!agentResponse.ok) {
+      console.error("[Update Retell] Failed to fetch agent");
+      return;
+    }
+
+    const agentData = await agentResponse.json();
+    const llmId = agentData.llm_id;
+
+    if (!llmId) {
+      console.error("[Update Retell] No LLM ID found");
+      return;
+    }
+
+    const updateResponse = await fetch(
+      `https://api.retellai.com/v2/llm/${llmId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${RETELL_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          general_prompt: englishPrompt,
+        }),
+      }
+    );
+
+    if (!updateResponse.ok) {
+      console.error("[Update Retell] Failed to update LLM");
+      return;
+    }
+
+    const { data: config } = await supabase
+      .from("ai_config")
+      .select("retell_agent_version")
+      .eq("business_id", businessId)
+      .single();
+
+    await supabase
+      .from("ai_config")
+      .update({
+        retell_agent_version: (config?.retell_agent_version || 0) + 1,
+      })
+      .eq("business_id", businessId);
+
+    console.log(`[Update Retell] Updated agent ${agentId} successfully`);
+  } catch (error) {
+    console.error("[Update Retell] Error:", error);
+  }
+}
