@@ -9,6 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { detectSchemaType, generateTableOfContents, extractFAQFromContent } from "@/lib/schema-markup";
 
+export const dynamic = "force-dynamic";
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 interface GenerationConfig {

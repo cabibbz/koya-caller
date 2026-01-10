@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { CookieConsent } from "@/components/cookie-consent";
@@ -30,7 +30,6 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Koya Caller" }],
   manifest: "/manifest.json",
-  themeColor: "#3B82F6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -55,6 +54,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#3B82F6",
 };
 
 export default function RootLayout({

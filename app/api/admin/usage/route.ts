@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 // Cost estimates per minute (in cents)
 const RETELL_COST_PER_MINUTE_CENTS = 10; // $0.10/min estimate
 const TWILIO_COST_PER_MINUTE_CENTS = 2; // $0.02/min estimate
