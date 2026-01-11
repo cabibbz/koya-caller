@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/badge";
 
 const navItems = [
   {
@@ -131,12 +132,9 @@ export function DashboardSidebar() {
 
         {/* Health Status */}
         <div className="absolute bottom-0 left-0 right-0 border-t border-border p-4">
-          <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-medium text-emerald-500">
-              Koya is active and ready
-            </span>
-          </div>
+          <StatusBadge status="active" className="w-full justify-center py-2">
+            Koya is active
+          </StatusBadge>
         </div>
       </aside>
     </>

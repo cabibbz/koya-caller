@@ -71,6 +71,7 @@ import {
   STYLE_DESCRIPTIONS,
 } from "@/lib/onboarding/voice-samples";
 import type { VoiceSample } from "@/types/onboarding";
+import { toast } from "@/hooks/use-toast";
 
 interface PromptConfig {
   industryEnhancements: boolean;
@@ -182,8 +183,6 @@ export function SettingsClient({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("call-handling");
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Audio playback state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -301,15 +300,33 @@ export function SettingsClient({
     }
 
     if (urlError) {
-      setError(urlError);
+      toast({ title: "Calendar connection failed", description: urlError, variant: "destructive" });
       router.replace("/settings?tab=calendar", { scroll: false });
     }
   }, [searchParams, router]);
 
+  // Allowed OAuth redirect domains
+  const ALLOWED_OAUTH_DOMAINS = [
+    "accounts.google.com",
+    "login.microsoftonline.com",
+    "login.live.com",
+  ];
+
+  // Validate OAuth URL is from a trusted provider
+  const isValidOAuthUrl = (url: string): boolean => {
+    try {
+      const parsed = new URL(url);
+      return ALLOWED_OAUTH_DOMAINS.some(
+        (domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+      );
+    } catch {
+      return false;
+    }
+  };
+
   // Connect to a calendar provider
   const handleConnectCalendar = async (provider: "google" | "outlook") => {
     setIsConnecting(true);
-    setError(null);
 
     try {
       // Check if OAuth is available for this provider
@@ -318,6 +335,7 @@ export function SettingsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider,
+          // Use relative path only - server validates and constructs full URL
           returnUrl: "/settings?tab=calendar",
         }),
       });
@@ -333,6 +351,11 @@ export function SettingsClient({
       }
 
       if (data.initiateUrl) {
+        // Validate initiateUrl is a relative path (starts with /)
+        if (!data.initiateUrl.startsWith("/")) {
+          throw new Error("Invalid OAuth initiation URL");
+        }
+
         // Call the OAuth initiation endpoint
         const authResponse = await fetch(data.initiateUrl, {
           method: "POST",
@@ -347,14 +370,20 @@ export function SettingsClient({
         }
 
         if (authData.authUrl) {
+          // Validate the auth URL is from a trusted OAuth provider
+          if (!isValidOAuthUrl(authData.authUrl)) {
+            throw new Error("Untrusted OAuth provider URL");
+          }
           // Redirect to OAuth provider
           window.location.href = authData.authUrl;
         }
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to connect calendar"
-      );
+      toast({
+        title: "Failed to connect calendar",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
       setIsConnecting(false);
     }
   };
@@ -362,7 +391,6 @@ export function SettingsClient({
   // Disconnect calendar
   const handleDisconnectCalendar = async () => {
     setSaving(true);
-    setError(null);
 
     try {
       const response = await fetch("/api/dashboard/settings/calendar", {
@@ -376,12 +404,13 @@ export function SettingsClient({
 
       setCalendarSettings((prev) => ({ ...prev, provider: "built_in" }));
       setCalendarConnected(false);
-      setSuccessMessage("Calendar disconnected");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast({ title: "Calendar disconnected", variant: "success" });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to disconnect calendar"
-      );
+      toast({
+        title: "Failed to disconnect calendar",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -444,7 +473,6 @@ export function SettingsClient({
   // Save handlers
   const saveCallSettings = async () => {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/dashboard/settings/call-handling", {
         method: "PUT",
@@ -455,10 +483,13 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save call settings");
 
       setCallSettingsModified(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast({ title: "Call settings saved", variant: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -466,7 +497,6 @@ export function SettingsClient({
 
   const saveVoiceSettings = async () => {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/dashboard/settings/voice", {
         method: "PUT",
@@ -477,10 +507,13 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save voice settings");
 
       setVoiceSettingsModified(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast({ title: "Voice settings saved", variant: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -488,7 +521,6 @@ export function SettingsClient({
 
   const saveLanguageSettings = async () => {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/dashboard/settings/language", {
         method: "PUT",
@@ -499,10 +531,13 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save language settings");
 
       setLanguageSettingsModified(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast({ title: "Language settings saved", variant: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -510,7 +545,6 @@ export function SettingsClient({
 
   const saveCalendarSettings = async () => {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/dashboard/settings/calendar", {
         method: "PUT",
@@ -521,10 +555,13 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save calendar settings");
 
       setCalendarSettingsModified(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast({ title: "Calendar settings saved", variant: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -532,7 +569,6 @@ export function SettingsClient({
 
   const saveNotificationSettings = async () => {
     setSaving(true);
-    setError(null);
     try {
       const res = await fetch("/api/dashboard/settings/notifications", {
         method: "PUT",
@@ -543,10 +579,13 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save notification settings");
 
       setNotificationSettingsModified(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast({ title: "Notification settings saved", variant: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
     } finally {
       setSaving(false);
     }
@@ -589,21 +628,7 @@ export function SettingsClient({
             Configure Koya&apos;s behavior and your preferences
           </p>
         </div>
-        {saveSuccess && (
-          <div className="flex items-center gap-2 text-emerald-500">
-            <CheckCircle className="w-5 h-5" />
-            <span className="text-sm font-medium">Saved</span>
-          </div>
-        )}
       </div>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
 
       {/* Tab Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">

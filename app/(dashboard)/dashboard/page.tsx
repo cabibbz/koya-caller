@@ -34,7 +34,12 @@ import {
   AIPerformance,
   WeeklyComparison,
 } from "@/components/dashboard";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Skeleton,
+  SkeletonText,
+  SkeletonStats,
+  SkeletonCard,
+} from "@/components/ui/skeleton";
 
 // Prevent static prerendering - requires auth
 export const dynamic = "force-dynamic";
@@ -42,19 +47,44 @@ export const dynamic = "force-dynamic";
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
+      {/* Header skeleton */}
       <div>
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-64 mt-2" />
+        <SkeletonText width="1/4" className="h-8" />
+        <SkeletonText width="1/2" className="mt-2" />
       </div>
-      <Skeleton className="h-40 w-full" />
+
+      {/* Quick actions skeleton */}
+      <div className="flex gap-3">
+        <Skeleton className="h-10 w-32" />
+        <Skeleton className="h-10 w-32" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+
+      {/* Minutes usage skeleton */}
+      <Skeleton className="h-32 w-full rounded-lg" />
+
+      {/* Stats cards skeleton */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-24" />
-        ))}
+        <SkeletonStats />
+        <SkeletonStats />
+        <SkeletonStats />
+        <SkeletonStats />
       </div>
+
+      {/* Call trends skeleton */}
+      <Skeleton className="h-72 w-full rounded-lg" />
+
+      {/* Two column layout skeleton */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-64" />
-        <Skeleton className="h-64" />
+        <SkeletonCard className="h-64" />
+        <SkeletonCard className="h-64" />
+      </div>
+
+      {/* Three column layout skeleton */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
     </div>
   );
