@@ -150,7 +150,6 @@ export async function POST(request: NextRequest) {
       // Retell uses SIP-based integration for Twilio calls
       // The call_id from registerPhoneCall is used in the SIP URI
       // See: https://docs.retellai.com/deploy/custom-telephony
-      // See: https://github.com/jambonz/retell-sip-integration-example
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial>
