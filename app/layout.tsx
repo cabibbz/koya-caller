@@ -5,6 +5,7 @@ import { CookieConsent } from "@/components/cookie-consent";
 import { OrganizationJsonLd, SoftwareApplicationJsonLd } from "@/components/json-ld";
 import { SkipNavLink } from "@/components/skip-nav";
 import { PageProgress } from "@/components/page-progress";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 /**
@@ -75,6 +76,7 @@ export default function RootLayout({
         <PageProgress />
         <SkipNavLink />
         {children}
+        <Toaster />
         <CookieConsent />
       </body>
     </html>
