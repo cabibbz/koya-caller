@@ -70,9 +70,7 @@ export async function POST(request: NextRequest) {
         .from("services")
         .insert(servicesToInsert);
 
-      if (servicesError) {
-        console.error("[Onboarding Phase 2] Services error:", servicesError);
-      }
+      // Services error handled silently
     }
 
     // Save FAQs
@@ -95,9 +93,7 @@ export async function POST(request: NextRequest) {
         .from("faqs")
         .insert(faqsToInsert);
 
-      if (faqsError) {
-        console.error("[Onboarding Phase 2] FAQs error:", faqsError);
-      }
+      // FAQs error handled silently
     }
 
     // Save voice selection
@@ -110,9 +106,7 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         }, { onConflict: "business_id" });
 
-      if (voiceError) {
-        console.error("[Onboarding Phase 2] Voice error:", voiceError);
-      }
+      // Voice error handled silently
     }
 
     // Update onboarding step
@@ -124,16 +118,8 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", businessId);
 
-    console.log("[Onboarding Phase 2] Saved:", {
-      businessId,
-      servicesCount: services?.length || 0,
-      faqsCount: faqs?.length || 0,
-      voiceId,
-    });
-
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Onboarding Phase 2] Error:", error);
     return NextResponse.json(
       { error: "Failed to save" },
       { status: 500 }
@@ -188,7 +174,6 @@ export async function GET(request: NextRequest) {
       voiceId: aiConfigRes.data?.voice_id || null,
     });
   } catch (error) {
-    console.error("[Onboarding Phase 2] GET Error:", error);
     return NextResponse.json(
       { error: "Failed to load data" },
       { status: 500 }

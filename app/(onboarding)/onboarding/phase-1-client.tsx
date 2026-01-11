@@ -50,7 +50,7 @@ export function OnboardingPhase1({ businessTypes, userId }: OnboardingPhase1Prop
         router.push("/onboarding/tune");
       }
     } catch (error) {
-      console.error("Failed to save:", error);
+      // Failed to save handled silently
     }
   };
 

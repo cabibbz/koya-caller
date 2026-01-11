@@ -29,15 +29,12 @@ export const checkScheduledPosts = inngest.createFunction(
       .lte("scheduled_for", now);
 
     if (error) {
-      console.error("[Blog Publish] Error fetching scheduled posts:", error);
       return { error: error.message };
     }
 
     if (!duePosts || duePosts.length === 0) {
       return { published: 0 };
     }
-
-    console.log(`[Blog Publish] Found ${duePosts.length} posts to publish`);
 
     // Publish each post
     const results = await Promise.all(
@@ -53,11 +50,9 @@ export const checkScheduledPosts = inngest.createFunction(
             .eq("id", post.id);
 
           if (updateError) {
-            console.error(`[Blog Publish] Failed to publish ${post.id}:`, updateError);
             return { id: post.id, success: false, error: updateError.message };
           }
 
-          console.log(`[Blog Publish] Published: ${post.title}`);
           return { id: post.id, success: true, title: post.title };
         })
       )

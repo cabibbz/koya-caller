@@ -42,7 +42,6 @@ export async function refreshOutlookToken(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error("[Outlook Refresh] Token refresh failed:", errorData);
 
     // Check for specific error types
     if (

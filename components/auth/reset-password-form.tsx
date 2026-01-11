@@ -56,7 +56,7 @@ export function ResetPasswordForm() {
         router.push(result.redirectTo);
       }
     } catch (err) {
-      console.error("Password update error:", err);
+      // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

@@ -141,7 +141,6 @@ export function verifyStripeSignature(
 
     // Check timestamp tolerance
     if (Math.abs(now - timestamp) > tolerance) {
-      console.warn("[Stripe Webhook] Timestamp outside tolerance window");
       return false;
     }
 

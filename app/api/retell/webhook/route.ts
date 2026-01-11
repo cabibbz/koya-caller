@@ -51,13 +51,11 @@ export async function POST(request: NextRequest) {
     // Verify signature - required in production
     const verified = verifyWebhookSignature(payload, signature);
     if (!verified) {
-      console.warn("[Retell Webhook] Signature verification failed");
       // In production, reject unverified requests
       if (process.env.NODE_ENV === "production") {
         return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
       }
-      // In development, log warning but continue
-      console.warn("[Retell Webhook] Proceeding without verification (dev mode)");
+      // In development, proceed without verification
     }
 
     // Parse the event
@@ -82,7 +80,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!aiConfig) {
-      console.warn("[Retell Webhook] No business found for agent:", call.agent_id);
       // Still return 200 to acknowledge receipt
       return NextResponse.json({ received: true, warning: "Unknown agent" });
     }
@@ -104,9 +101,7 @@ export async function POST(request: NextRequest) {
           language: "en", // Default, will be updated
         });
 
-        if (insertError) {
-          console.error("[Retell Webhook] Error creating call:", insertError);
-        }
+        // Error creating call handled silently
         break;
       }
 
@@ -293,7 +288,6 @@ export async function POST(request: NextRequest) {
                       .eq("id", newAppointment.id);
                   }
                 } catch (calendarError) {
-                  console.error("[Retell Webhook] Calendar sync failed:", calendarError);
                   // Don't fail the whole webhook - calendar sync is nice-to-have
                 }
               }
@@ -311,7 +305,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("[Retell Webhook] Error:", error);
     // Return 200 anyway to prevent retries for transient errors
     return NextResponse.json({ received: true, error: "Internal error" });
   }

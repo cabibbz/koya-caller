@@ -297,7 +297,6 @@ export function SettingsClient({
         }
       }
     } catch (err) {
-      console.error("Error connecting calendar:", err);
       setError(
         err instanceof Error ? err.message : "Failed to connect calendar"
       );
@@ -325,7 +324,6 @@ export function SettingsClient({
       setSuccessMessage("Calendar disconnected");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      console.error("Error disconnecting calendar:", err);
       setError(
         err instanceof Error ? err.message : "Failed to disconnect calendar"
       );
@@ -360,7 +358,7 @@ export function SettingsClient({
       audio.oncanplaythrough = () => {
         setLoadingVoiceId(null);
         setPlayingVoiceId(voice.id);
-        audio.play().catch(console.error);
+        audio.play().catch(() => {});
       };
 
       audio.onended = () => {
@@ -376,7 +374,6 @@ export function SettingsClient({
 
       audio.load();
     } catch (err) {
-      console.error("Error playing voice:", err);
       setLoadingVoiceId(null);
       setPlayingVoiceId(null);
     }

@@ -60,7 +60,6 @@ export async function PUT(request: NextRequest) {
         .eq("id", businessId);
 
       if (updateError) {
-        console.error("[Business API] Update error:", updateError);
         return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
       }
     }
@@ -74,7 +73,6 @@ export async function PUT(request: NextRequest) {
         .eq("business_id", businessId);
 
       if (deleteError) {
-        console.error("[Business API] Hours delete error:", deleteError);
         return NextResponse.json({ error: "Failed to update hours" }, { status: 500 });
       }
 
@@ -93,7 +91,6 @@ export async function PUT(request: NextRequest) {
           .insert(hoursToInsert);
 
         if (insertError) {
-          console.error("[Business API] Hours insert error:", insertError);
           return NextResponse.json({ error: "Failed to save hours" }, { status: 500 });
         }
       }
@@ -101,7 +98,6 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Business API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -220,15 +220,7 @@ export function withWebhook(
 
     // If signature verification failed in production, reject
     if (!verified && process.env.NODE_ENV === "production") {
-      console.error(`[Webhook] Invalid ${provider} signature`);
       return new Response("Invalid signature", { status: 401 });
-    }
-
-    // In development, warn but continue
-    if (!verified) {
-      console.warn(
-        `[Webhook] Signature not verified for ${provider} (OK in development)`
-      );
     }
 
     // Call the actual handler

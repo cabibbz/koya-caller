@@ -135,7 +135,6 @@ export async function signup(data: SignupData): Promise<AuthResult> {
   });
 
   if (signUpError) {
-    console.error("Signup error:", signUpError);
     return {
       success: false,
       error: signUpError.message,
@@ -164,7 +163,6 @@ export async function signup(data: SignupData): Promise<AuthResult> {
     } as any);
 
   if (userInsertError) {
-    console.error("User insert error:", userInsertError);
     // Don't fail signup, user can still proceed
   }
 
@@ -183,7 +181,6 @@ export async function signup(data: SignupData): Promise<AuthResult> {
     .single() as { data: { id: string } | null; error: any };
 
   if (businessError || !businessData) {
-    console.error("Business creation error:", businessError);
     return {
       success: false,
       error: "Failed to create business. Please contact support.",
@@ -207,7 +204,6 @@ export async function signup(data: SignupData): Promise<AuthResult> {
   );
 
   if (updateError) {
-    console.error("Tenant ID assignment error:", updateError);
     return {
       success: false,
       error: "Failed to configure account. Please contact support.",
@@ -255,7 +251,6 @@ export async function login(data: LoginData): Promise<AuthResult> {
   });
 
   if (error) {
-    console.error("Login error:", error);
     return {
       success: false,
       error: "Invalid email or password.",
@@ -337,7 +332,6 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
   });
 
   if (error) {
-    console.error("Password reset error:", error);
     // Don't reveal if email exists or not
     return {
       success: true, // Always return success to prevent email enumeration
@@ -367,7 +361,6 @@ export async function updatePassword(newPassword: string): Promise<AuthResult> {
   });
 
   if (error) {
-    console.error("Password update error:", error);
     return {
       success: false,
       error: "Failed to update password. Please try again.",

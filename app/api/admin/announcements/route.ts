@@ -23,13 +23,11 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Admin Announcements API] Error:", error);
       return NextResponse.json({ announcements: [] });
     }
 
     return NextResponse.json({ announcements: announcements || [] });
   } catch (error) {
-    console.error("[Admin Announcements API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -65,7 +63,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Admin Announcements API] Error:", error);
       return NextResponse.json({ error: "Failed to create" }, { status: 500 });
     }
 
@@ -82,7 +79,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ announcement });
   } catch (error) {
-    console.error("[Admin Announcements API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

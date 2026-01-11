@@ -136,7 +136,7 @@ export function PricingSectionV2() {
           );
         }
       } catch (error) {
-        console.error("Failed to fetch pricing:", error);
+        // Error handled silently
       }
     }
     fetchPricing();

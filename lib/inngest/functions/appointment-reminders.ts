@@ -63,7 +63,6 @@ export const checkAppointmentReminders = inngest.createFunction(
         .is("reminder_24hr_sent_at", null);
 
       if (error) {
-        console.error("[24hr Reminders] Fetch error:", error);
         return [];
       }
 
@@ -108,7 +107,6 @@ export const checkAppointmentReminders = inngest.createFunction(
         .is("reminder_1hr_sent_at", null);
 
       if (error) {
-        console.error("[1hr Reminders] Fetch error:", error);
         return [];
       }
 

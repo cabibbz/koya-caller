@@ -94,10 +94,7 @@ export async function POST(request: NextRequest) {
       .eq("business_id", businessId)
       .eq("is_active", true);
 
-    if (deactivateError) {
-      console.error("[Twilio Provision] Deactivate error:", deactivateError);
-      // Don't fail the request, just log
-    }
+    // Don't fail the request if deactivation fails
 
     // Insert the new phone number
     const { data: phoneRecord, error: insertError } = await (supabase as any)
@@ -115,9 +112,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("[Twilio Provision] Database insert error:", insertError);
       // Note: Number is already provisioned in Twilio at this point
-      // We should still return success but log the DB error
+      // We should still return success
       return NextResponse.json({
         success: true,
         sid: result.sid,
@@ -125,8 +121,6 @@ export async function POST(request: NextRequest) {
         warning: "Number provisioned but database storage failed",
       });
     }
-
-    console.log("[Twilio Provision] Stored in DB:", phoneRecord.id);
 
     return NextResponse.json({
       success: true,
@@ -138,8 +132,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Twilio Provision] Error:", error);
-
     // Log to system_logs for admin visibility
     await handleTwilioProvisioningFailure(error, {
       businessId: requestBody?.businessId,

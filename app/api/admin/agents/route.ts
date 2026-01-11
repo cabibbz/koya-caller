@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       .not("retell_agent_id", "is", null);
 
     if (error) {
-      console.error("[Admin Agents API] Error:", error);
+      // Error handled silently
     }
 
     // Get call counts per business
@@ -92,7 +92,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Agents API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

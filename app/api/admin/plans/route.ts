@@ -24,13 +24,11 @@ export async function GET(request: NextRequest) {
       .order("sort_order", { ascending: true });
 
     if (error) {
-      console.error("[Admin Plans API] Error:", error);
       return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 
     return NextResponse.json({ plans: plans || [] });
   } catch (error) {
-    console.error("[Admin Plans API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

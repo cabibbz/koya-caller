@@ -52,7 +52,7 @@ export function LoginForm() {
       router.push(destination);
       router.refresh();
     } catch (err) {
-      console.error("Login error:", err);
+      // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Admin Customers API] Error:", error);
       return NextResponse.json(
         { error: "Failed to fetch businesses" },
         { status: 500 }
@@ -122,7 +121,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ businesses: formattedBusinesses });
   } catch (error) {
-    console.error("[Admin Customers API] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

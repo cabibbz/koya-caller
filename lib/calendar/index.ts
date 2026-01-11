@@ -59,13 +59,11 @@ export function parseOAuthState(state: string): {
     // Check if state is not too old (15 minutes max)
     const maxAge = 15 * 60 * 1000;
     if (Date.now() - parsed.timestamp > maxAge) {
-      console.warn("[OAuth] State token expired");
       return null;
     }
 
     return parsed;
-  } catch (error) {
-    console.error("[OAuth] Failed to parse state:", error);
+  } catch {
     return null;
   }
 }
@@ -91,7 +89,6 @@ export async function createCalendarClient(
     .single();
 
   if (error || !integration) {
-    console.log("[Calendar] No calendar integration found for business:", businessId);
     return null;
   }
 
@@ -104,7 +101,6 @@ export async function createCalendarClient(
 
   // Validate tokens exist
   if (!integration.access_token || !integration.refresh_token) {
-    console.warn("[Calendar] Missing tokens for provider:", provider);
     return null;
   }
 
@@ -121,7 +117,7 @@ export async function createCalendarClient(
       .eq("business_id", businessId);
 
     if (updateError) {
-      console.error("[Calendar] Failed to persist refreshed tokens:", updateError);
+      // Error handled silently
     }
   };
 
@@ -185,7 +181,6 @@ export async function storeCalendarTokens(
     );
 
   if (error) {
-    console.error("[Calendar] Failed to store tokens:", error);
     throw new CalendarAuthError(
       "Failed to save calendar connection",
       provider,
@@ -215,7 +210,6 @@ export async function disconnectCalendar(
     .eq("business_id", businessId);
 
   if (error) {
-    console.error("[Calendar] Failed to disconnect:", error);
     throw new Error("Failed to disconnect calendar");
   }
 }
@@ -278,8 +272,7 @@ export async function isTimeSlotAvailable(
     }
 
     return true;
-  } catch (error) {
-    console.error("[Calendar] Failed to check availability:", error);
+  } catch {
     // On error, assume available to not block bookings
     return true;
   }
@@ -325,8 +318,7 @@ export async function createAppointmentEvent(
     });
 
     return event.id;
-  } catch (error) {
-    console.error("[Calendar] Failed to create event:", error);
+  } catch {
     return null;
   }
 }

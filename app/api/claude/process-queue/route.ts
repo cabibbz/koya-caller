@@ -62,7 +62,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
       .limit(MAX_BATCH_SIZE);
 
     if (fetchError) {
-      console.error("[Process Queue] Fetch error:", fetchError);
       return NextResponse.json(
         { success: false, processed: 0, failed: 0, errors: [{ businessId: "", error: "Failed to fetch queue" }] },
         { status: 500 }
@@ -113,7 +112,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    console.error("[Process Queue] Error:", error);
     return NextResponse.json(
       { success: false, processed: 0, failed: 0, errors: [{ businessId: "", error: "Internal server error" }] },
       { status: 500 }
@@ -155,7 +153,6 @@ export async function GET(): Promise<NextResponse> {
       lastChecked: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Queue Status] Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch queue status" },
       { status: 500 }
@@ -238,7 +235,6 @@ async function processQueueItem(
 
     return { success: true };
   } catch (error) {
-    console.error(`[Process Queue Item] Error for ${businessId}:`, error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     await markQueueFailed(supabase, queueId, errorMessage);
     return { success: false, error: errorMessage };
@@ -381,7 +377,6 @@ async function fetchBusinessData(
       },
     };
   } catch (error) {
-    console.error("[Fetch Business Data] Error:", error);
     return { success: false, error: "Failed to fetch business data" };
   }
 }
@@ -445,7 +440,6 @@ async function updateRetellAgent(
     const RETELL_API_KEY = process.env.RETELL_API_KEY;
 
     if (!RETELL_API_KEY) {
-      console.log("[Update Retell] Running in mock mode");
       return;
     }
 
@@ -461,7 +455,6 @@ async function updateRetellAgent(
     );
 
     if (!agentResponse.ok) {
-      console.error("[Update Retell] Failed to fetch agent");
       return;
     }
 
@@ -469,7 +462,6 @@ async function updateRetellAgent(
     const llmId = agentData.llm_id;
 
     if (!llmId) {
-      console.error("[Update Retell] No LLM ID found");
       return;
     }
 
@@ -489,7 +481,6 @@ async function updateRetellAgent(
     );
 
     if (!updateResponse.ok) {
-      console.error("[Update Retell] Failed to update LLM");
       return;
     }
 
@@ -507,9 +498,7 @@ async function updateRetellAgent(
         retell_agent_version: (config?.retell_agent_version || 0) + 1,
       })
       .eq("business_id", businessId);
-
-    console.log(`[Update Retell] Updated agent ${agentId} successfully`);
   } catch (error) {
-    console.error("[Update Retell] Error:", error);
+    // Error handled silently
   }
 }

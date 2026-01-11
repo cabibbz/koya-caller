@@ -50,7 +50,7 @@ export function Step6Language() {
           setStep6Data(existing);
         }
       } catch (error) {
-        console.error("Error loading language settings:", error);
+        // Error handled silently
       } finally {
         setIsLoading(false);
       }
@@ -69,7 +69,6 @@ export function Step6Language() {
       
       router.push("/onboarding/voice");
     } catch (error) {
-      console.error("Error saving language settings:", error);
       setError(
         error instanceof Error ? error.message : "Failed to save language settings"
       );
@@ -86,7 +85,6 @@ export function Step6Language() {
       setStep6Data(formData);
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error saving:", error);
       setError(error instanceof Error ? error.message : "Failed to save");
     } finally {
       setSaving(false);

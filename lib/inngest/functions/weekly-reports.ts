@@ -41,7 +41,6 @@ export const sendWeeklyReports = inngest.createFunction(
         .eq("subscription_status", "active");
 
       if (error) {
-        console.error("[Weekly Reports] Fetch error:", error);
         return [];
       }
 
@@ -120,7 +119,6 @@ export const sendWeeklyReportEvent = inngest.createFunction(
         .lt("created_at", weekEnd.toISO());
 
       if (error) {
-        console.error("[Weekly Report] Stats fetch error:", error);
         return {
           totalCalls: 0,
           appointmentsBooked: 0,

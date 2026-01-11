@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
 
   // Handle error from Microsoft
   if (error) {
-    console.error("[Outlook OAuth] Authorization error:", error);
     const errorDescription = searchParams.get("error_description") || "Authorization was denied";
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=calendar&error=${encodeURIComponent(errorDescription)}`
@@ -31,7 +30,6 @@ export async function GET(request: NextRequest) {
 
   // Validate code exists
   if (!code) {
-    console.error("[Outlook OAuth] Missing authorization code");
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=calendar&error=${encodeURIComponent("Missing authorization code")}`
     );
@@ -39,7 +37,6 @@ export async function GET(request: NextRequest) {
 
   // Validate state exists
   if (!state) {
-    console.error("[Outlook OAuth] Missing state parameter");
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=calendar&error=${encodeURIComponent("Invalid request state")}`
     );
@@ -48,7 +45,6 @@ export async function GET(request: NextRequest) {
   // Validate state matches cookie
   const storedState = request.cookies.get("outlook_oauth_state")?.value;
   if (!storedState || storedState !== state) {
-    console.error("[Outlook OAuth] State mismatch - possible CSRF attack");
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=calendar&error=${encodeURIComponent("Invalid request state")}`
     );
@@ -57,7 +53,6 @@ export async function GET(request: NextRequest) {
   // Parse state to get business ID and return URL
   const stateData = parseOAuthState(state);
   if (!stateData) {
-    console.error("[Outlook OAuth] Failed to parse state");
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=calendar&error=${encodeURIComponent("Invalid or expired request")}`
     );
@@ -67,11 +62,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // Exchange code for tokens
-    console.log("[Outlook OAuth] Exchanging code for tokens...");
     const tokens = await exchangeOutlookCode(code);
 
     // Store tokens in database
-    console.log("[Outlook OAuth] Storing tokens for business:", businessId);
     await storeCalendarTokens(businessId, "outlook", tokens);
 
     // Clear the state cookie
@@ -82,7 +75,6 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("[Outlook OAuth] Token exchange failed:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to connect calendar";
     return NextResponse.redirect(

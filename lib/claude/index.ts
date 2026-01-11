@@ -82,7 +82,6 @@ export async function generatePrompts(
 
   // Mock mode if no API key
   if (!client) {
-    console.log("[Claude] Running in mock mode - no API key configured");
     return generateMockPrompts(input);
   }
 
@@ -122,7 +121,6 @@ export async function generatePrompts(
       mock: false,
     };
   } catch (error) {
-    console.error("[Claude] Error generating prompts:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

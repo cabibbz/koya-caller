@@ -113,7 +113,6 @@ export function Step1BusinessType({
           setTemplateLoaded(true);
         }
       } catch (err) {
-        console.error("Failed to load template:", err);
         setError("Failed to load business template. Please try again.");
       } finally {
         setIsLoadingTemplate(false);
@@ -166,7 +165,6 @@ export function Step1BusinessType({
         goNext();
         router.push("/onboarding/services");
       } catch (err) {
-        console.error("Failed to save business type:", err);
         setError("Failed to save. Please try again.");
       }
     });

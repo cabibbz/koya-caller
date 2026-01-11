@@ -117,18 +117,11 @@ export const POST = withRateLimit(
             ],
           });
 
-          console.log("[Stripe Checkout] Plan upgraded:", {
-            businessId: biz.id,
-            newPlan: planSlug,
-          });
-
           return NextResponse.json({
             success: true,
             message: "Plan updated successfully",
           });
         } catch (upgradeError) {
-          console.error("[Stripe Checkout] Upgrade error:", upgradeError);
-          
           // Fall back to portal for complex cases
           const portalSession = await stripe.billingPortal.sessions.create({
             customer: biz.stripe_customer_id,
@@ -174,17 +167,10 @@ export const POST = withRateLimit(
         allow_promotion_codes: true,
       });
 
-      console.log("[Stripe Checkout] Session created:", {
-        sessionId: checkoutSession.id,
-        businessId: biz.id,
-        plan: planSlug,
-      });
-
       return NextResponse.json({
         url: checkoutSession.url,
       });
     } catch (error) {
-      console.error("[Stripe Checkout] Error:", error);
       return NextResponse.json(
         { error: "Failed to create checkout session" },
         { status: 500 }

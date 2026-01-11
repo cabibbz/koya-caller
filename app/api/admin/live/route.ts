@@ -113,7 +113,6 @@ export async function GET(request: NextRequest) {
       events: events.slice(0, 50),
     });
   } catch (error) {
-    console.error("[Admin Live API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

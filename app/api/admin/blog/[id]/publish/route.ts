@@ -42,11 +42,8 @@ export async function POST(
       throw error;
     }
 
-    console.log("[Blog API] Published:", post.id, post.title);
-
     return NextResponse.json({ success: true, post });
   } catch (error) {
-    console.error("[Blog API] Publish error:", error);
     return NextResponse.json({ error: "Failed to publish post" }, { status: 500 });
   }
 }

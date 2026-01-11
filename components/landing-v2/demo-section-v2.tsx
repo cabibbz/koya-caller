@@ -280,7 +280,6 @@ export function DemoSectionV2() {
       });
 
       retellClient.on("error", (err: any) => {
-        console.error("Retell error:", err);
         setError(`Call error: ${err.message || err}`);
         setCallState("error");
         setKoyaState("idle");
@@ -303,7 +302,6 @@ export function DemoSectionV2() {
         accessToken: data.accessToken,
       });
     } catch (err) {
-      console.error("Call error:", err);
       setError(err instanceof Error ? err.message : "Failed to start call");
       setCallState("error");
     }
@@ -314,7 +312,7 @@ export function DemoSectionV2() {
       try {
         retellClientRef.current.stopCall();
       } catch (e) {
-        console.error("Error stopping call:", e);
+        // Error handled silently
       }
     }
     setCallState("ended");
@@ -335,7 +333,7 @@ export function DemoSectionV2() {
         }
         setIsMuted(!isMuted);
       } catch (e) {
-        console.error("Error toggling mute:", e);
+        // Error handled silently
       }
     }
   }, [isMuted]);

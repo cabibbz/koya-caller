@@ -31,15 +31,9 @@ export async function POST(request: NextRequest) {
     // Search for available numbers
     const numbers = await searchPhoneNumbers(areaCode, 5);
 
-    if (!isTwilioConfigured()) {
-      console.log("[Twilio Search] Credentials not configured, returning mock data");
-    }
-
     return NextResponse.json({ numbers });
 
   } catch (error) {
-    console.error("[Twilio Search] Error:", error);
-    
     // Check for specific Twilio errors
     if (error instanceof Error) {
       if (error.message.includes("authenticate")) {

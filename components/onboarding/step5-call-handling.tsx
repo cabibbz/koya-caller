@@ -66,7 +66,7 @@ export function Step5CallHandling() {
           // This would come from signup data
         }
       } catch (error) {
-        console.error("Error loading call settings:", error);
+        // Error handled silently
       } finally {
         setIsLoading(false);
       }
@@ -85,7 +85,6 @@ export function Step5CallHandling() {
       
       router.push("/onboarding/language");
     } catch (error) {
-      console.error("Error saving call settings:", error);
       setError(
         error instanceof Error ? error.message : "Failed to save call settings"
       );
@@ -102,7 +101,6 @@ export function Step5CallHandling() {
       setStep5Data(formData);
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error saving:", error);
       setError(error instanceof Error ? error.message : "Failed to save");
     } finally {
       setSaving(false);

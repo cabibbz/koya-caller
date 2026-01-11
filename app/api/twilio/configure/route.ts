@@ -57,8 +57,6 @@ export async function POST(request: NextRequest) {
 
     // If Twilio credentials aren't set, use mock mode
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-      console.log("[Twilio Configure] Mock mode - no credentials");
-      
       // Save to database
       const supabase = await createClient();
       
@@ -72,7 +70,6 @@ export async function POST(request: NextRequest) {
         .eq("id", businessId);
 
       if (dbError) {
-        console.error("[Twilio Configure] Database error:", dbError);
         return NextResponse.json(
           { error: "Failed to save phone number" },
           { status: 500 }
@@ -126,11 +123,6 @@ export async function POST(request: NextRequest) {
       smsMethod: "POST",
     });
 
-    console.log(`[Twilio Configure] Configured webhooks for ${TWILIO_PHONE_NUMBER}`);
-    console.log(`  Voice URL: ${webhookUrl}`);
-    console.log(`  Fallback URL: ${fallbackUrl}`);
-    console.log(`  Status URL: ${statusCallbackUrl}`);
-
     // Save to database
     const supabase = await createClient();
     
@@ -144,7 +136,6 @@ export async function POST(request: NextRequest) {
       .eq("id", businessId);
 
     if (dbError) {
-      console.error("[Twilio Configure] Database error:", dbError);
       return NextResponse.json(
         { error: "Failed to save phone number to database" },
         { status: 500 }
@@ -165,7 +156,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Twilio Configure] Error:", error);
     return NextResponse.json(
       { error: "Failed to configure phone number" },
       { status: 500 }

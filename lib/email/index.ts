@@ -12,7 +12,6 @@ let resendClient: Resend | null = null;
 
 function getResendClient(): Resend | null {
   if (!RESEND_API_KEY) {
-    console.warn("[Email] Resend API key not configured");
     return null;
   }
   if (!resendClient) {
@@ -44,7 +43,7 @@ export async function sendEmail(params: {
   const client = getResendClient();
 
   if (!client) {
-    console.log("[Email] Mock mode - would send:", { to: params.to, subject: params.subject });
+    // Mock mode - email not configured
     return { success: true, id: `mock_${Date.now()}` };
   }
 
@@ -58,14 +57,11 @@ export async function sendEmail(params: {
     });
 
     if (result.error) {
-      console.error("[Email] Send error:", result.error);
       return { success: false, error: result.error.message };
     }
 
-    console.log("[Email] Sent:", result.data?.id);
     return { success: true, id: result.data?.id };
   } catch (error) {
-    console.error("[Email] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to send email",

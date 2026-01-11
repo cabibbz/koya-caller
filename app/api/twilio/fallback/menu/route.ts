@@ -71,8 +71,6 @@ export async function POST(request: NextRequest) {
     const digits = params.Digits || "";
     const toNumber = params.To || "";
     
-    console.log("[Twilio Fallback Menu] Input:", { digits, toNumber });
-    
     // Get backup number if needed
     let backupNumber: string | undefined;
     if (digits === "2") {
@@ -89,8 +87,6 @@ export async function POST(request: NextRequest) {
     return twimlResponse(twiml);
     
   } catch (error) {
-    console.error("[Twilio Fallback Menu] Error:", error);
-    
     return twimlResponse(simpleSay(
       "We apologize for the technical difficulty. Please try your call again later."
     ));

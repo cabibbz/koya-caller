@@ -57,7 +57,6 @@ export async function PUT(request: NextRequest) {
       .eq("business_id", businessId);
 
     if (deleteError) {
-      console.error("[FAQs API] Delete error:", deleteError);
       return NextResponse.json({ error: "Failed to update FAQs" }, { status: 500 });
     }
 
@@ -75,14 +74,12 @@ export async function PUT(request: NextRequest) {
         .insert(faqsToInsert);
 
       if (insertError) {
-        console.error("[FAQs API] Insert error:", insertError);
         return NextResponse.json({ error: "Failed to save FAQs" }, { status: 500 });
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[FAQs API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

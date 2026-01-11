@@ -58,7 +58,6 @@ async function getBusinessFromNumber(toNumber: string) {
     .single() as { data: { business_id: string } | null; error: any };
   
   if (phoneError || !phoneRecord?.business_id) {
-    console.log("[Fallback] No business found for number:", toNumber);
     return null;
   }
   
@@ -97,8 +96,6 @@ export async function POST(request: NextRequest) {
     const callSid = params.CallSid || "";
     const reason = params.ErrorCode ? `error:${params.ErrorCode}` : "fallback";
     
-    console.log("[Twilio Fallback] Incoming:", { toNumber, callSid, reason });
-    
     // Get business info
     const business = await getBusinessFromNumber(toNumber);
     
@@ -119,8 +116,6 @@ export async function POST(request: NextRequest) {
     return twimlResponse(twiml);
     
   } catch (error) {
-    console.error("[Twilio Fallback] Error:", error);
-    
     return twimlResponse(simpleSay(
       "We apologize, but we are experiencing technical difficulties. Please try your call again later."
     ));

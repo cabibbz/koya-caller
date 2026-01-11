@@ -78,7 +78,6 @@ async function handler(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Call Handling API] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update call settings" },
         { status: 500 }
@@ -93,7 +92,6 @@ async function handler(request: NextRequest) {
       data: callSettings,
     });
   } catch (error) {
-    console.error("[Call Handling API] Error:", error);
     return NextResponse.json(
       { error: "Failed to update call settings" },
       { status: 500 }

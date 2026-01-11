@@ -37,16 +37,12 @@ export async function GET(request: NextRequest) {
 
     const { data: settings, error } = await query.order("key");
 
-    console.log("Admin settings query result:", { settings, error });
-
     if (error) {
-      console.error("Error fetching settings:", error);
       return NextResponse.json({ error: "Failed to fetch settings: " + error.message }, { status: 500 });
     }
 
     return NextResponse.json({ settings: settings || [] });
   } catch (error) {
-    console.error("Settings API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -86,13 +82,11 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error updating setting:", error);
       return NextResponse.json({ error: "Failed to update setting" }, { status: 500 });
     }
 
     return NextResponse.json({ setting });
   } catch (error) {
-    console.error("Settings API error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -89,7 +89,6 @@ export async function GET() {
       voices: formattedVoices.length > 0 ? formattedVoices : FALLBACK_VOICES,
     });
   } catch (error) {
-    console.error("[Retell Voices] Error fetching voices:", error);
     return NextResponse.json({
       success: true,
       voices: FALLBACK_VOICES,

@@ -57,7 +57,7 @@ export function SignupForm() {
         router.push(result.redirectTo);
       }
     } catch (err) {
-      console.error("Signup error:", err);
+      // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);

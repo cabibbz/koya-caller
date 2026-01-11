@@ -92,7 +92,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
     }
 
     // Scrape the website
-    console.log(`[Scrape] Fetching content from: ${validatedUrl.toString()}`);
     const websiteContent = await fetchWebsiteContent(validatedUrl.toString());
 
     if (!websiteContent) {
@@ -122,7 +121,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
       scrapedUrl: validatedUrl.toString(),
     });
   } catch (error) {
-    console.error("[Scrape] Error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -150,7 +148,6 @@ async function fetchWebsiteContent(url: string): Promise<string | null> {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      console.error(`[Scrape] HTTP error: ${response.status}`);
       return null;
     }
 
@@ -167,7 +164,6 @@ async function fetchWebsiteContent(url: string): Promise<string | null> {
 
     return textContent;
   } catch (error) {
-    console.error("[Scrape] Fetch error:", error);
     return null;
   }
 }
@@ -220,7 +216,6 @@ async function extractContentWithClaude(
   businessType?: string
 ): Promise<ExtractedContent | null> {
   if (!ANTHROPIC_API_KEY) {
-    console.log("[Scrape] Running in mock mode - no API key");
     return generateMockContent(businessName, businessType);
   }
 
@@ -284,7 +279,6 @@ Return only the JSON object:`;
     // Extract text from response
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      console.error("[Scrape] No text response from Claude");
       return null;
     }
 
@@ -317,12 +311,9 @@ Return only the JSON object:`;
         additionalInfo: parsed.additionalInfo || undefined,
       };
     } catch (parseError) {
-      console.error("[Scrape] Failed to parse Claude response:", parseError);
-      console.error("[Scrape] Raw response:", textBlock.text);
       return null;
     }
   } catch (error) {
-    console.error("[Scrape] Claude API error:", error);
     return null;
   }
 }

@@ -38,7 +38,6 @@ export async function refreshGoogleToken(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error("[Google Refresh] Token refresh failed:", errorData);
 
     // Check for specific error types
     if (errorData.error === "invalid_grant") {

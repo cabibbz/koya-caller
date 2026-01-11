@@ -45,7 +45,6 @@ async function handlePOST(request: NextRequest) {
     try {
       authUrl = getGoogleAuthUrl(state);
     } catch (error) {
-      console.error("[Google OAuth] Failed to generate auth URL:", error);
       return NextResponse.json(
         { error: "Google Calendar is not configured. Please contact support." },
         { status: 503 }
@@ -69,7 +68,6 @@ async function handlePOST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("[Google OAuth] Error initiating flow:", error);
     return NextResponse.json(
       { error: "Failed to initiate Google Calendar connection" },
       { status: 500 }

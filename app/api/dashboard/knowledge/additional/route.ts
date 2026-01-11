@@ -63,13 +63,11 @@ export async function PUT(request: NextRequest) {
       );
 
     if (upsertError) {
-      console.error("[Knowledge API] Upsert error:", upsertError);
       return NextResponse.json({ error: "Failed to save knowledge" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Knowledge API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

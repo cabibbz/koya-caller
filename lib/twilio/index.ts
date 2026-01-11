@@ -81,7 +81,7 @@ export async function sendSMS(params: SendSMSParams): Promise<SMSResult> {
   
   // Check if Twilio is configured
   if (!isTwilioConfigured()) {
-    console.log("[Twilio SMS] Mock mode - would send:", { to, body: body.substring(0, 50) });
+    // Mock mode - Twilio not configured
     return { success: true, sid: `SM${Date.now()}mock` };
   }
   
@@ -109,12 +109,10 @@ export async function sendSMS(params: SendSMSParams): Promise<SMSResult> {
     }
     
     const message = await client.messages.create(messageParams);
-    
-    console.log("[Twilio SMS] Sent:", message.sid);
+
     return { success: true, sid: message.sid };
     
   } catch (error) {
-    console.error("[Twilio SMS] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to send SMS",
@@ -349,7 +347,7 @@ export async function updatePhoneNumberWebhooks(
   }
 ): Promise<void> {
   if (!isTwilioConfigured()) {
-    console.log("[Twilio] Mock mode - would update:", twilioSid, params);
+    // Mock mode - Twilio not configured
     return;
   }
   
@@ -362,7 +360,7 @@ export async function updatePhoneNumberWebhooks(
  */
 export async function releasePhoneNumber(twilioSid: string): Promise<void> {
   if (!isTwilioConfigured()) {
-    console.log("[Twilio] Mock mode - would release:", twilioSid);
+    // Mock mode - Twilio not configured
     return;
   }
   

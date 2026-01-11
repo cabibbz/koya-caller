@@ -77,7 +77,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error("[Function Call] Error:", error);
     return NextResponse.json({
       success: false,
       message: "An error occurred processing this request",
@@ -211,7 +210,6 @@ async function handleCheckAvailability(
     };
 
   } catch (error) {
-    console.error("[Check Availability] Error:", error);
     return {
       success: false,
       message: "I had trouble checking availability. Let me take your information and have someone call you back.",
@@ -320,7 +318,7 @@ async function handleBookAppointment(
         messageType: "booking_confirmation",
       });
     } catch (smsError) {
-      console.warn("[Book Appointment] SMS failed:", smsError);
+      // Error handled silently
     }
 
     // Update call outcome
@@ -341,7 +339,6 @@ async function handleBookAppointment(
     };
 
   } catch (error) {
-    console.error("[Book Appointment] Error:", error);
     return {
       success: false,
       message: "I had trouble booking that appointment. Let me take a message and have someone call you back to confirm.",
@@ -387,7 +384,6 @@ async function handleTransferCall(
     };
 
   } catch (error) {
-    console.error("[Transfer Call] Error:", error);
     return {
       success: false,
       message: "I wasn't able to complete the transfer. Would you like to leave a message?",
@@ -459,7 +455,7 @@ async function handleTakeMessage(
             messageType: "message_alert",
           });
         } catch (smsError) {
-          console.warn("[Take Message] SMS alert failed:", smsError);
+          // Error handled silently
         }
       }
     }
@@ -475,7 +471,6 @@ async function handleTakeMessage(
     };
 
   } catch (error) {
-    console.error("[Take Message] Error:", error);
     return {
       success: false,
       message: "I had trouble saving that message. Let me try one more time - what would you like me to tell them?",
@@ -529,7 +524,6 @@ async function handleSendSMS(
     };
 
   } catch (error) {
-    console.error("[Send SMS] Error:", error);
     return {
       success: false,
       message: "I had trouble sending that text. Would you like me to try again or help with something else?",
@@ -573,7 +567,6 @@ async function handleEndCall(
     };
 
   } catch (error) {
-    console.error("[End Call] Error:", error);
     return {
       success: true,
       message: "Goodbye!",

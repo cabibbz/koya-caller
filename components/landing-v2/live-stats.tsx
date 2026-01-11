@@ -117,7 +117,7 @@ export function LiveStatsSection() {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch stats:", error);
+        // Error handled silently
       }
     }
     fetchStats();

@@ -100,19 +100,16 @@ export default function TestPage() {
 
       // Set up event handlers
       retellClient.on("call_started", () => {
-        console.log("[Test Call] Call started");
         setTestStatus("calling");
         startDurationTimer();
       });
 
       retellClient.on("call_ended", () => {
-        console.log("[Test Call] Call ended");
         stopDurationTimer();
         setTestStatus("complete");
       });
 
       retellClient.on("error", (err) => {
-        console.error("[Test Call] Error:", err);
         stopDurationTimer();
         setError("Call error occurred. Please try again.");
         setTestStatus("error");
@@ -126,7 +123,6 @@ export default function TestPage() {
       });
 
     } catch (err) {
-      console.error("[Test Call] Failed:", err);
       stopDurationTimer();
       setError(err instanceof Error ? err.message : "Failed to start call");
       setTestStatus("error");
@@ -164,7 +160,6 @@ export default function TestPage() {
       await fetch("/api/onboarding/complete", { method: "POST" });
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error completing onboarding:", error);
       router.push("/dashboard");
     }
   };

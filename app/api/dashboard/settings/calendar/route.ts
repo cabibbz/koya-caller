@@ -66,7 +66,6 @@ async function handleGET(request: NextRequest) {
       tokenExpired: isConnected && tokenExpired,
     });
   } catch (error) {
-    console.error("[Calendar API GET] Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch calendar settings" },
       { status: 500 }
@@ -118,7 +117,6 @@ async function handlePUT(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Calendar API PUT] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update calendar settings" },
         { status: 500 }
@@ -130,7 +128,6 @@ async function handlePUT(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
-    console.error("[Calendar API PUT] Error:", error);
     return NextResponse.json(
       { error: "Failed to update calendar settings" },
       { status: 500 }
@@ -224,7 +221,6 @@ async function handlePOST(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Calendar API POST] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update calendar provider" },
         { status: 500 }
@@ -236,7 +232,6 @@ async function handlePOST(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
-    console.error("[Calendar API POST] Error:", error);
     return NextResponse.json(
       { error: "Failed to initiate calendar connection" },
       { status: 500 }
@@ -280,7 +275,6 @@ async function handleDELETE(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Calendar API DELETE] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to disconnect calendar" },
         { status: 500 }
@@ -293,7 +287,6 @@ async function handleDELETE(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
-    console.error("[Calendar API DELETE] Error:", error);
     return NextResponse.json(
       { error: "Failed to disconnect calendar" },
       { status: 500 }

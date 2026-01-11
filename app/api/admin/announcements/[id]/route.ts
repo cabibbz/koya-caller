@@ -32,7 +32,6 @@ export async function PUT(
       .eq("id", id);
 
     if (error) {
-      console.error("[Admin Announcement Update] Error:", error);
       return NextResponse.json({ error: "Failed to update" }, { status: 500 });
     }
 
@@ -48,7 +47,6 @@ export async function PUT(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Admin Announcement Update] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -72,7 +70,6 @@ export async function DELETE(
       .eq("id", id);
 
     if (error) {
-      console.error("[Admin Announcement Delete] Error:", error);
       return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
     }
 
@@ -88,7 +85,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Admin Announcement Delete] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
       .select("id, status, duration_seconds, created_at, business_id");
 
     if (callsError) {
-      console.error("[Admin Usage API] Error:", callsError);
       return NextResponse.json(
         { error: "Failed to fetch usage data" },
         { status: 500 }
@@ -63,7 +62,6 @@ export async function GET(request: NextRequest) {
       `);
 
     if (bizError) {
-      console.error("[Admin Usage API] Error:", bizError);
       return NextResponse.json(
         { error: "Failed to fetch business data" },
         { status: 500 }
@@ -164,7 +162,6 @@ export async function GET(request: NextRequest) {
       businesses: businessUsage,
     });
   } catch (error) {
-    console.error("[Admin Usage API] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

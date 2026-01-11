@@ -119,7 +119,7 @@ export function Step7VoicePersonality() {
       audio.oncanplaythrough = () => {
         setLoadingVoiceId(null);
         setPlayingVoiceId(voice.id);
-        audio.play().catch(console.error);
+        audio.play().catch(() => {});
       };
       
       audio.onended = () => {
@@ -128,7 +128,6 @@ export function Step7VoicePersonality() {
       };
       
       audio.onerror = () => {
-        console.error("Error loading audio:", voice.previewUrl);
         setLoadingVoiceId(null);
         setPlayingVoiceId(null);
         audioRef.current = null;
@@ -137,7 +136,6 @@ export function Step7VoicePersonality() {
       // Start loading
       audio.load();
     } catch (error) {
-      console.error("Error playing voice:", error);
       setLoadingVoiceId(null);
       setPlayingVoiceId(null);
     }
@@ -188,7 +186,7 @@ export function Step7VoicePersonality() {
       // Navigate to next step
       router.push("/onboarding/phone");
     } catch (error) {
-      console.error("Error saving Step 7:", error);
+      // Error handled silently
     } finally {
       setIsSaving(false);
     }

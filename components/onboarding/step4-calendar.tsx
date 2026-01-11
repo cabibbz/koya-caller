@@ -111,7 +111,7 @@ export function Step4Calendar() {
           setStep4Data(existing);
         }
       } catch (error) {
-        console.error("Error loading calendar settings:", error);
+        // Error handled silently
       } finally {
         setIsLoading(false);
       }
@@ -180,7 +180,6 @@ export function Step4Calendar() {
         }
       }
     } catch (error) {
-      console.error("Error connecting calendar:", error);
       setError(
         error instanceof Error ? error.message : "Failed to connect calendar"
       );
@@ -200,7 +199,6 @@ export function Step4Calendar() {
       
       router.push("/onboarding/calls");
     } catch (error) {
-      console.error("Error saving calendar settings:", error);
       setError(
         error instanceof Error ? error.message : "Failed to save calendar settings"
       );
@@ -217,7 +215,6 @@ export function Step4Calendar() {
       setStep4Data(formData);
       router.push("/dashboard");
     } catch (error) {
-      console.error("Error saving:", error);
       setError(error instanceof Error ? error.message : "Failed to save");
     } finally {
       setSaving(false);

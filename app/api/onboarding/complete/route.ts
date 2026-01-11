@@ -116,11 +116,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             }
           }
         } catch (agentError) {
-          console.error("[Onboarding Complete] Error creating Retell agent:", agentError);
           // Don't fail onboarding if agent creation fails
         }
       } else {
-        console.error("[Onboarding Complete] Prompt generation failed:", promptResult.error);
+        // Prompt generation failed - continue without it
       }
     }
 
@@ -138,7 +137,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq("id", businessId);
 
     if (updateError) {
-      console.error("[Onboarding Complete] Error:", updateError);
       return NextResponse.json(
         { success: false, error: "Failed to complete onboarding" },
         { status: 500 }
@@ -150,7 +148,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       message: "Onboarding completed successfully",
     });
   } catch (error) {
-    console.error("[Onboarding Complete] Error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -216,7 +213,6 @@ async function fetchBusinessData(supabase: any, businessId: string) {
       minutesExhausted: false,
     };
   } catch (error) {
-    console.error("[Fetch Business Data] Error:", error);
     return null;
   }
 }

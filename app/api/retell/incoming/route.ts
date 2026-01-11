@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       .single();
     
     if (callError) {
-      console.error("[Retell Incoming] Failed to create call record:", callError);
+      // Error handled silently
     }
     
     // Use Retell SDK to register the call
@@ -160,7 +160,6 @@ export async function POST(request: NextRequest) {
       return twimlResponse(twiml);
       
     } catch (retellError) {
-      console.error("[Retell Incoming] Retell API error:", retellError);
 
       // Log to system_logs for admin visibility
       await handleRetellFailure(retellError, {
@@ -185,7 +184,6 @@ export async function POST(request: NextRequest) {
     }
     
   } catch (error) {
-    console.error("[Retell Incoming] Error:", error);
     return twimlResponse(twimlRedirect(`${appUrl}/api/twilio/fallback`));
   }
 }

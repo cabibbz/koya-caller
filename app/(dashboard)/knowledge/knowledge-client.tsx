@@ -174,10 +174,10 @@ export function KnowledgeClient({
       });
 
       if (!res.ok) {
-        console.error("Failed to trigger regeneration");
+        // Failed to trigger regeneration
       }
     } catch (err) {
-      console.error("Regeneration error:", err);
+      // Regeneration error handled silently
     } finally {
       setRegenerating(false);
     }
@@ -424,7 +424,6 @@ export function KnowledgeClient({
       setSelectedFaqs(new Set(data.data.faqs.map((_: unknown, i: number) => i)));
     } catch (err) {
       setImportError("An error occurred while scraping the website");
-      console.error("Scrape error:", err);
     } finally {
       setImporting(false);
     }

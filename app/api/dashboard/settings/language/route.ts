@@ -68,7 +68,6 @@ async function handler(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Language API] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update language settings" },
         { status: 500 }
@@ -83,7 +82,6 @@ async function handler(request: NextRequest) {
       data: aiConfig,
     });
   } catch (error) {
-    console.error("[Language API] Error:", error);
     return NextResponse.json(
       { error: "Failed to update language settings" },
       { status: 500 }

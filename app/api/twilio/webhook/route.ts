@@ -98,7 +98,6 @@ function isWithinBusinessHours(
     
     return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
   } catch (error) {
-    console.error("[Twilio Webhook] Error checking business hours:", error);
     return true; // Default to open on error
   }
 }
@@ -126,7 +125,6 @@ export async function POST(request: NextRequest) {
       );
 
       if (!isValid) {
-        console.warn("[Twilio Webhook] Invalid signature");
         return new Response("Invalid signature", { status: 401 });
       }
     }
@@ -283,8 +281,6 @@ export async function POST(request: NextRequest) {
     }));
     
   } catch (error) {
-    console.error("[Twilio Webhook] Error:", error);
-    
     return twimlResponse(simpleSay(
       "We apologize, but we are experiencing technical difficulties. Please try your call again later."
     ));

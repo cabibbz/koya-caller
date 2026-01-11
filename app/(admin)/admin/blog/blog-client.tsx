@@ -268,7 +268,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
                 setGeneratedPost(refreshData.post);
               }
             } catch (imgError) {
-              console.error("Image generation error:", imgError);
+              // Error handled silently
             } finally {
               setIsGeneratingImage(false);
             }
@@ -286,7 +286,6 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         throw new Error(data.error || "Generation failed");
       }
     } catch (error) {
-      console.error("Generation error:", error);
       setCurrentStep("review");
     } finally {
       setIsGenerating(false);
@@ -316,7 +315,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setPosts(posts.map(p => p.id === editingPost.id ? editingPost : p));
       }
     } catch (error) {
-      console.error("Save error:", error);
+      // Error handled silently
     } finally {
       setIsSaving(false);
     }
@@ -329,7 +328,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         p.id === postId ? { ...p, status: "published" as const, published_at: new Date().toISOString() } : p
       ));
     } catch (error) {
-      console.error("Publish error:", error);
+      // Error handled silently
     }
   };
 
@@ -355,7 +354,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
       setScheduleDate("");
       setScheduleTime("");
     } catch (error) {
-      console.error("Schedule error:", error);
+      // Error handled silently
     }
   };
 
@@ -370,7 +369,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setViewMode("list");
       }
     } catch (error) {
-      console.error("Delete error:", error);
+      // Error handled silently
     }
   };
 
@@ -400,7 +399,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setPosts(posts.map(p => p.id === editingPost.id ? updatedPost : p));
       }
     } catch (error) {
-      console.error("Image generation error:", error);
+      // Error handled silently
     } finally {
       setIsGeneratingImage(false);
     }
@@ -415,7 +414,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setViewMode("editor");
       }
     } catch (error) {
-      console.error("Failed to load post:", error);
+      // Error handled silently
     }
   };
 

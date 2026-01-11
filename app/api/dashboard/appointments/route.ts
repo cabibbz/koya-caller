@@ -89,13 +89,11 @@ export async function GET(request: NextRequest) {
     const { data: appointments, error } = await query;
 
     if (error) {
-      console.error("[Appointments API] Error:", error);
       return NextResponse.json({ error: "Failed to fetch appointments" }, { status: 500 });
     }
 
     return NextResponse.json({ appointments: appointments || [] });
   } catch (error) {
-    console.error("[Appointments API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -193,13 +191,11 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Appointments API] Create error:", error);
       return NextResponse.json({ error: "Failed to create appointment" }, { status: 500 });
     }
 
     return NextResponse.json({ appointment });
   } catch (error) {
-    console.error("[Appointments API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

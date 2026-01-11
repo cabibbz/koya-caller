@@ -42,15 +42,6 @@ export async function POST(request: NextRequest) {
     const direction = params.Direction || "";
     const timestamp = params.Timestamp || new Date().toISOString();
     
-    console.log("[Twilio Status] Callback:", {
-      sid: callSid,
-      status: callStatus,
-      duration: callDuration,
-      from: fromNumber,
-      to: toNumber,
-      direction,
-    });
-    
     const supabase = createAdminClient();
     
     // Look up business from phone number
@@ -63,7 +54,6 @@ export async function POST(request: NextRequest) {
     
     if (!phoneRecord?.business_id) {
       // Unknown number, just acknowledge
-      console.log("[Twilio Status] No business found for:", toNumber);
       return new Response("", { status: 200 });
     }
     
@@ -102,12 +92,7 @@ export async function POST(request: NextRequest) {
         break;
         
       case "failed":
-        // Call failed - log for debugging
-        console.error("[Twilio Status] Call failed:", {
-          callSid,
-          error: params.ErrorCode,
-          message: params.ErrorMessage,
-        });
+        // Call failed - no action needed
         break;
         
       case "initiated":
@@ -117,14 +102,13 @@ export async function POST(request: NextRequest) {
         break;
         
       default:
-        console.log("[Twilio Status] Unknown status:", callStatus);
+        // Unknown status - no action
     }
     
     // Always return 200 to acknowledge
     return new Response("", { status: 200 });
     
   } catch (error) {
-    console.error("[Twilio Status] Error:", error);
     // Still return 200 to prevent Twilio retries
     return new Response("", { status: 200 });
   }

@@ -42,7 +42,6 @@ export async function GET(
       .single();
 
     if (businessError) {
-      console.error("[Admin Customer API] Business error:", businessError);
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
@@ -111,7 +110,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("[Admin Customer API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -153,7 +151,6 @@ export async function PATCH(
         .eq("id", businessId);
 
       if (error) {
-        console.error("[Admin Customer API] Business update error:", error);
         return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
       }
     }
@@ -174,7 +171,6 @@ export async function PATCH(
         }, { onConflict: "business_id" });
 
       if (error) {
-        console.error("[Admin Customer API] AI config update error:", error);
         return NextResponse.json({ error: "Failed to update AI config" }, { status: 500 });
       }
     }
@@ -193,14 +189,12 @@ export async function PATCH(
         }, { onConflict: "business_id" });
 
       if (error) {
-        console.error("[Admin Customer API] Call settings update error:", error);
         return NextResponse.json({ error: "Failed to update call settings" }, { status: 500 });
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Admin Customer API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

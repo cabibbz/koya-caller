@@ -30,10 +30,6 @@ function createRedisClient(): Redis | null {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    console.warn(
-      "[Rate Limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. " +
-      "Rate limiting will use in-memory fallback (not suitable for production)."
-    );
     return null;
   }
 
@@ -256,9 +252,8 @@ export async function checkRateLimit(
       reset: result.reset,
       retryAfter: result.success ? undefined : Math.ceil((result.reset - Date.now()) / 1000),
     };
-  } catch (error) {
-    // If Redis fails, allow the request (fail open) but log
-    console.error("[Rate Limit] Redis error, failing open:", error);
+  } catch {
+    // If Redis fails, allow the request (fail open)
     return {
       success: true,
       limit: LIMITS[type].max,

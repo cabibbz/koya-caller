@@ -94,7 +94,6 @@ async function handleGet(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Dashboard Calls API] GET Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch calls" },
       { status: 500 }
@@ -187,7 +186,6 @@ async function handlePatch(request: NextRequest) {
       data: updatedCall,
     });
   } catch (error) {
-    console.error("[Dashboard Calls API] PATCH Error:", error);
     return NextResponse.json(
       { error: "Failed to update call" },
       { status: 500 }

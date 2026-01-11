@@ -49,13 +49,11 @@ export async function queuePromptRegeneration(
     });
 
     if (error) {
-      console.error("[Queue Regeneration] Error:", error);
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (error) {
-    console.error("[Queue Regeneration] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -89,7 +87,6 @@ export async function triggerImmediateRegeneration(
 
     return { success: true };
   } catch (error) {
-    console.error("[Immediate Regeneration] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -135,7 +132,6 @@ export async function processRegenerationQueue(): Promise<{
       failed: data.failed,
     };
   } catch (error) {
-    console.error("[Process Queue] Error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

@@ -98,8 +98,6 @@ export async function exchangeOutlookCode(code: string): Promise<OAuthTokens> {
   );
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("[Outlook OAuth] Token exchange failed:", error);
     throw new CalendarAuthError(
       "Failed to exchange authorization code",
       "outlook",
@@ -143,8 +141,6 @@ export async function refreshOutlookTokens(
   );
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("[Outlook OAuth] Token refresh failed:", error);
     throw new CalendarAuthError(
       "Failed to refresh access token. Please reconnect your calendar.",
       "outlook",
@@ -195,7 +191,6 @@ export class OutlookCalendarClient implements CalendarClient {
       return null; // No refresh needed
     }
 
-    console.log("[Outlook Calendar] Refreshing expired tokens");
     const newTokens = await refreshOutlookTokens(this.refreshToken);
 
     // Update internal state
@@ -231,9 +226,6 @@ export class OutlookCalendarClient implements CalendarClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`[Outlook Calendar] API error (${response.status}):`, error);
-
       if (response.status === 401) {
         throw new CalendarAuthError(
           "Calendar authorization expired. Please reconnect.",

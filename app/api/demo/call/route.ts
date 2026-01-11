@@ -192,13 +192,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
       } catch (dbError) {
         // Non-fatal - continue with call even if lead capture fails
-        console.warn("[Demo Call] Lead capture failed:", dbError);
       }
     }
 
     // If no Retell API key, return mock response
     if (!RETELL_API_KEY) {
-      console.log("[Demo Call] Mock mode - no RETELL_API_KEY");
       return NextResponse.json({
         success: false,
         mock: true,
@@ -283,7 +281,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
       }
     } catch (agentError) {
-      console.error("[Demo Call] Agent error:", agentError);
       return NextResponse.json({
         success: false,
         leadId,
@@ -303,8 +300,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
 
-    console.log("[Demo Call] Created web call:", webCall.call_id, "for", businessId ? "business" : "demo");
-
     return NextResponse.json({
       success: true,
       callId: webCall.call_id,
@@ -313,7 +308,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
 
   } catch (error) {
-    console.error("[Demo Call] Error:", error);
     return NextResponse.json(
       {
         success: false,

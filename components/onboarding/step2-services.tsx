@@ -161,7 +161,6 @@ export function Step2Services() {
         goNext();
         router.push("/onboarding/faqs");
       } catch (err) {
-        console.error("Failed to save services:", err);
         setError("Failed to save. Please try again.");
       }
     });

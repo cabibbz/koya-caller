@@ -44,8 +44,6 @@ export async function POST(request: NextRequest) {
     const dialCallStatus = params.DialCallStatus || "failed";
     const dialCallDuration = parseInt(params.DialCallDuration || "0", 10);
     
-    console.log("[Twilio Dial Status]:", { dialCallStatus, dialCallDuration });
-    
     // Generate appropriate response
     const twiml = generateDialStatusResponse({
       dialCallStatus,
@@ -55,8 +53,6 @@ export async function POST(request: NextRequest) {
     return twimlResponse(twiml);
     
   } catch (error) {
-    console.error("[Twilio Dial Status] Error:", error);
-    
     return twimlResponse(simpleSay(
       "We apologize for the technical difficulty. Goodbye."
     ));

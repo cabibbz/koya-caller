@@ -43,7 +43,6 @@ export async function GET(request: NextRequest) {
       .in("subscription_status", ["active", "paused", "cancelled"]);
 
     if (bizError) {
-      console.error("[Admin Health API] Error:", bizError);
       return NextResponse.json(
         { error: "Failed to fetch business data" },
         { status: 500 }
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
       .in("business_id", businessIds);
 
     if (callsError) {
-      console.error("[Admin Health API] Error:", callsError);
+      // Error handled silently
     }
 
     // Calculate call metrics per business
@@ -172,7 +171,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Health API] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
       .not("phone_number", "is", null);
 
     if (error) {
-      console.error("[Admin Phones API] Error:", error);
       return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 
@@ -77,7 +76,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Phones API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

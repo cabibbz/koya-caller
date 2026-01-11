@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
       .order("minutes_used_this_cycle", { ascending: false });
 
     if (error) {
-      console.error("[Admin Export Usage] Error:", error);
       return NextResponse.json({ error: "Failed to export" }, { status: 500 });
     }
 
@@ -77,7 +76,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Export Usage] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

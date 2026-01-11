@@ -253,7 +253,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Agent API] Error creating agent:", error);
     return NextResponse.json(
       { error: "Failed to create agent" },
       { status: 500 }
@@ -330,9 +329,6 @@ export async function PATCH(request: NextRequest) {
         aiName: configData.ai_name as string,
       });
 
-      if (!success) {
-        console.warn("[Agent API] Failed to update Retell agent, updating local config only");
-      }
     }
 
     const updates: Record<string, unknown> = {};
@@ -366,7 +362,6 @@ export async function PATCH(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Agent API] Error updating agent:", error);
     return NextResponse.json(
       { error: "Failed to update agent" },
       { status: 500 }
@@ -441,7 +436,6 @@ export async function DELETE(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Agent API] Error deleting agent:", error);
     return NextResponse.json(
       { error: "Failed to delete agent" },
       { status: 500 }
@@ -511,7 +505,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("[Agent API] Error getting agent status:", error);
     return NextResponse.json(
       { error: "Failed to get agent status" },
       { status: 500 }

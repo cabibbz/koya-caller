@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
       .limit(10000);
 
     if (error) {
-      console.error("[Admin Export Calls] Error:", error);
       return NextResponse.json({ error: "Failed to export" }, { status: 500 });
     }
 
@@ -65,7 +64,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Export Calls] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

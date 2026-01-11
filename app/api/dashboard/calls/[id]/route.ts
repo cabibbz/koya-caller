@@ -69,7 +69,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("[Call Detail API] Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch call details" },
       { status: 500 }

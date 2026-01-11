@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
     const { data: settings, error } = await query;
 
     if (error) {
-      console.error("Error fetching public settings:", error);
       // Return default values on error
       return NextResponse.json({
         settings: getDefaultSettings(category)
@@ -41,7 +40,6 @@ export async function GET(request: NextRequest) {
       raw: settings
     });
   } catch (error) {
-    console.error("Public settings API error:", error);
     return NextResponse.json({
       settings: getDefaultSettings(null)
     });

@@ -59,7 +59,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateP
     const business = businessCheck as { user_id: string } | null;
 
     if (checkError || !business) {
-      console.error("[Generate Prompt] Business check error:", checkError);
       return NextResponse.json(
         { success: false, error: "Business not found" },
         { status: 404 }
@@ -120,7 +119,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateP
       mock: result.mock,
     });
   } catch (error) {
-    console.error("[Generate Prompt] Error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -167,7 +165,6 @@ async function fetchBusinessData(
       .single();
 
     if (bizError || !business) {
-      console.error("[Fetch Business] Error:", bizError);
       return { success: false, error: "Business not found" };
     }
 
@@ -262,7 +259,6 @@ async function fetchBusinessData(
       },
     };
   } catch (error) {
-    console.error("[Fetch Business Data] Error:", error);
     return { success: false, error: "Failed to fetch business data" };
   }
 }
@@ -301,7 +297,6 @@ async function savePrompts(
       .eq("business_id", businessId);
 
     if (error) {
-      console.error("[Save Prompts] Error:", error);
       return { success: false, error: "Failed to save prompts" };
     }
 
@@ -310,7 +305,6 @@ async function savePrompts(
       retellAgentId: current?.retell_agent_id,
     };
   } catch (error) {
-    console.error("[Save Prompts] Error:", error);
     return { success: false, error: "Failed to save prompts" };
   }
 }
@@ -336,7 +330,6 @@ async function updateRetellAgent(
       }),
     });
   } catch (error) {
-    // Log but don't fail - prompt is saved, Retell update can be retried
-    console.error("[Update Retell Agent] Error:", error);
+    // Prompt is saved, Retell update can be retried
   }
 }

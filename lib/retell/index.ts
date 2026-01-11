@@ -34,7 +34,6 @@ const RETELL_API_KEY = process.env.RETELL_API_KEY;
  */
 export function getRetellClient(): Retell | null {
   if (!RETELL_API_KEY) {
-    console.warn("[Retell] API key not configured, running in mock mode");
     return null;
   }
   return new Retell({ apiKey: RETELL_API_KEY });
@@ -90,7 +89,6 @@ export async function createRetellLLM(options: {
 
     return { llm_id: llm.llm_id };
   } catch (error) {
-    console.error("[Retell] Failed to create LLM:", error);
     throw error;
   }
 }
@@ -109,7 +107,6 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
 
   if (!client) {
     // Mock mode - return fake agent
-    console.log("[Retell Mock] Creating agent:", params.businessName);
     return {
       agent_id: `agent_mock_${Date.now()}`,
       llm_id: `llm_mock_${Date.now()}`,
@@ -170,7 +167,6 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       created_at: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("[Retell] Failed to create agent:", error);
     throw error;
   }
 }
@@ -185,7 +181,6 @@ export async function updateAgent(
   const client = getRetellClient();
 
   if (!client) {
-    console.log("[Retell Mock] Updating agent:", agentId);
     return true;
   }
 
@@ -217,8 +212,7 @@ export async function updateAgent(
     }
 
     return true;
-  } catch (error) {
-    console.error("[Retell] Failed to update agent:", error);
+  } catch {
     return false;
   }
 }
@@ -230,15 +224,13 @@ export async function deleteAgent(agentId: string): Promise<boolean> {
   const client = getRetellClient();
 
   if (!client) {
-    console.log("[Retell Mock] Deleting agent:", agentId);
     return true;
   }
 
   try {
     await client.agent.delete(agentId);
     return true;
-  } catch (error) {
-    console.error("[Retell] Failed to delete agent:", error);
+  } catch {
     return false;
   }
 }
@@ -256,7 +248,6 @@ export async function createWebCall(params: WebCallParams): Promise<WebCallRespo
 
   if (!client) {
     // Mock mode
-    console.log("[Retell Mock] Creating web call for agent:", params.agentId);
     return {
       access_token: `mock_token_${Date.now()}`,
       call_id: `call_mock_${Date.now()}`,
@@ -277,7 +268,6 @@ export async function createWebCall(params: WebCallParams): Promise<WebCallRespo
       agent_id: params.agentId,
     };
   } catch (error) {
-    console.error("[Retell] Failed to create web call:", error);
     throw error;
   }
 }
@@ -297,7 +287,6 @@ export async function registerPhoneCall(
 
   if (!client) {
     // Mock mode
-    console.log("[Retell Mock] Registering phone call:", params);
     return {
       call_id: `call_mock_${Date.now()}`,
       agent_id: params.agentId,
@@ -320,7 +309,6 @@ export async function registerPhoneCall(
       call_type: "phone_call",
     };
   } catch (error) {
-    console.error("[Retell] Failed to register phone call:", error);
     throw error;
   }
 }
@@ -338,14 +326,12 @@ export function verifyWebhookSignature(
   signature: string | null
 ): boolean {
   if (!RETELL_API_KEY || !signature) {
-    console.warn("[Retell] Cannot verify webhook - missing API key or signature");
     return false;
   }
 
   try {
     return Retell.verify(payload, RETELL_API_KEY, signature);
-  } catch (error) {
-    console.error("[Retell] Webhook verification failed:", error);
+  } catch {
     return false;
   }
 }
@@ -374,7 +360,6 @@ export async function getDemoAgent(): Promise<string | null> {
 
   // TODO: Create a dedicated demo agent with demo prompt
   // This would be done during initial setup
-  console.warn("[Retell] No demo agent configured. Set RETELL_DEMO_AGENT_ID");
   return null;
 }
 

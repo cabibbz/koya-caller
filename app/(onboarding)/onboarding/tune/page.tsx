@@ -96,7 +96,6 @@ export default function TunePage() {
           }
         }
       } catch (error) {
-        console.error("Failed to load data:", error);
         // Set defaults on error
         setServices([
           { id: "1", name: "General Inquiry", duration: 15 },
@@ -123,7 +122,7 @@ export default function TunePage() {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch voices:", error);
+        // Error handled silently
       } finally {
         setLoadingVoices(false);
       }
@@ -189,7 +188,6 @@ export default function TunePage() {
     audio.onerror = () => {
       setLoadingVoice(null);
       setPlayingVoice(null);
-      console.error("Failed to load audio");
     };
 
     setAudioElement(audio);
@@ -554,12 +552,10 @@ export default function TunePage() {
                       if (response.ok) {
                         router.push("/onboarding/test");
                       } else {
-                        console.error("Failed to save phase 2 data");
                         // Still navigate on error - user can fix later
                         router.push("/onboarding/test");
                       }
                     } catch (error) {
-                      console.error("Error saving:", error);
                       router.push("/onboarding/test");
                     }
                   }}

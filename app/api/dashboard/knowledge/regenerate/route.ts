@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
     const result = await queuePromptRegeneration(supabase, actualBusinessId, trigger);
 
     if (!result.success) {
-      console.error("[Regenerate API] Queue error:", result.error);
       // Don't fail the request - regeneration is best-effort
       return NextResponse.json({ 
         success: true, 
@@ -94,13 +93,11 @@ export async function POST(request: NextRequest) {
         });
       } catch (err) {
         // Ignore errors - queue processing is async
-        console.log("[Regenerate API] Async queue processing triggered");
       }
     }
 
     return NextResponse.json({ success: true, queued: true });
   } catch (error) {
-    console.error("[Regenerate API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

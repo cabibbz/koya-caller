@@ -59,7 +59,6 @@ Theme: Technology, AI, business communication, phone systems.
 No text or words in the image. 16:9 aspect ratio composition.
 ${topic ? `Related to: ${topic}` : ""}`;
 
-    console.log("[Image Generation] Generating image for post:", postId);
 
     const response = await openai.images.generate({
       model: "dall-e-3",
@@ -92,7 +91,6 @@ ${topic ? `Related to: ${topic}` : ""}`;
       });
 
     if (uploadError) {
-      console.error("[Image Generation] Upload error:", uploadError);
       // If bucket doesn't exist, try to create it
       if (uploadError.message?.includes("Bucket not found")) {
         // Fall back to using the original URL (expires after some time)
@@ -127,14 +125,11 @@ ${topic ? `Related to: ${topic}` : ""}`;
       })
       .eq("id", postId);
 
-    console.log("[Image Generation] Image saved:", publicUrl);
-
     return NextResponse.json({
       success: true,
       imageUrl: publicUrl,
     });
   } catch (error) {
-    console.error("[Image Generation] Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Image generation failed" },
       { status: 500 }

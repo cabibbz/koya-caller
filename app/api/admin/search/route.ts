@@ -116,7 +116,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ results: results.slice(0, 30) });
   } catch (error) {
-    console.error("[Admin Search API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

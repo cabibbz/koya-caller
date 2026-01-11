@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Onboarding Phase 1] Error:", error);
     return NextResponse.json(
       { error: "Failed to save" },
       { status: 500 }

@@ -94,8 +94,6 @@ export async function exchangeGoogleCode(code: string): Promise<OAuthTokens> {
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("[Google OAuth] Token exchange failed:", error);
     throw new CalendarAuthError(
       "Failed to exchange authorization code",
       "google",
@@ -135,8 +133,6 @@ export async function refreshGoogleTokens(
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    console.error("[Google OAuth] Token refresh failed:", error);
     throw new CalendarAuthError(
       "Failed to refresh access token. Please reconnect your calendar.",
       "google",
@@ -188,7 +184,6 @@ export class GoogleCalendarClient implements CalendarClient {
       return null; // No refresh needed
     }
 
-    console.log("[Google Calendar] Refreshing expired tokens");
     const newTokens = await refreshGoogleTokens(this.refreshToken);
 
     // Update internal state
@@ -224,9 +219,6 @@ export class GoogleCalendarClient implements CalendarClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`[Google Calendar] API error (${response.status}):`, error);
-
       if (response.status === 401) {
         throw new CalendarAuthError(
           "Calendar authorization expired. Please reconnect.",

@@ -57,7 +57,6 @@ export async function PUT(request: NextRequest) {
       .eq("business_id", businessId);
 
     if (deleteError) {
-      console.error("[Services API] Delete error:", deleteError);
       return NextResponse.json({ error: "Failed to update services" }, { status: 500 });
     }
 
@@ -79,14 +78,12 @@ export async function PUT(request: NextRequest) {
         .insert(servicesToInsert);
 
       if (insertError) {
-        console.error("[Services API] Insert error:", insertError);
         return NextResponse.json({ error: "Failed to save services" }, { status: 500 });
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Services API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

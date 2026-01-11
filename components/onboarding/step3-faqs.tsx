@@ -119,7 +119,6 @@ export function Step3FAQs() {
         goNext();
         router.push("/onboarding/calendar");
       } catch (err) {
-        console.error("Failed to save FAQs:", err);
         setError("Failed to save. Please try again.");
       }
     });

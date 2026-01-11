@@ -149,21 +149,18 @@ export function Step9TestCall() {
       
       // Set up event listeners
       retellClient.on("call_started", () => {
-        console.log("Call started");
         setCallStatus("Connected! Speak into your microphone.");
         setBrowserCallActive(true);
         setHasCalledTest(true);
       });
       
       retellClient.on("call_ended", () => {
-        console.log("Call ended");
         setCallStatus("Call ended");
         setBrowserCallActive(false);
         setIsCallingBrowser(false);
       });
       
       retellClient.on("error", (error: any) => {
-        console.error("Retell error:", error);
         setBrowserCallError(`Call error: ${error.message || error}`);
         setBrowserCallActive(false);
         setIsCallingBrowser(false);
@@ -183,7 +180,6 @@ export function Step9TestCall() {
       });
       
     } catch (error) {
-      console.error("Browser call error:", error);
       setBrowserCallError(
         error instanceof Error ? error.message : "Failed to start browser call"
       );
@@ -198,7 +194,7 @@ export function Step9TestCall() {
       try {
         retellClientRef.current.stopCall();
       } catch (e) {
-        console.error("Error stopping call:", e);
+        // Error handled silently
       }
     }
     setBrowserCallActive(false);
@@ -248,9 +244,7 @@ export function Step9TestCall() {
       });
       
       if (!agentResponse.ok) {
-        const error = await agentResponse.json();
         // Don't fail completely if Retell isn't configured - prompt is still saved
-        console.warn("Retell agent creation failed:", error);
       }
       
       // Step 3: Mark onboarding as complete
@@ -264,7 +258,6 @@ export function Step9TestCall() {
       
       if (!completeResponse.ok) {
         // Non-fatal - the bot is still generated
-        console.warn("Failed to mark onboarding complete");
       }
       
       setGenerationComplete(true);
@@ -276,7 +269,6 @@ export function Step9TestCall() {
       }, 2000);
       
     } catch (error) {
-      console.error("Bot generation error:", error);
       setGenerationError(
         error instanceof Error ? error.message : "Failed to generate your AI assistant"
       );

@@ -68,7 +68,6 @@ async function handleCheckoutCompleted(
   const subscriptionId = session.subscription as string;
   
   if (!businessId) {
-    console.error("[Stripe Webhook] No business_id in checkout metadata");
     return;
   }
   
@@ -101,7 +100,6 @@ async function handleCheckoutCompleted(
     .eq("id", businessId);
   
   if (error) {
-    console.error("[Stripe Webhook] Error updating business:", error);
     throw error;
   }
 }
@@ -131,7 +129,6 @@ async function handleSubscriptionCreated(
   }
   
   if (!targetBusinessId) {
-    console.warn("[Stripe Webhook] Could not find business for subscription:", subscription.id);
     return;
   }
   
@@ -162,7 +159,6 @@ async function handleSubscriptionCreated(
     .eq("id", targetBusinessId);
   
   if (error) {
-    console.error("[Stripe Webhook] Error updating business:", error);
     throw error;
   }
 }
@@ -188,10 +184,9 @@ async function handleSubscriptionUpdated(
   const biz = business as { id: string } | null;
   
   if (!biz) {
-    console.warn("[Stripe Webhook] Business not found for subscription:", subscription.id);
     return;
   }
-  
+
   // Get plan from current price
   const priceId = subscription.items.data[0]?.price?.id;
   const plan = priceId ? await getPlanFromPriceId(supabase, priceId) : null;
@@ -231,7 +226,6 @@ async function handleSubscriptionUpdated(
     .eq("id", biz.id);
   
   if (error) {
-    console.error("[Stripe Webhook] Error updating business:", error);
     throw error;
   }
 }
@@ -255,10 +249,9 @@ async function handleSubscriptionDeleted(
   const biz = business as { id: string } | null;
   
   if (!biz) {
-    console.warn("[Stripe Webhook] Business not found for subscription:", subscription.id);
     return;
   }
-  
+
   // Update business status
   const { error } = await (supabase as any)
     .from("businesses")
@@ -269,7 +262,6 @@ async function handleSubscriptionDeleted(
     .eq("id", biz.id);
   
   if (error) {
-    console.error("[Stripe Webhook] Error updating business:", error);
     throw error;
   }
 }
@@ -298,10 +290,9 @@ async function handleInvoicePaymentSucceeded(
   const biz = business as { id: string } | null;
   
   if (!biz) {
-    console.warn("[Stripe Webhook] Business not found for invoice:", invoice.id);
     return;
   }
-  
+
   // Get subscription for new billing cycle dates
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   
@@ -323,7 +314,6 @@ async function handleInvoicePaymentSucceeded(
     .eq("id", biz.id);
   
   if (error) {
-    console.error("[Stripe Webhook] Error resetting minutes:", error);
     throw error;
   }
 }
@@ -350,10 +340,9 @@ async function handleInvoicePaymentFailed(
   const biz = business as { id: string } | null;
   
   if (!biz) {
-    console.warn("[Stripe Webhook] Business not found for failed invoice:", invoice.id);
     return;
   }
-  
+
   // Update status to paused
   const { error } = await (supabase as any)
     .from("businesses")
@@ -364,7 +353,6 @@ async function handleInvoicePaymentFailed(
     .eq("id", biz.id);
   
   if (error) {
-    console.error("[Stripe Webhook] Error updating business status:", error);
     throw error;
   }
 }
@@ -443,7 +431,6 @@ export const POST = withWebhook(
           // Unhandled event type - ignored
       }
     } catch (error) {
-      console.error("[Stripe Webhook] Error processing event:", error);
       // Return 500 so Stripe retries
       return NextResponse.json(
         { error: "Webhook handler failed" },

@@ -61,7 +61,6 @@ export async function GET(
 
     return NextResponse.json({ appointment });
   } catch (error) {
-    console.error("[Appointment Detail API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -166,13 +165,11 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("[Appointment Detail API] Update error:", error);
       return NextResponse.json({ error: "Failed to update appointment" }, { status: 500 });
     }
 
     return NextResponse.json({ appointment });
   } catch (error) {
-    console.error("[Appointment Detail API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -224,13 +221,11 @@ export async function DELETE(
       .eq("business_id", (business as { id: string }).id);
 
     if (error) {
-      console.error("[Appointment Detail API] Delete error:", error);
       return NextResponse.json({ error: "Failed to delete appointment" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Appointment Detail API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

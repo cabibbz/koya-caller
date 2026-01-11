@@ -73,7 +73,7 @@ export function SearchClient() {
       const data = await response.json();
       setResults(data.results || []);
     } catch (err) {
-      console.error("Search error:", err);
+      // Error handled silently
       setResults([]);
     } finally {
       setLoading(false);

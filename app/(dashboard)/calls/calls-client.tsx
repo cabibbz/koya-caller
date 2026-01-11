@@ -174,7 +174,7 @@ export function CallsListClient({
         setAppointment(data.data.appointment);
       }
     } catch (error) {
-      console.error("Failed to load call details:", error);
+      // Error handled silently
     } finally {
       setDetailsLoading(false);
     }
@@ -216,7 +216,7 @@ export function CallsListClient({
       });
       router.refresh();
     } catch (error) {
-      console.error("Failed to flag call:", error);
+      // Error handled silently
     }
   };
 
@@ -231,7 +231,7 @@ export function CallsListClient({
       });
       router.refresh();
     } catch (error) {
-      console.error("Failed to save note:", error);
+      // Error handled silently
     } finally {
       setSavingNote(false);
     }

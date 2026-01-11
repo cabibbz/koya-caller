@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Admin Export Revenue] Error:", error);
       return NextResponse.json({ error: "Failed to export" }, { status: 500 });
     }
 
@@ -68,7 +67,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Admin Export Revenue] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -231,7 +231,6 @@ The goal is PAGE 1 RANKINGS. Write accordingly.
 
 Return ONLY valid JSON, no other text.`;
 
-    console.log("[Blog Generation] Generating SEO-optimized article for:", topic);
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -258,8 +257,6 @@ Return ONLY valid JSON, no other text.`;
         throw new Error("No JSON found in response");
       }
     } catch (parseError) {
-      console.error("[Blog Generation] Parse error:", parseError);
-      console.log("[Blog Generation] Raw response:", textContent.text.substring(0, 500));
       throw new Error("Failed to parse AI response");
     }
 
@@ -317,11 +314,8 @@ Return ONLY valid JSON, no other text.`;
       .single();
 
     if (insertError) {
-      console.error("[Blog Generation] Insert error:", insertError);
       throw new Error("Failed to save article");
     }
-
-    console.log("[Blog Generation] SEO-optimized article saved:", post.id);
 
     return NextResponse.json({
       success: true,
@@ -337,7 +331,6 @@ Return ONLY valid JSON, no other text.`;
       },
     });
   } catch (error) {
-    console.error("[Blog Generation] Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Generation failed" },
       { status: 500 }

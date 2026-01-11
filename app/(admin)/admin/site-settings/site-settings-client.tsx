@@ -66,7 +66,6 @@ export function SiteSettingsClient() {
       setLoading(true);
       const res = await fetch("/api/admin/settings");
       const data = await res.json();
-      console.log("Admin settings response:", data);
       if (data.error) {
         setError(data.error);
       } else if (data.settings) {
@@ -77,7 +76,6 @@ export function SiteSettingsClient() {
       }
     } catch (err) {
       setError("Failed to load settings");
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -104,7 +102,6 @@ export function SiteSettingsClient() {
       setTimeout(() => setSaved(null), 2000);
     } catch (err) {
       setError("Failed to save setting");
-      console.error(err);
     } finally {
       setSaving(null);
     }

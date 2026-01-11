@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Admin Subscriptions API] Error:", error);
       return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ subscriptions });
   } catch (error) {
-    console.error("[Admin Subscriptions API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

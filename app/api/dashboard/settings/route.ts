@@ -90,7 +90,6 @@ async function handler(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Settings API] Error:", error);
     return NextResponse.json(
       { error: "Failed to fetch settings" },
       { status: 500 }

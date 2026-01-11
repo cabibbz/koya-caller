@@ -207,7 +207,7 @@ export function VoicePreviewWidget() {
       }
     } else {
       audioRef.current.src = selectedVoice.previewUrl;
-      audioRef.current.play().catch(console.error);
+      audioRef.current.play().catch(() => {});
       setIsPlaying(true);
 
       // Update progress

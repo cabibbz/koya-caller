@@ -91,14 +91,8 @@ export const refreshCalendarToken = inngest.createFunction(
       const businessId = originalEvent?.data?.businessId;
 
       if (!businessId) {
-        console.error("[Calendar Refresh] Final failure - no businessId found:", error);
         return;
       }
-
-      console.error(
-        `[Calendar Refresh] Final failure for business ${businessId}:`,
-        error
-      );
 
       const supabase = createAdminClient();
 

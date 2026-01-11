@@ -53,8 +53,6 @@ export async function POST(request: NextRequest) {
     }
     
   } catch (error) {
-    console.error("[Twilio SMS] Error:", error);
-    
     // Return empty TwiML response (don't auto-reply on error)
     return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
   }
@@ -69,12 +67,6 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   const body = params.Body || "";
   const messageSid = params.MessageSid || params.SmsSid || "";
   
-  console.log("[Twilio SMS] Incoming message:", {
-    from: fromNumber,
-    to: toNumber,
-    body: body.substring(0, 50),
-  });
-  
   const supabase = createAdminClient();
   
   // Look up business from phone number
@@ -86,7 +78,6 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
     .single() as { data: { business_id: string } | null };
   
   if (!phoneRecord?.business_id) {
-    console.log("[Twilio SMS] No business found for number:", toNumber);
     return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
   }
   
@@ -144,8 +135,7 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   
   // Check for STOP keyword (unsubscribe - required for A2P compliance)
   if (normalizedBody === "STOP" || normalizedBody === "UNSUBSCRIBE") {
-    // Twilio handles STOP automatically, but we log it
-    console.log("[Twilio SMS] STOP received from:", fromNumber);
+    // Twilio handles STOP automatically
     // Don't reply - Twilio handles this
     return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
   }
@@ -169,7 +159,6 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   
   // For other messages, don't auto-reply
   // (Could potentially forward to business owner in future)
-  console.log("[Twilio SMS] Message stored, no auto-reply");
   return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
 }
 
@@ -181,12 +170,6 @@ async function handleStatusCallback(params: Record<string, string>): Promise<Res
   const messageStatus = params.MessageStatus || "";
   const errorCode = params.ErrorCode;
   const errorMessage = params.ErrorMessage;
-  
-  console.log("[Twilio SMS] Status update:", {
-    sid: messageSid,
-    status: messageStatus,
-    errorCode,
-  });
   
   // Update message status in database
   const supabase = createAdminClient();
@@ -203,10 +186,6 @@ async function handleStatusCallback(params: Record<string, string>): Promise<Res
     .from("sms_messages")
     .update({ status: dbStatus })
     .eq("twilio_sid", messageSid);
-  
-  if (error) {
-    console.error("[Twilio SMS] Failed to update status:", error);
-  }
   
   // Return empty response (status callbacks don't need TwiML)
   return new Response("", { status: 200 });

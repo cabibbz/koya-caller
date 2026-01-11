@@ -25,13 +25,11 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       // Table might not exist yet, return empty
-      console.error("[Admin Audit API] Error:", error);
       return NextResponse.json({ logs: [] });
     }
 
     return NextResponse.json({ logs: logs || [] });
   } catch (error) {
-    console.error("[Admin Audit API] Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

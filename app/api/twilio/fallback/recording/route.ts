@@ -47,13 +47,6 @@ export async function POST(request: NextRequest) {
     const fromNumber = params.From || "";
     const toNumber = params.To || "";
     
-    console.log("[Twilio Recording] Received:", {
-      recordingUrl,
-      duration: recordingDuration,
-      callSid,
-      from: fromNumber,
-    });
-    
     if (recordingUrl && recordingDuration > 0) {
       const supabase = createAdminClient();
       
@@ -86,11 +79,6 @@ export async function POST(request: NextRequest) {
           .select()
           .single();
         
-        if (callError) {
-          console.error("[Twilio Recording] Failed to create call record:", callError);
-        } else {
-          console.log("[Twilio Recording] Created call record:", callRecord?.id);
-        }
         
         // Check notification settings and send SMS alert if enabled
         const { data: notificationSettings } = await supabase
@@ -145,8 +133,6 @@ export async function POST(request: NextRequest) {
     return twimlResponse(generateRecordingComplete());
     
   } catch (error) {
-    console.error("[Twilio Recording] Error:", error);
-    
     return twimlResponse(simpleSay(
       "Thank you for your message. Goodbye."
     ));

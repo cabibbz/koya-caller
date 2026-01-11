@@ -44,7 +44,6 @@ export async function getBusinessTemplates(): Promise<BusinessTypeOption[]> {
     .order("sort_order", { ascending: true });
   
   if (error) {
-    console.error("Error fetching business templates:", error);
     throw new Error("Failed to load business types");
   }
   
@@ -66,7 +65,6 @@ export async function getBusinessTemplate(
     if (error.code === "PGRST116") {
       return null; // Not found
     }
-    console.error("Error fetching business template:", error);
     throw new Error("Failed to load template");
   }
   
@@ -100,7 +98,6 @@ export async function getCurrentBusiness() {
     .single();
   
   if (error) {
-    console.error("Error fetching business:", error);
     throw new Error("Failed to load business");
   }
   
@@ -139,7 +136,6 @@ export async function saveBusinessType(typeSlug: string, typeName: string) {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error saving business type:", businessError);
     throw new Error("Failed to save business type");
   }
   
@@ -193,7 +189,6 @@ export async function saveStep2Data(data: {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error updating business:", businessError);
     throw new Error("Failed to save business details");
   }
   
@@ -204,7 +199,6 @@ export async function saveStep2Data(data: {
     .eq("business_id", tenantId);
   
   if (deleteServicesError) {
-    console.error("Error deleting services:", deleteServicesError);
     throw new Error("Failed to update services");
   }
   
@@ -225,7 +219,6 @@ export async function saveStep2Data(data: {
     .insert(servicesToInsert);
   
   if (insertServicesError) {
-    console.error("Error inserting services:", insertServicesError);
     throw new Error("Failed to save services");
   }
   
@@ -236,7 +229,6 @@ export async function saveStep2Data(data: {
     .eq("business_id", tenantId);
   
   if (deleteHoursError) {
-    console.error("Error deleting business hours:", deleteHoursError);
     throw new Error("Failed to update business hours");
   }
   
@@ -254,7 +246,6 @@ export async function saveStep2Data(data: {
     .insert(hoursToInsert);
   
   if (insertHoursError) {
-    console.error("Error inserting business hours:", insertHoursError);
     throw new Error("Failed to save business hours");
   }
   
@@ -297,7 +288,6 @@ export async function saveStep3Data(data: {
     .eq("business_id", tenantId);
   
   if (deleteFAQsError) {
-    console.error("Error deleting FAQs:", deleteFAQsError);
     throw new Error("Failed to update FAQs");
   }
   
@@ -315,7 +305,6 @@ export async function saveStep3Data(data: {
       .insert(faqsToInsert);
     
     if (insertFAQsError) {
-      console.error("Error inserting FAQs:", insertFAQsError);
       throw new Error("Failed to save FAQs");
     }
   }
@@ -334,7 +323,6 @@ export async function saveStep3Data(data: {
     );
   
   if (knowledgeError) {
-    console.error("Error saving knowledge:", knowledgeError);
     throw new Error("Failed to save knowledge");
   }
   
@@ -348,7 +336,6 @@ export async function saveStep3Data(data: {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error updating business:", businessError);
     throw new Error("Failed to update progress");
   }
   
@@ -383,7 +370,6 @@ export async function loadExistingServices(): Promise<ServiceFormData[]> {
     .order("sort_order", { ascending: true });
   
   if (error) {
-    console.error("Error loading services:", error);
     return [];
   }
   
@@ -424,7 +410,6 @@ export async function loadExistingFAQs(): Promise<FAQFormData[]> {
     .order("sort_order", { ascending: true });
   
   if (error) {
-    console.error("Error loading FAQs:", error);
     return [];
   }
   
@@ -462,7 +447,7 @@ export async function loadExistingKnowledge() {
     .single();
   
   if (error && error.code !== "PGRST116") {
-    console.error("Error loading knowledge:", error);
+    // Error handled silently
   }
   
   return {
@@ -496,7 +481,6 @@ export async function loadExistingBusinessHours(): Promise<
     .order("day_of_week", { ascending: true });
   
   if (error) {
-    console.error("Error loading business hours:", error);
     return [];
   }
   
@@ -552,7 +536,6 @@ export async function saveStep4Data(data: Step4FormData) {
     );
   
   if (calendarError) {
-    console.error("Error saving calendar settings:", calendarError);
     throw new Error("Failed to save calendar settings");
   }
   
@@ -566,7 +549,6 @@ export async function saveStep4Data(data: Step4FormData) {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error updating business:", businessError);
     throw new Error("Failed to update progress");
   }
   
@@ -597,7 +579,6 @@ export async function loadExistingCalendarSettings(): Promise<Step4FormData | nu
     .single();
   
   if (error && error.code !== "PGRST116") {
-    console.error("Error loading calendar settings:", error);
     return null;
   }
   
@@ -671,7 +652,6 @@ export async function saveStep5Data(data: Step5FormData) {
     );
   
   if (callSettingsError) {
-    console.error("Error saving call settings:", callSettingsError);
     throw new Error("Failed to save call settings");
   }
   
@@ -689,7 +669,6 @@ export async function saveStep5Data(data: Step5FormData) {
       );
     
     if (aiConfigError) {
-      console.error("Error saving after-hours greeting:", aiConfigError);
       // Non-fatal error, continue
     }
   }
@@ -704,7 +683,6 @@ export async function saveStep5Data(data: Step5FormData) {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error updating business:", businessError);
     throw new Error("Failed to update progress");
   }
   
@@ -736,7 +714,6 @@ export async function loadExistingCallSettings(): Promise<Step5FormData | null> 
     .single();
   
   if (callError && callError.code !== "PGRST116") {
-    console.error("Error loading call settings:", callError);
     return null;
   }
   
@@ -804,7 +781,6 @@ export async function saveStep6Data(data: Step6FormData) {
     );
   
   if (aiConfigError) {
-    console.error("Error saving language settings:", aiConfigError);
     throw new Error("Failed to save language settings");
   }
   
@@ -818,7 +794,6 @@ export async function saveStep6Data(data: Step6FormData) {
     .eq("id", tenantId);
   
   if (businessError) {
-    console.error("Error updating business:", businessError);
     throw new Error("Failed to update progress");
   }
   
@@ -849,7 +824,6 @@ export async function loadExistingLanguageSettings(): Promise<Step6FormData | nu
     .single();
   
   if (error && error.code !== "PGRST116") {
-    console.error("Error loading language settings:", error);
     return null;
   }
   

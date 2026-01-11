@@ -149,7 +149,6 @@ export function DemoSection() {
       })
 
       retellClient.on("error", (err: any) => {
-        console.error("Retell error:", err)
         setError(`Call error: ${err.message || err}`)
         setCallState("error")
         if (durationIntervalRef.current) {
@@ -170,7 +169,6 @@ export function DemoSection() {
         accessToken: data.accessToken,
       })
     } catch (err) {
-      console.error("Call error:", err)
       setError(err instanceof Error ? err.message : "Failed to start call")
       setCallState("error")
     }
@@ -181,7 +179,7 @@ export function DemoSection() {
       try {
         retellClientRef.current.stopCall()
       } catch (e) {
-        console.error("Error stopping call:", e)
+        // Error handled silently
       }
     }
     setCallState("ended")
@@ -201,7 +199,7 @@ export function DemoSection() {
         }
         setIsMuted(!isMuted)
       } catch (e) {
-        console.error("Error toggling mute:", e)
+        // Error handled silently
       }
     }
   }, [isMuted])

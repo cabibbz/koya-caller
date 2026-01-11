@@ -66,14 +66,9 @@ export async function logSystemError(error: SystemError): Promise<void> {
       call_id: error.callId || null,
     });
 
-    // Also log to console for debugging
-    console.error(
-      `[${error.category.toUpperCase()}] ${error.level}: ${error.message}`,
-      error.details
-    );
-  } catch (logError) {
+    // Error handled silently
+  } catch {
     // Don't throw - logging failures shouldn't break the app
-    console.error("[System Log] Failed to log error:", logError);
   }
 }
 
@@ -152,9 +147,6 @@ export async function withRetry<T>(
         throw error;
       }
 
-      console.log(
-        `[Retry] Attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms...`
-      );
       await sleep(delay);
       delay = Math.min(delay * backoffMultiplier, maxDelayMs);
     }

@@ -253,8 +253,7 @@ async function fetchBusinessData(
         minutesExhausted: minutesRemaining <= 0,
       },
     };
-  } catch (error) {
-    console.error("[Fetch Business Data] Error:", error);
+  } catch {
     return { success: false, error: "Failed to fetch business data" };
   }
 }
@@ -308,7 +307,6 @@ async function updateRetellAgent(
     const RETELL_API_KEY = process.env.RETELL_API_KEY;
 
     if (!RETELL_API_KEY) {
-      console.log("[Update Retell] Running in mock mode");
       return;
     }
 
@@ -322,7 +320,6 @@ async function updateRetellAgent(
     );
 
     if (!agentResponse.ok) {
-      console.error("[Update Retell] Failed to fetch agent");
       return;
     }
 
@@ -330,7 +327,6 @@ async function updateRetellAgent(
     const llmId = agentData.llm_id;
 
     if (!llmId) {
-      console.error("[Update Retell] No LLM ID found");
       return;
     }
 
@@ -349,7 +345,6 @@ async function updateRetellAgent(
     );
 
     if (!updateResponse.ok) {
-      console.error("[Update Retell] Failed to update LLM");
       return;
     }
 
@@ -365,9 +360,7 @@ async function updateRetellAgent(
         retell_agent_version: (config?.retell_agent_version || 0) + 1,
       })
       .eq("business_id", businessId);
-
-    console.log(`[Update Retell] Updated agent ${agentId} successfully`);
-  } catch (error) {
-    console.error("[Update Retell] Error:", error);
+  } catch {
+    // Error handled silently
   }
 }

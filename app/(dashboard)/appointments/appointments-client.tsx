@@ -133,7 +133,7 @@ export function AppointmentsClient({
         setAppointments(data.appointments || []);
       }
     } catch (error) {
-      console.error("Error fetching appointments:", error);
+      // Error handled silently
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export function AppointmentsClient({
         setSelectedAppointment(null);
       }
     } catch (error) {
-      console.error("Error updating appointment:", error);
+      // Error handled silently
     } finally {
       setActionLoading(false);
     }

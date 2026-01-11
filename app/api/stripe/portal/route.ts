@@ -48,7 +48,6 @@ export const GET = withRateLimit(
         .single();
 
       if (businessError || !business) {
-        console.error("[Stripe Portal] No business found:", businessError);
         return NextResponse.redirect(new URL("/settings?error=no_business", request.url));
       }
 
@@ -59,7 +58,6 @@ export const GET = withRateLimit(
       };
 
       if (!biz.stripe_customer_id) {
-        console.error("[Stripe Portal] No Stripe customer ID for business:", biz.id);
         return NextResponse.redirect(new URL("/settings?error=no_stripe_customer", request.url));
       }
 
@@ -71,16 +69,9 @@ export const GET = withRateLimit(
         return_url: returnUrl,
       });
 
-      console.log("[Stripe Portal] Session created:", {
-        businessId: biz.id,
-        portalUrl: portalSession.url,
-      });
-
       // Redirect to portal
       return NextResponse.redirect(portalSession.url);
     } catch (error) {
-      console.error("[Stripe Portal] Error:", error);
-      
       // Handle Stripe-specific errors
       if (error instanceof Error && error.message.includes("No such customer")) {
         return NextResponse.redirect(new URL("/settings?error=invalid_customer", request.url));

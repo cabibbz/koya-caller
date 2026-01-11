@@ -91,7 +91,6 @@ async function handler(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("[Notifications API] Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update notification settings" },
         { status: 500 }
@@ -103,7 +102,6 @@ async function handler(request: NextRequest) {
       data: notificationSettings,
     });
   } catch (error) {
-    console.error("[Notifications API] Error:", error);
     return NextResponse.json(
       { error: "Failed to update notification settings" },
       { status: 500 }

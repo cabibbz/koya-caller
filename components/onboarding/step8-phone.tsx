@@ -106,7 +106,7 @@ export function Step8PhoneNumber() {
           setExistingNumber(data.phoneNumber);
         }
       } catch (error) {
-        console.error("Error checking existing number:", error);
+        // Error handled silently
       } finally {
         setCheckingExisting(false);
       }
@@ -166,7 +166,6 @@ export function Step8PhoneNumber() {
       }));
       
     } catch (error) {
-      console.error("Error configuring existing number:", error);
       setConfigureError(
         error instanceof Error ? error.message : "Failed to configure existing number"
       );
@@ -209,7 +208,6 @@ export function Step8PhoneNumber() {
         setSearchError(`No numbers available in area code ${formData.areaCode}. Try a different area code.`);
       }
     } catch (error) {
-      console.error("Error searching numbers:", error);
       setSearchError(
         error instanceof Error ? error.message : "Failed to search for numbers"
       );
@@ -251,7 +249,6 @@ export function Step8PhoneNumber() {
         isProvisioned: true,
       }));
     } catch (error) {
-      console.error("Error provisioning number:", error);
       setProvisionError(
         error instanceof Error ? error.message : "Failed to provision number"
       );
@@ -312,7 +309,7 @@ END:VCARD`;
       completeStep(8);
       router.push("/onboarding/test");
     } catch (error) {
-      console.error("Error saving Step 8:", error);
+      // Error handled silently
     } finally {
       setIsSaving(false);
     }
