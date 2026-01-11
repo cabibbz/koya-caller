@@ -10,6 +10,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendSMS } from "@/lib/twilio";
+import {
+  getFullErrorResponse,
+  type Personality,
+  type ErrorType,
+} from "@/lib/claude/error-templates";
 
 // =============================================================================
 // Types
@@ -27,6 +32,45 @@ interface FunctionResult {
   success: boolean;
   message: string;
   data?: Record<string, unknown>;
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Get business personality for error message customization
+ */
+async function getBusinessPersonality(
+  supabase: ReturnType<typeof createAdminClient>,
+  businessId: string
+): Promise<Personality> {
+  try {
+    const { data } = await supabase
+      .from("ai_config")
+      .select("personality")
+      .eq("business_id", businessId)
+      .single();
+
+    const config = data as { personality: string } | null;
+    if (config?.personality && ["professional", "friendly", "casual"].includes(config.personality)) {
+      return config.personality as Personality;
+    }
+  } catch {
+    // Default to professional on error
+  }
+  return "professional";
+}
+
+/**
+ * Get personality-aware error message
+ */
+function getErrorMessage(
+  errorType: ErrorType,
+  personality: Personality,
+  language: "en" | "es" = "en"
+): string {
+  return getFullErrorResponse(errorType, personality, language);
 }
 
 // =============================================================================
@@ -210,9 +254,10 @@ async function handleCheckAvailability(
     };
 
   } catch (error) {
+    const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
-      message: "I had trouble checking availability. Let me take your information and have someone call you back.",
+      message: getErrorMessage("availability_check_failed", personality),
     };
   }
 }
@@ -339,9 +384,10 @@ async function handleBookAppointment(
     };
 
   } catch (error) {
+    const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
-      message: "I had trouble booking that appointment. Let me take a message and have someone call you back to confirm.",
+      message: getErrorMessage("booking_failed", personality),
     };
   }
 }
@@ -384,9 +430,10 @@ async function handleTransferCall(
     };
 
   } catch (error) {
+    const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
-      message: "I wasn't able to complete the transfer. Would you like to leave a message?",
+      message: getErrorMessage("transfer_failed", personality),
     };
   }
 }
@@ -471,9 +518,10 @@ async function handleTakeMessage(
     };
 
   } catch (error) {
+    const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
-      message: "I had trouble saving that message. Let me try one more time - what would you like me to tell them?",
+      message: getErrorMessage("message_save_failed", personality),
     };
   }
 }
@@ -524,9 +572,10 @@ async function handleSendSMS(
     };
 
   } catch (error) {
+    const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
-      message: "I had trouble sending that text. Would you like me to try again or help with something else?",
+      message: getErrorMessage("sms_failed", personality),
     };
   }
 }

@@ -188,3 +188,144 @@ export interface ProcessQueueResponse {
   failed: number;
   errors?: { businessId: string; error: string }[];
 }
+
+// =============================================================================
+// Enhanced Prompt System Types
+// =============================================================================
+
+/**
+ * Configuration for enhanced prompt features
+ */
+export interface EnhancedPromptConfig {
+  /** Enable industry-specific prompt enhancements */
+  industryEnhancements: boolean;
+  /** Enable few-shot conversation examples in prompts */
+  fewShotExamplesEnabled: boolean;
+  /** Level of sentiment detection: none, basic, advanced */
+  sentimentDetectionLevel: "none" | "basic" | "advanced";
+  /** Enable caller context/recognition features */
+  callerContextEnabled: boolean;
+  /** Tone intensity: 1 (subdued) to 5 (expressive) */
+  toneIntensity: 1 | 2 | 3 | 4 | 5;
+  /** Enable personality-aware error messages */
+  personalityAwareErrors: boolean;
+  /** Maximum few-shot examples to include */
+  maxFewShotExamples: number;
+}
+
+/**
+ * Default enhanced prompt configuration
+ */
+export const DEFAULT_ENHANCED_PROMPT_CONFIG: EnhancedPromptConfig = {
+  industryEnhancements: true,
+  fewShotExamplesEnabled: true,
+  sentimentDetectionLevel: "basic",
+  callerContextEnabled: true,
+  toneIntensity: 3,
+  personalityAwareErrors: true,
+  maxFewShotExamples: 3
+};
+
+/**
+ * Extended AI configuration with enhanced features
+ */
+export interface ExtendedAIConfigContext extends AIConfigContext {
+  promptConfig?: EnhancedPromptConfig;
+}
+
+/**
+ * Industry-specific enhancement configuration
+ */
+export interface IndustryEnhancementConfig {
+  displayName: string;
+  personalityModifiers: Record<"professional" | "friendly" | "casual", string>;
+  terminology: string[];
+  commonPhrases: string[];
+  scenarios: Array<{ trigger: string; instruction: string }>;
+  guardrails: string[];
+  urgencyKeywords: string[];
+  typicalServices: string[];
+  peakTimes?: string;
+}
+
+/**
+ * Sentiment detection configuration
+ */
+export interface SentimentDetectionConfig {
+  level: SentimentLevel;
+  category: "positive" | "neutral" | "negative";
+  escalationThreshold: number;
+}
+
+/**
+ * Sentiment levels for caller emotion tracking
+ */
+export type SentimentLevel =
+  | "pleased"
+  | "neutral"
+  | "confused"
+  | "impatient"
+  | "frustrated"
+  | "upset"
+  | "angry";
+
+/**
+ * Caller context for personalization
+ */
+export interface CallerContextData {
+  isRepeatCaller: boolean;
+  knownName: string | null;
+  previousCallCount: number;
+  lastCallOutcome: string | null;
+  knownPreferences: Record<string, string>;
+  appointmentHistory: {
+    count: number;
+    lastServiceBooked: string | null;
+    lastAppointmentDate: string | null;
+  };
+}
+
+/**
+ * Few-shot conversation example
+ */
+export interface ConversationExample {
+  category: string;
+  personality: "professional" | "friendly" | "casual";
+  context: string;
+  conversation: Array<{
+    role: "caller" | "ai";
+    content: string;
+  }>;
+  notes?: string;
+}
+
+/**
+ * Error template for personality-aware error handling
+ */
+export interface PersonalityErrorTemplate {
+  initial: string;
+  followUp: string;
+  recovery: string;
+}
+
+/**
+ * Complete prompt generation options including enhancements
+ */
+export interface EnhancedPromptGenerationInput extends PromptGenerationInput {
+  enhancedConfig?: EnhancedPromptConfig;
+  callerContext?: CallerContextData;
+  industryType?: string;
+}
+
+/**
+ * Result of enhanced prompt generation
+ */
+export interface EnhancedPromptGenerationResult extends PromptGenerationResult {
+  enhancementsApplied?: {
+    industry: boolean;
+    fewShot: boolean;
+    sentiment: boolean;
+    callerContext: boolean;
+    errorTemplates: boolean;
+  };
+}

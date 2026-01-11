@@ -7,7 +7,13 @@
  * for Retell voice AI agents.
  */
 
-import type { PromptGenerationInput } from "./types";
+import type { PromptGenerationInput, EnhancedPromptConfig } from "./types";
+import { generateIndustryContextSection, getIndustryEnhancement } from "./industry-prompts";
+import { generateSentimentInstructions } from "./sentiment-responses";
+import { generateErrorHandlingInstructions } from "./error-templates";
+import { getRelevantExamples, formatExamplesForPrompt } from "./few-shot-examples";
+import type { Personality } from "./error-templates";
+import type { IndustryType } from "./industry-prompts";
 
 // =============================================================================
 // Meta-Prompt Template
@@ -471,4 +477,352 @@ Puede reservar: {{can_book}}
 Transferencia habilitada: {{transfer_enabled}}
 Hoy: {{today_date}}
 Hora: {{current_time}}`;
+}
+
+// =============================================================================
+// Enhanced Prompt Generation with Injections
+// =============================================================================
+
+/**
+ * Enhanced meta-prompt template with injection points
+ */
+export const ENHANCED_VOICE_AI_META_PROMPT = `You are an expert prompt engineer creating system prompts for voice AI agents.
+
+Your task is to generate a highly effective system prompt for a voice AI receptionist. The prompt you create will be used by a Retell.ai voice agent to handle real phone calls for a business.
+
+<business_context>
+Business Name: {BUSINESS_NAME}
+Industry: {INDUSTRY}
+Services: {SERVICES}
+AI Assistant Name: {AI_NAME}
+Personality: {PERSONALITY}
+Language: {LANGUAGE}
+</business_context>
+
+{INDUSTRY_CONTEXT}
+
+{SENTIMENT_INSTRUCTIONS}
+
+{FEW_SHOT_EXAMPLES}
+
+{ERROR_HANDLING}
+
+<output_structure>
+Generate the prompt with these exact sections:
+
+1. # Personality
+   Write 2-3 sentences defining who the AI is and their core traits.
+   Incorporate the industry-specific personality guidance provided above.
+
+2. # Environment
+   Describe the context of interactions (phone calls, what callers expect).
+   Include industry-specific terminology and scenarios.
+
+3. # Tone
+   Specific voice and speech guidelines based on the personality type.
+   Apply the tone intensity setting: {TONE_INTENSITY}/5 (1=subdued, 5=expressive)
+
+4. # Goal
+   Numbered workflow steps for handling calls. Mark critical steps with "This step is important."
+   Include handling for repeat callers and urgent situations.
+
+5. # Guardrails
+   Non-negotiable rules the AI must follow.
+   Include industry-specific guardrails.
+
+6. # Sentiment Awareness
+   How to detect and respond to caller emotions.
+   Include de-escalation techniques.
+
+7. # Tools
+   When and how to use each function (check_availability, book_appointment, transfer_call, take_message, send_sms, end_call).
+   Include personality-aware error handling guidance.
+
+8. # Character Normalization
+   Rules for converting spoken words to written format (emails, phone numbers, dates).
+</output_structure>
+
+<constraints>
+- Keep total prompt under 2000 tokens
+- Use action-oriented language
+- Mark critical instructions with "This step is important."
+- Design for voice: responses should be 2-3 sentences max
+- Include natural filler words and acknowledgments appropriate to the personality
+- Never generate placeholder text - use actual business details
+- Apply personality consistently in all examples and guidance
+</constraints>
+
+<function_definitions>
+The AI has access to these functions:
+- check_availability(date, service?) - Check available appointment times
+- book_appointment(date, time, customer_name, customer_phone, service, notes?) - Book an appointment
+- transfer_call(reason) - Transfer to business owner
+- take_message(caller_name, caller_phone, message, urgency) - Take a message
+- send_sms(message, to_number?) - Send SMS to caller
+- end_call(reason) - End the call politely
+</function_definitions>
+
+<additional_context>
+{ADDITIONAL_CONTEXT}
+</additional_context>
+
+{CALLER_CONTEXT}
+
+Generate only the system prompt content. Do not include any preamble or explanation.`;
+
+/**
+ * Build enhanced industry context section
+ */
+function buildIndustryContextSection(
+  businessType: string,
+  personality: Personality,
+  language: "en" | "es"
+): string {
+  return generateIndustryContextSection(businessType, personality, language);
+}
+
+/**
+ * Build sentiment instructions section
+ */
+function buildSentimentSection(
+  personality: Personality,
+  level: "none" | "basic" | "advanced",
+  language: "en" | "es"
+): string {
+  if (level === "none") return "";
+  return generateSentimentInstructions(personality, language);
+}
+
+/**
+ * Build few-shot examples section
+ */
+function buildFewShotSection(
+  personality: Personality,
+  businessType: string,
+  maxExamples: number,
+  language: "en" | "es"
+): string {
+  const examples = getRelevantExamples(
+    personality,
+    businessType as IndustryType,
+    language,
+    maxExamples
+  );
+  return formatExamplesForPrompt(examples, language);
+}
+
+/**
+ * Build error handling section
+ */
+function buildErrorHandlingSection(
+  personality: Personality,
+  language: "en" | "es"
+): string {
+  return generateErrorHandlingInstructions(personality, language);
+}
+
+/**
+ * Build caller context section for the meta-prompt
+ */
+function buildCallerContextSection(enabled: boolean, language: "en" | "es"): string {
+  if (!enabled) return "";
+
+  if (language === "es") {
+    return `
+<caller_context_handling>
+## Manejo de Contexto del Llamante
+
+El sistema proporcionara contexto sobre el llamante si esta disponible:
+- {{is_repeat_caller}} - "true" si han llamado antes
+- {{caller_name}} - Su nombre si se conoce
+- {{previous_call_count}} - Cuantas veces han llamado
+- {{last_service}} - Ultimo servicio reservado
+
+Para llamantes recurrentes:
+- Reconocelos: "Que gusto escucharle de nuevo!"
+- Referencia su historial si es relevante
+- Omite preguntas redundantes si ya tienes su informacion
+- Usa su nombre cuando sea apropiado
+
+Para llamantes nuevos:
+- Hazlos sentir bienvenidos
+- Captura su informacion de contacto
+- Explica los servicios si preguntan
+</caller_context_handling>`;
+  }
+
+  return `
+<caller_context_handling>
+## Caller Context Handling
+
+The system will provide context about the caller if available:
+- {{is_repeat_caller}} - "true" if they've called before
+- {{caller_name}} - Their name if known
+- {{previous_call_count}} - How many times they've called
+- {{last_service}} - Last service they booked
+
+For repeat callers:
+- Acknowledge them: "Good to hear from you again!"
+- Reference their history if relevant
+- Skip redundant questions if you already have their info
+- Use their name when appropriate
+
+For new callers:
+- Make a great first impression
+- Capture their contact information
+- Explain services if they ask
+</caller_context_handling>`;
+}
+
+/**
+ * Build enhanced English prompt request with all enhancements
+ */
+export function buildEnhancedEnglishPromptRequest(
+  input: PromptGenerationInput,
+  config?: EnhancedPromptConfig
+): string {
+  const enhancedConfig = config || {
+    industryEnhancements: true,
+    fewShotExamplesEnabled: true,
+    sentimentDetectionLevel: "basic" as const,
+    callerContextEnabled: true,
+    toneIntensity: 3 as const,
+    personalityAwareErrors: true,
+    maxFewShotExamples: 3
+  };
+
+  const personality = input.aiConfig.personality as Personality;
+  const businessType = input.business.type;
+
+  const personalityDescriptions = {
+    professional: "formal, courteous, and business-appropriate",
+    friendly: "warm, approachable, and conversational",
+    casual: "relaxed, informal, and easy-going",
+  };
+
+  // Build enhanced sections
+  const industryContext = enhancedConfig.industryEnhancements
+    ? buildIndustryContextSection(businessType, personality, "en")
+    : "";
+
+  const sentimentInstructions = buildSentimentSection(
+    personality,
+    enhancedConfig.sentimentDetectionLevel,
+    "en"
+  );
+
+  const fewShotExamples = enhancedConfig.fewShotExamplesEnabled
+    ? buildFewShotSection(personality, businessType, enhancedConfig.maxFewShotExamples, "en")
+    : "";
+
+  const errorHandling = enhancedConfig.personalityAwareErrors
+    ? buildErrorHandlingSection(personality, "en")
+    : "";
+
+  const callerContext = buildCallerContextSection(enhancedConfig.callerContextEnabled, "en");
+
+  return ENHANCED_VOICE_AI_META_PROMPT
+    .replace("{BUSINESS_NAME}", input.business.name)
+    .replace("{INDUSTRY}", businessType)
+    .replace("{SERVICES}", input.services.map((s) => s.name).join(", ") || "General services")
+    .replace("{AI_NAME}", input.aiConfig.name)
+    .replace("{PERSONALITY}", personalityDescriptions[personality])
+    .replace("{LANGUAGE}", "English")
+    .replace("{TONE_INTENSITY}", enhancedConfig.toneIntensity.toString())
+    .replace("{INDUSTRY_CONTEXT}", industryContext)
+    .replace("{SENTIMENT_INSTRUCTIONS}", sentimentInstructions)
+    .replace("{FEW_SHOT_EXAMPLES}", fewShotExamples)
+    .replace("{ERROR_HANDLING}", errorHandling)
+    .replace("{CALLER_CONTEXT}", callerContext)
+    .replace("{ADDITIONAL_CONTEXT}", buildAdditionalContext(input));
+}
+
+/**
+ * Build enhanced Spanish prompt request with all enhancements
+ */
+export function buildEnhancedSpanishPromptRequest(
+  input: PromptGenerationInput,
+  config?: EnhancedPromptConfig
+): string {
+  const enhancedConfig = config || {
+    industryEnhancements: true,
+    fewShotExamplesEnabled: true,
+    sentimentDetectionLevel: "basic" as const,
+    callerContextEnabled: true,
+    toneIntensity: 3 as const,
+    personalityAwareErrors: true,
+    maxFewShotExamples: 3
+  };
+
+  const personality = input.aiConfig.personality as Personality;
+  const businessType = input.business.type;
+
+  const personalityDescriptions = {
+    professional: "formal, cortés y apropiado para negocios (use 'usted')",
+    friendly: "cálido, accesible y conversacional",
+    casual: "relajado, informal y tranquilo",
+  };
+
+  // Build enhanced sections in Spanish
+  const industryContext = enhancedConfig.industryEnhancements
+    ? buildIndustryContextSection(businessType, personality, "es")
+    : "";
+
+  const sentimentInstructions = buildSentimentSection(
+    personality,
+    enhancedConfig.sentimentDetectionLevel,
+    "es"
+  );
+
+  const fewShotExamples = enhancedConfig.fewShotExamplesEnabled
+    ? buildFewShotSection(personality, businessType, enhancedConfig.maxFewShotExamples, "es")
+    : "";
+
+  const errorHandling = enhancedConfig.personalityAwareErrors
+    ? buildErrorHandlingSection(personality, "es")
+    : "";
+
+  const callerContext = buildCallerContextSection(enhancedConfig.callerContextEnabled, "es");
+
+  // Create Spanish-specific context
+  const spanishContext = buildAdditionalContext(input);
+
+  // Add Spanish-specific instructions
+  const spanishAdditions = `
+
+Spanish-Specific Guidelines:
+- Use "usted" form for professional tone, "tú" for casual
+- Localized for US Hispanic market
+- Natural Spanish expressions and idioms
+- ${input.aiConfig.greetingSpanish ? `Custom Spanish greeting: "${input.aiConfig.greetingSpanish}"` : "Translate the English greeting naturally"}`;
+
+  return ENHANCED_VOICE_AI_META_PROMPT
+    .replace("{BUSINESS_NAME}", input.business.name)
+    .replace("{INDUSTRY}", businessType)
+    .replace("{SERVICES}", input.services.map((s) => s.name).join(", ") || "Servicios generales")
+    .replace("{AI_NAME}", input.aiConfig.name)
+    .replace("{PERSONALITY}", personalityDescriptions[personality])
+    .replace("{LANGUAGE}", "Spanish (US Hispanic market)")
+    .replace("{TONE_INTENSITY}", enhancedConfig.toneIntensity.toString())
+    .replace("{INDUSTRY_CONTEXT}", industryContext)
+    .replace("{SENTIMENT_INSTRUCTIONS}", sentimentInstructions)
+    .replace("{FEW_SHOT_EXAMPLES}", fewShotExamples)
+    .replace("{ERROR_HANDLING}", errorHandling)
+    .replace("{CALLER_CONTEXT}", callerContext)
+    .replace("{ADDITIONAL_CONTEXT}", spanishContext + spanishAdditions);
+}
+
+/**
+ * Get the appropriate prompt builder based on config
+ */
+export function getPromptBuilder(
+  enhanced: boolean,
+  language: "en" | "es"
+): (input: PromptGenerationInput, config?: EnhancedPromptConfig) => string {
+  if (enhanced) {
+    return language === "es" ? buildEnhancedSpanishPromptRequest : buildEnhancedEnglishPromptRequest;
+  }
+  return language === "es"
+    ? (input) => buildSpanishPromptRequest(input)
+    : (input) => buildEnglishPromptRequest(input);
 }

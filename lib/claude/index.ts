@@ -15,13 +15,18 @@ import type {
   PromptGenerationInput,
   GeneratedPrompts,
   PromptGenerationResult,
+  EnhancedPromptConfig,
+  EnhancedPromptGenerationResult,
 } from "./types";
+import { DEFAULT_ENHANCED_PROMPT_CONFIG } from "./types";
 import {
   buildEnglishPromptRequest,
   buildSpanishPromptRequest,
   buildLanguageSwitchingInstructions,
   generateMockEnglishPrompt,
   generateMockSpanishPrompt,
+  buildEnhancedEnglishPromptRequest,
+  buildEnhancedSpanishPromptRequest,
 } from "./meta-prompt";
 import {
   withRetry,
@@ -410,6 +415,174 @@ export function buildPromptInputFromDatabase(data: {
 }
 
 // =============================================================================
+// Enhanced Prompt Generation
+// =============================================================================
+
+/**
+ * Generate enhanced system prompts with industry-specific content,
+ * sentiment detection, few-shot examples, and caller context support.
+ *
+ * @param input - Business context and configuration
+ * @param enhancedConfig - Optional enhanced prompt configuration
+ * @returns Generated prompts with enhancement metadata
+ */
+export async function generateEnhancedPrompts(
+  input: PromptGenerationInput,
+  enhancedConfig?: EnhancedPromptConfig
+): Promise<EnhancedPromptGenerationResult> {
+  const config = enhancedConfig || DEFAULT_ENHANCED_PROMPT_CONFIG;
+  const client = getClient();
+
+  // Mock mode if no API key
+  if (!client) {
+    const mockResult = generateMockPrompts(input);
+    return {
+      ...mockResult,
+      enhancementsApplied: {
+        industry: false,
+        fewShot: false,
+        sentiment: false,
+        callerContext: false,
+        errorTemplates: false,
+      },
+    };
+  }
+
+  try {
+    // Generate enhanced English prompt
+    const englishPrompt = await generateEnhancedEnglishPrompt(client, input, config);
+
+    // Generate enhanced Spanish prompt if enabled
+    let spanishPrompt: string | undefined;
+    if (input.languageSettings.spanishEnabled) {
+      spanishPrompt = await generateEnhancedSpanishPrompt(client, input, config);
+    }
+
+    // Add language switching instructions if bilingual
+    let finalEnglishPrompt = englishPrompt;
+    if (input.languageSettings.spanishEnabled) {
+      const switchInstructions = buildLanguageSwitchingInstructions(
+        input.languageSettings.languageMode
+      );
+      finalEnglishPrompt = englishPrompt + "\n" + switchInstructions;
+    }
+
+    const prompts: GeneratedPrompts = {
+      englishPrompt: finalEnglishPrompt,
+      spanishPrompt,
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      tokenCount: {
+        english: estimateTokenCount(finalEnglishPrompt),
+        spanish: spanishPrompt ? estimateTokenCount(spanishPrompt) : undefined,
+      },
+    };
+
+    return {
+      success: true,
+      prompts,
+      mock: false,
+      enhancementsApplied: {
+        industry: config.industryEnhancements,
+        fewShot: config.fewShotExamplesEnabled,
+        sentiment: config.sentimentDetectionLevel !== "none",
+        callerContext: config.callerContextEnabled,
+        errorTemplates: config.personalityAwareErrors,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      mock: false,
+      enhancementsApplied: {
+        industry: false,
+        fewShot: false,
+        sentiment: false,
+        callerContext: false,
+        errorTemplates: false,
+      },
+    };
+  }
+}
+
+/**
+ * Generate enhanced English system prompt
+ */
+async function generateEnhancedEnglishPrompt(
+  client: Anthropic,
+  input: PromptGenerationInput,
+  config: EnhancedPromptConfig
+): Promise<string> {
+  const metaPrompt = buildEnhancedEnglishPromptRequest(input, config);
+
+  const response = await withRetry(
+    () =>
+      client.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: metaPrompt,
+          },
+        ],
+      }),
+    {
+      maxAttempts: 3,
+      initialDelayMs: 2000,
+      maxDelayMs: 10000,
+      retryIf: isClaudeRetryable,
+    }
+  );
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Claude");
+  }
+
+  return textBlock.text;
+}
+
+/**
+ * Generate enhanced Spanish system prompt
+ */
+async function generateEnhancedSpanishPrompt(
+  client: Anthropic,
+  input: PromptGenerationInput,
+  config: EnhancedPromptConfig
+): Promise<string> {
+  const metaPrompt = buildEnhancedSpanishPromptRequest(input, config);
+
+  const response = await withRetry(
+    () =>
+      client.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: metaPrompt,
+          },
+        ],
+      }),
+    {
+      maxAttempts: 3,
+      initialDelayMs: 2000,
+      maxDelayMs: 10000,
+      retryIf: isClaudeRetryable,
+    }
+  );
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Claude");
+  }
+
+  return textBlock.text;
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 
@@ -419,6 +592,8 @@ export {
   buildSpanishPromptRequest,
   generateMockEnglishPrompt,
   generateMockSpanishPrompt,
+  buildEnhancedEnglishPromptRequest,
+  buildEnhancedSpanishPromptRequest,
 } from "./meta-prompt";
 export {
   queuePromptRegeneration,
@@ -426,3 +601,86 @@ export {
   processRegenerationQueue,
   getTriggerType,
 } from "./queue";
+
+// Enhanced prompt system exports
+export {
+  getErrorMessage,
+  getErrorInitial,
+  getErrorFollowUp,
+  getErrorRecovery,
+  getFullErrorResponse,
+  formatErrorMessage,
+  getAllErrorTemplatesForPersonality,
+  generateErrorHandlingInstructions,
+  ERROR_TEMPLATES,
+  ERROR_TEMPLATES_SPANISH,
+  type Personality,
+  type ErrorType,
+  type ErrorMessage,
+  type ErrorTemplate,
+} from "./error-templates";
+
+export {
+  getIndustryEnhancement,
+  getPersonalityModifier,
+  getUrgencyKeywords,
+  containsUrgencyKeyword,
+  generateIndustryContextSection,
+  getIndustryOptions,
+  INDUSTRY_ENHANCEMENTS,
+  type IndustryType,
+  type IndustryScenario,
+  type IndustryPromptEnhancement,
+} from "./industry-prompts";
+
+export {
+  getSentimentConfig,
+  getSentimentResponse,
+  shouldConsiderEscalation,
+  getSentimentCategory,
+  generateSentimentInstructions,
+  getAcknowledgment,
+  detectSentimentLevel,
+  getNegativeSentimentLevels,
+  getSentimentHandlingSummary,
+  SENTIMENT_INDICATORS,
+  ESCALATION_TRIGGERS,
+  type SentimentLevel as SentimentLevelType,
+  type SentimentCategory,
+  type SentimentIndicator,
+  type SentimentResponse,
+  type SentimentConfig,
+  type EscalationTrigger,
+} from "./sentiment-responses";
+
+export {
+  getExamplesByCategory,
+  getExamplesByPersonality,
+  getExamplesByIndustry,
+  getRelevantExamples,
+  formatExamplesForPrompt,
+  getEssentialExamples,
+  getScenarioCategories,
+  FEW_SHOT_EXAMPLES,
+  FEW_SHOT_EXAMPLES_SPANISH,
+  type ScenarioCategory,
+  type ConversationTurn,
+  type FewShotExample,
+} from "./few-shot-examples";
+
+export {
+  fetchCallerContext,
+  updateCallerProfile,
+  incrementCallerCallCount,
+  buildCallerContextPrompt,
+  buildCallerContextDynamicVars,
+  isVIPCaller,
+  getPersonalizedGreeting,
+  getSuggestedFollowUp,
+  shouldAskForName,
+  type CallerPreferences,
+  type CallerHistory,
+  type CallerContext,
+  type CallerProfile,
+  type CallerContextDynamicVars,
+} from "./caller-context";
