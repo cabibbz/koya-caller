@@ -67,9 +67,6 @@ import {
   Textarea,
 } from "@/components/ui";
 import type { Appointment, AppointmentStatus } from "@/types";
-import { EmptyStateAppointments } from "@/components/ui/empty-state";
-import { SkeletonCard } from "@/components/ui/skeleton";
-import { toast } from "@/hooks/use-toast";
 
 interface AppointmentsClientProps {
   businessId: string;
@@ -97,90 +94,17 @@ export function AppointmentsClient({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Fetch appointments with abort controller to prevent race conditions
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    const fetchAppointments = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-
-        // For calendar view, filter by visible date range for performance
-        if (viewMode === "calendar") {
-          let rangeStart: Date;
-          let rangeEnd: Date;
-
-          if (calendarView === "month") {
-            rangeStart = startOfWeek(startOfMonth(currentDate));
-            rangeEnd = endOfWeek(endOfMonth(currentDate));
-          } else if (calendarView === "week") {
-            rangeStart = startOfWeek(currentDate);
-            rangeEnd = endOfWeek(currentDate);
-          } else {
-            // Day view
-            rangeStart = currentDate;
-            rangeEnd = addDays(currentDate, 1);
-          }
-
-          params.set("from", rangeStart.toISOString());
-          params.set("to", rangeEnd.toISOString());
-        } else {
-          // List view uses upcoming/past filters
-          if (listFilter === "upcoming") params.set("upcoming", "true");
-          if (listFilter === "past") params.set("past", "true");
-        }
-
-        if (statusFilter !== "all") params.set("status", statusFilter);
-
-        const res = await fetch(`/api/dashboard/appointments?${params.toString()}`, {
-          signal: abortController.signal,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAppointments(data.appointments || []);
-        } else {
-          toast({
-            title: "Failed to load appointments",
-            description: "Please try again",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        // Ignore aborted requests (expected during cleanup)
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-        toast({
-          title: "Failed to load appointments",
-          description: "Network error occurred",
-          variant: "destructive",
-        });
-      } finally {
-        // Only update loading state if request wasn't aborted
-        if (!abortController.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchAppointments();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [viewMode, calendarView, currentDate, listFilter, statusFilter]);
-
-  // Refetch appointments (for use after actions)
-  const refetchAppointments = useCallback(async () => {
+  // Fetch appointments
+  const fetchAppointments = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-
+      
+      // For calendar view, filter by visible date range for performance
       if (viewMode === "calendar") {
         let rangeStart: Date;
         let rangeEnd: Date;
-
+        
         if (calendarView === "month") {
           rangeStart = startOfWeek(startOfMonth(currentDate));
           rangeEnd = endOfWeek(endOfMonth(currentDate));
@@ -188,17 +112,19 @@ export function AppointmentsClient({
           rangeStart = startOfWeek(currentDate);
           rangeEnd = endOfWeek(currentDate);
         } else {
+          // Day view
           rangeStart = currentDate;
           rangeEnd = addDays(currentDate, 1);
         }
-
+        
         params.set("from", rangeStart.toISOString());
         params.set("to", rangeEnd.toISOString());
       } else {
+        // List view uses upcoming/past filters
         if (listFilter === "upcoming") params.set("upcoming", "true");
         if (listFilter === "past") params.set("past", "true");
       }
-
+      
       if (statusFilter !== "all") params.set("status", statusFilter);
 
       const res = await fetch(`/api/dashboard/appointments?${params.toString()}`);
@@ -207,11 +133,15 @@ export function AppointmentsClient({
         setAppointments(data.appointments || []);
       }
     } catch (error) {
-      // Silent catch - error already shown via action toast
+      // Error handled silently
     } finally {
       setLoading(false);
     }
   }, [viewMode, calendarView, currentDate, listFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
 
   // Handle appointment actions
   const handleAction = async (action: "cancel" | "complete" | "no_show") => {
@@ -226,32 +156,12 @@ export function AppointmentsClient({
       });
 
       if (res.ok) {
-        await refetchAppointments();
+        await fetchAppointments();
         setSheetOpen(false);
         setSelectedAppointment(null);
-
-        const messages = {
-          cancel: "Appointment cancelled",
-          complete: "Appointment marked as complete",
-          no_show: "Appointment marked as no-show",
-        };
-        toast({
-          title: messages[action],
-          variant: action === "complete" ? "success" : "default",
-        });
-      } else {
-        toast({
-          title: "Action failed",
-          description: "Please try again.",
-          variant: "destructive",
-        });
       }
     } catch (error) {
-      toast({
-        title: "Something went wrong",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      // Error handled silently
     } finally {
       setActionLoading(false);
     }
@@ -580,7 +490,7 @@ export function AppointmentsClient({
       return (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <SkeletonCard key={i} />
+            <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
       );
@@ -589,8 +499,9 @@ export function AppointmentsClient({
     if (appointments.length === 0) {
       return (
         <Card>
-          <CardContent className="p-0">
-            <EmptyStateAppointments />
+          <CardContent className="py-12 text-center">
+            <Calendar className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No appointments found</p>
           </CardContent>
         </Card>
       );

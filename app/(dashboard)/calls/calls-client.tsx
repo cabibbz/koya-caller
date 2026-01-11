@@ -15,7 +15,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -61,8 +60,6 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Call, Appointment } from "@/types";
-import { ChatTranscript } from "@/components/ui/chat-transcript";
-import { EmptyStateCalls } from "@/components/ui/empty-state";
 
 interface CallsListClientProps {
   initialCalls: Call[];
@@ -143,8 +140,7 @@ export function CallsListClient({
 }: CallsListClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
-
+  
   const [calls] = useState(initialCalls);
   const [searchQuery, setSearchQuery] = useState(filters.search || "");
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
@@ -156,34 +152,6 @@ export function CallsListClient({
 
   const totalPages = Math.ceil(total / limit);
 
-  const loadCallDetails = useCallback(async (call: Call) => {
-    setSelectedCall(call);
-    setNoteText(call.notes || "");
-    setDetailsLoading(true);
-
-    try {
-      const res = await fetch(`/api/dashboard/calls/${call.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAppointment(data.data.appointment);
-      } else {
-        toast({
-          title: "Failed to load call details",
-          description: "Please try again",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Failed to load call details",
-        description: "Network error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setDetailsLoading(false);
-    }
-  }, [toast]);
-
   // Load selected call details if ID is in URL
   useEffect(() => {
     if (selectedCallId) {
@@ -192,7 +160,25 @@ export function CallsListClient({
         loadCallDetails(call);
       }
     }
-  }, [selectedCallId, calls, loadCallDetails]);
+  }, [selectedCallId, calls]);
+
+  const loadCallDetails = async (call: Call) => {
+    setSelectedCall(call);
+    setNoteText(call.notes || "");
+    setDetailsLoading(true);
+    
+    try {
+      const res = await fetch(`/api/dashboard/calls/${call.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAppointment(data.data.appointment);
+      }
+    } catch (error) {
+      // Error handled silently
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
 
   const updateFilters = useCallback(
     (key: string, value: string | undefined) => {
@@ -223,30 +209,14 @@ export function CallsListClient({
 
   const handleFlag = async (call: Call) => {
     try {
-      const res = await fetch("/api/dashboard/calls", {
+      await fetch("/api/dashboard/calls", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: call.id, flagged: !call.flagged }),
       });
-      if (!res.ok) {
-        toast({
-          title: "Failed to update flag",
-          description: "Please try again",
-          variant: "destructive",
-        });
-        return;
-      }
-      toast({
-        title: call.flagged ? "Call unflagged" : "Call flagged",
-        variant: "success",
-      });
       router.refresh();
     } catch (error) {
-      toast({
-        title: "Failed to update flag",
-        description: "Network error occurred",
-        variant: "destructive",
-      });
+      // Error handled silently
     }
   };
 
@@ -254,30 +224,14 @@ export function CallsListClient({
     if (!selectedCall) return;
     setSavingNote(true);
     try {
-      const res = await fetch("/api/dashboard/calls", {
+      await fetch("/api/dashboard/calls", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selectedCall.id, notes: noteText }),
       });
-      if (!res.ok) {
-        toast({
-          title: "Failed to save note",
-          description: "Please try again",
-          variant: "destructive",
-        });
-        return;
-      }
-      toast({
-        title: "Note saved",
-        variant: "success",
-      });
       router.refresh();
     } catch (error) {
-      toast({
-        title: "Failed to save note",
-        description: "Network error occurred",
-        variant: "destructive",
-      });
+      // Error handled silently
     } finally {
       setSavingNote(false);
     }
@@ -419,17 +373,15 @@ export function CallsListClient({
       <Card>
         <CardContent className="p-0">
           {calls.length === 0 ? (
-            filters.search || filters.outcome || filters.language ? (
-              <div className="text-center py-12">
-                <Phone className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-medium">No calls found</h3>
-                <p className="text-muted-foreground mt-1">
-                  Try adjusting your filters
-                </p>
-              </div>
-            ) : (
-              <EmptyStateCalls />
-            )
+            <div className="text-center py-12">
+              <Phone className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+              <h3 className="text-lg font-medium">No calls found</h3>
+              <p className="text-muted-foreground mt-1">
+                {filters.search || filters.outcome || filters.language
+                  ? "Try adjusting your filters"
+                  : "Calls will appear here once Koya handles them"}
+              </p>
+            </div>
           ) : (
             <div className="divide-y divide-border">
               {calls.map((call) => {
@@ -662,11 +614,12 @@ export function CallsListClient({
                 {selectedCall.transcript && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">Transcript</h4>
-                    <div className="bg-muted/50 rounded-lg p-4 max-h-80 overflow-y-auto">
-                      <ChatTranscript
-                        transcript={selectedCall.transcript}
-                        agentName="Koya"
-                      />
+                    <div className="bg-muted rounded-lg p-3 max-h-64 overflow-y-auto">
+                      <pre className="text-xs whitespace-pre-wrap font-mono">
+                        {typeof selectedCall.transcript === "string"
+                          ? selectedCall.transcript
+                          : JSON.stringify(selectedCall.transcript, null, 2)}
+                      </pre>
                     </div>
                   </div>
                 )}

@@ -56,8 +56,6 @@ import {
   Checkbox,
 } from "@/components/ui";
 import type { Service, FAQ, BusinessHours } from "@/types";
-import { toast } from "@/hooks/use-toast";
-import { EmptyStateKnowledge } from "@/components/ui/empty-state";
 
 // Extracted content from website scraping
 interface ExtractedContent {
@@ -119,6 +117,8 @@ export function KnowledgeClient({
   const [activeTab, setActiveTab] = useState<Tab>("services");
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Services state
   const [services, setServices] = useState<Service[]>(initialServices);
@@ -188,11 +188,12 @@ export function KnowledgeClient({
     // Validate: all services must have names
     const invalidServices = services.filter(s => !s.name || s.name.trim() === "");
     if (invalidServices.length > 0) {
-      toast({ title: "All services must have a name", variant: "warning" });
+      setError("All services must have a name");
       return;
     }
-
+    
     setSaving(true);
+    setError(null);
     try {
       // Filter out temp IDs and clean data for API
       const cleanedServices = services.map(s => ({
@@ -200,7 +201,7 @@ export function KnowledgeClient({
         name: s.name.trim(),
         description: s.description?.trim() || null,
       }));
-
+      
       const res = await fetch("/api/dashboard/knowledge/services", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -212,16 +213,13 @@ export function KnowledgeClient({
       }
 
       setServicesModified(false);
-      toast({ title: "Services saved", variant: "success" });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
 
       // Trigger regeneration
       await triggerRegeneration("services_update");
     } catch (err) {
-      toast({
-        title: "Failed to save",
-        description: err instanceof Error ? err.message : "Please try again",
-        variant: "destructive"
-      });
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -232,11 +230,12 @@ export function KnowledgeClient({
     // Validate: FAQs must have both question and answer
     const invalidFaqs = faqs.filter(f => !f.question?.trim() || !f.answer?.trim());
     if (invalidFaqs.length > 0) {
-      toast({ title: "All FAQs must have both a question and answer", variant: "warning" });
+      setError("All FAQs must have both a question and answer");
       return;
     }
-
+    
     setSaving(true);
+    setError(null);
     try {
       // Clean data for API
       const cleanedFaqs = faqs.map(f => ({
@@ -244,7 +243,7 @@ export function KnowledgeClient({
         question: f.question.trim(),
         answer: f.answer.trim(),
       }));
-
+      
       const res = await fetch("/api/dashboard/knowledge/faqs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -256,16 +255,13 @@ export function KnowledgeClient({
       }
 
       setFaqsModified(false);
-      toast({ title: "FAQs saved", variant: "success" });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
 
       // Trigger regeneration
       await triggerRegeneration("faqs_update");
     } catch (err) {
-      toast({
-        title: "Failed to save",
-        description: err instanceof Error ? err.message : "Please try again",
-        variant: "destructive"
-      });
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -274,6 +270,7 @@ export function KnowledgeClient({
   // Save business info - Line 741
   const saveBusinessInfo = async () => {
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch("/api/dashboard/knowledge/business", {
         method: "PUT",
@@ -286,16 +283,13 @@ export function KnowledgeClient({
       }
 
       setBusinessModified(false);
-      toast({ title: "Business info saved", variant: "success" });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
 
       // Trigger regeneration
       await triggerRegeneration("settings_update");
     } catch (err) {
-      toast({
-        title: "Failed to save",
-        description: err instanceof Error ? err.message : "Please try again",
-        variant: "destructive"
-      });
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -304,6 +298,7 @@ export function KnowledgeClient({
   // Save additional knowledge - Line 746
   const saveKnowledge = async () => {
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch("/api/dashboard/knowledge/additional", {
         method: "PUT",
@@ -316,16 +311,13 @@ export function KnowledgeClient({
       }
 
       setKnowledgeModified(false);
-      toast({ title: "Knowledge saved", variant: "success" });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
 
       // Trigger regeneration
       await triggerRegeneration("knowledge_update");
     } catch (err) {
-      toast({
-        title: "Failed to save",
-        description: err instanceof Error ? err.message : "Please try again",
-        variant: "destructive"
-      });
+      setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -531,7 +523,8 @@ export function KnowledgeClient({
     // Close dialog and reset
     setImportDialogOpen(false);
     resetImportState();
-    toast({ title: "Content imported successfully", description: "Don't forget to save your changes", variant: "success" });
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
   };
 
   const tabs = [
@@ -582,6 +575,22 @@ export function KnowledgeClient({
           {regenerating && " Updating Koya..."}
         </AlertDescription>
       </Alert>
+
+      {/* Success/Error messages */}
+      {saveSuccess && (
+        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-600">
+            Changes saved successfully! Koya is being updated.
+          </AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b pb-2">
