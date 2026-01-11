@@ -32,6 +32,7 @@ import {
   ExternalLink,
   AlertCircle,
   Unlink,
+  Sparkles,
 } from "lucide-react";
 import {
   Button,
@@ -71,6 +72,36 @@ import {
 } from "@/lib/onboarding/voice-samples";
 import type { VoiceSample } from "@/types/onboarding";
 
+interface PromptConfig {
+  industryEnhancements: boolean;
+  fewShotExamplesEnabled: boolean;
+  sentimentDetectionLevel: SentimentDetectionLevel;
+  callerContextEnabled: boolean;
+  toneIntensity: ToneIntensity;
+  personalityAwareErrors: boolean;
+  maxFewShotExamples: number;
+}
+
+const DEFAULT_PROMPT_CONFIG: PromptConfig = {
+  industryEnhancements: true,
+  fewShotExamplesEnabled: true,
+  sentimentDetectionLevel: "basic",
+  callerContextEnabled: true,
+  toneIntensity: 3,
+  personalityAwareErrors: true,
+  maxFewShotExamples: 3,
+};
+
+interface InitialPromptConfig {
+  industryEnhancements?: boolean;
+  fewShotExamplesEnabled?: boolean;
+  sentimentDetectionLevel?: SentimentDetectionLevel;
+  callerContextEnabled?: boolean;
+  toneIntensity?: ToneIntensity;
+  personalityAwareErrors?: boolean;
+  maxFewShotExamples?: number;
+}
+
 interface SettingsClientProps {
   businessId: string;
   businessInfo: {
@@ -89,9 +120,10 @@ interface SettingsClientProps {
   initialCalendarIntegration: CalendarIntegration | null;
   initialNotificationSettings: NotificationSettings | null;
   initialPhoneNumbers: PhoneNumber[];
+  initialPromptConfig?: InitialPromptConfig | null;
 }
 
-type Tab = "call-handling" | "voice" | "language" | "calendar" | "notifications" | "phone-billing";
+type Tab = "call-handling" | "voice" | "language" | "calendar" | "notifications" | "phone-billing" | "advanced-ai";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "call-handling", label: "Call Handling", icon: Phone },
@@ -100,6 +132,16 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "phone-billing", label: "Phone & Billing", icon: CreditCard },
+  { id: "advanced-ai", label: "Advanced AI", icon: Sparkles },
+];
+
+type SentimentDetectionLevel = "none" | "basic" | "advanced";
+type ToneIntensity = 1 | 2 | 3 | 4 | 5;
+
+const SENTIMENT_LEVEL_OPTIONS: { value: SentimentDetectionLevel; label: string; description: string }[] = [
+  { value: "none", label: "Off", description: "No sentiment detection" },
+  { value: "basic", label: "Basic", description: "Detect frustrated and upset callers" },
+  { value: "advanced", label: "Advanced", description: "Full emotion detection with de-escalation" },
 ];
 
 const PERSONALITY_OPTIONS: { value: Personality; label: string; description: string }[] = [
@@ -134,6 +176,7 @@ export function SettingsClient({
   initialCalendarIntegration,
   initialNotificationSettings,
   initialPhoneNumbers,
+  initialPromptConfig,
 }: SettingsClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -214,6 +257,18 @@ export function SettingsClient({
     smsCustomerReminder: (initialNotificationSettings?.sms_customer_reminder || "24hr") as ReminderSetting,
   });
   const [notificationSettingsModified, setNotificationSettingsModified] = useState(false);
+
+  // Advanced AI state
+  const [advancedAiSettings, setAdvancedAiSettings] = useState<PromptConfig>({
+    industryEnhancements: initialPromptConfig?.industryEnhancements ?? DEFAULT_PROMPT_CONFIG.industryEnhancements,
+    fewShotExamplesEnabled: initialPromptConfig?.fewShotExamplesEnabled ?? DEFAULT_PROMPT_CONFIG.fewShotExamplesEnabled,
+    sentimentDetectionLevel: initialPromptConfig?.sentimentDetectionLevel ?? DEFAULT_PROMPT_CONFIG.sentimentDetectionLevel,
+    callerContextEnabled: initialPromptConfig?.callerContextEnabled ?? DEFAULT_PROMPT_CONFIG.callerContextEnabled,
+    toneIntensity: initialPromptConfig?.toneIntensity ?? DEFAULT_PROMPT_CONFIG.toneIntensity,
+    personalityAwareErrors: initialPromptConfig?.personalityAwareErrors ?? DEFAULT_PROMPT_CONFIG.personalityAwareErrors,
+    maxFewShotExamples: initialPromptConfig?.maxFewShotExamples ?? DEFAULT_PROMPT_CONFIG.maxFewShotExamples,
+  });
+  const [advancedAiSettingsModified, setAdvancedAiSettingsModified] = useState(false);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -488,6 +543,28 @@ export function SettingsClient({
       if (!res.ok) throw new Error("Failed to save notification settings");
 
       setNotificationSettingsModified(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveAdvancedAiSettings = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/dashboard/settings/advanced-ai", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(advancedAiSettings),
+      });
+
+      if (!res.ok) throw new Error("Failed to save advanced AI settings");
+
+      setAdvancedAiSettingsModified(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -1707,6 +1784,239 @@ export function SettingsClient({
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Advanced AI Tab */}
+      {activeTab === "advanced-ai" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Advanced AI Settings</CardTitle>
+            <CardDescription>
+              Fine-tune how Koya&apos;s AI responds to callers with industry-specific enhancements, sentiment detection, and personalization features
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Industry Enhancements */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Intelligence Features</h3>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Industry-specific prompts</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Uses terminology, scenarios, and guardrails specific to your business type
+                    </p>
+                  </div>
+                  <Switch
+                    checked={advancedAiSettings.industryEnhancements}
+                    onCheckedChange={(checked) => {
+                      setAdvancedAiSettings({ ...advancedAiSettings, industryEnhancements: checked });
+                      setAdvancedAiSettingsModified(true);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Conversation examples</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Teaches Koya with curated examples of ideal conversations
+                    </p>
+                  </div>
+                  <Switch
+                    checked={advancedAiSettings.fewShotExamplesEnabled}
+                    onCheckedChange={(checked) => {
+                      setAdvancedAiSettings({ ...advancedAiSettings, fewShotExamplesEnabled: checked });
+                      setAdvancedAiSettingsModified(true);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Personality-aware error messages</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Error messages match your chosen personality style
+                    </p>
+                  </div>
+                  <Switch
+                    checked={advancedAiSettings.personalityAwareErrors}
+                    onCheckedChange={(checked) => {
+                      setAdvancedAiSettings({ ...advancedAiSettings, personalityAwareErrors: checked });
+                      setAdvancedAiSettingsModified(true);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sentiment Detection */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Sentiment Detection</h3>
+              <p className="text-sm text-muted-foreground">
+                How Koya detects and responds to caller emotions
+              </p>
+
+              <div className="space-y-2">
+                {SENTIMENT_LEVEL_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-4 transition-all ${
+                      advancedAiSettings.sentimentDetectionLevel === option.value
+                        ? "border-primary bg-primary/5"
+                        : "border-muted hover:border-muted-foreground/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="sentimentLevel"
+                        value={option.value}
+                        checked={advancedAiSettings.sentimentDetectionLevel === option.value}
+                        onChange={() => {
+                          setAdvancedAiSettings({ ...advancedAiSettings, sentimentDetectionLevel: option.value });
+                          setAdvancedAiSettingsModified(true);
+                        }}
+                        className="h-4 w-4 text-primary"
+                      />
+                      <span className="font-medium">{option.label}</span>
+                    </div>
+                    <p className="ml-7 text-sm text-muted-foreground">
+                      {option.description}
+                    </p>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Caller Recognition */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Caller Recognition</h3>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Remember repeat callers</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Personalize interactions for returning callers with their name and history
+                  </p>
+                </div>
+                <Switch
+                  checked={advancedAiSettings.callerContextEnabled}
+                  onCheckedChange={(checked) => {
+                    setAdvancedAiSettings({ ...advancedAiSettings, callerContextEnabled: checked });
+                    setAdvancedAiSettingsModified(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Tone Intensity */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Tone Intensity</h3>
+              <p className="text-sm text-muted-foreground">
+                How strongly Koya expresses the selected personality style
+              </p>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Subtle</span>
+                  <span>Balanced</span>
+                  <span>Expressive</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={5}
+                  value={advancedAiSettings.toneIntensity}
+                  onChange={(e) => {
+                    setAdvancedAiSettings({
+                      ...advancedAiSettings,
+                      toneIntensity: parseInt(e.target.value) as ToneIntensity,
+                    });
+                    setAdvancedAiSettingsModified(true);
+                  }}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <div className="flex justify-between">
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <button
+                      key={level}
+                      onClick={() => {
+                        setAdvancedAiSettings({
+                          ...advancedAiSettings,
+                          toneIntensity: level as ToneIntensity,
+                        });
+                        setAdvancedAiSettingsModified(true);
+                      }}
+                      className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        advancedAiSettings.toneIntensity === level
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted hover:bg-muted-foreground/20"
+                      }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Conversation Examples Count */}
+            {advancedAiSettings.fewShotExamplesEnabled && (
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-lg font-medium">Example Count</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="maxExamples">Max conversation examples per prompt</Label>
+                  <Input
+                    id="maxExamples"
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={advancedAiSettings.maxFewShotExamples}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 3;
+                      setAdvancedAiSettings({
+                        ...advancedAiSettings,
+                        maxFewShotExamples: Math.max(1, Math.min(5, value)),
+                      });
+                      setAdvancedAiSettingsModified(true);
+                    }}
+                    className="max-w-[100px]"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    More examples improve accuracy but use more tokens (1-5)
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="rounded-lg bg-muted/50 p-4 mt-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Enhanced AI Features</p>
+                  <p className="text-sm text-muted-foreground">
+                    These settings work together to make Koya smarter and more personalized. Changes take effect immediately on new calls.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-4 border-t">
+              <Button onClick={saveAdvancedAiSettings} disabled={saving || !advancedAiSettingsModified}>
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -85,6 +85,18 @@ export default async function SettingsPage() {
     if (plan?.name) planName = plan.name;
   }
 
+  // Extract prompt_config from aiConfig if available
+  // Note: prompt_config column added by migration 20250110000001
+  const promptConfig = (aiConfig as Record<string, unknown> | null)?.prompt_config as {
+    industryEnhancements?: boolean;
+    fewShotExamplesEnabled?: boolean;
+    sentimentDetectionLevel?: "none" | "basic" | "advanced";
+    callerContextEnabled?: boolean;
+    toneIntensity?: 1 | 2 | 3 | 4 | 5;
+    personalityAwareErrors?: boolean;
+    maxFewShotExamples?: number;
+  } | null;
+
   return (
     <div className="p-6 lg:p-8">
       <SettingsClient
@@ -105,6 +117,7 @@ export default async function SettingsPage() {
         initialCalendarIntegration={calendarIntegration}
         initialNotificationSettings={notificationSettings}
         initialPhoneNumbers={phoneNumbers || []}
+        initialPromptConfig={promptConfig}
       />
     </div>
   );
