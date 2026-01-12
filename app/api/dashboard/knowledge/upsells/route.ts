@@ -12,6 +12,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
+import {
+  isValidUUID,
+  validateStringLength,
+  validateDiscountPercent,
+  validateBoolean,
+  validateEnum,
+  TRIGGER_TIMINGS,
+  LIMITS,
+} from "@/lib/validation";
 
 interface Upsell {
   id: string;
@@ -86,13 +96,13 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Upsells GET] Error:", error);
+      logError("Upsells GET", error);
       return NextResponse.json({ error: "Failed to fetch upsells" }, { status: 500 });
     }
 
     return NextResponse.json({ upsells: upsells || [] });
   } catch (error) {
-    console.error("[Upsells GET] Error:", error);
+    logError("Upsells GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -150,11 +160,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate UUID format for service IDs
+    if (!isValidUUID(source_service_id) || !isValidUUID(target_service_id)) {
+      return NextResponse.json(
+        { error: "Invalid service ID format" },
+        { status: 400 }
+      );
+    }
+
     if (source_service_id === target_service_id) {
       return NextResponse.json(
         { error: "Source and target services must be different" },
         { status: 400 }
       );
+    }
+
+    // Validate trigger_timing
+    const triggerTimingError = validateEnum(trigger_timing, TRIGGER_TIMINGS, "Trigger timing");
+    if (triggerTimingError) {
+      return NextResponse.json({ error: triggerTimingError }, { status: 400 });
+    }
+
+    // Validate discount_percent (reject invalid values instead of clamping)
+    const discountError = validateDiscountPercent(discount_percent);
+    if (discountError) {
+      return NextResponse.json({ error: discountError }, { status: 400 });
+    }
+
+    // Validate pitch_message length
+    const pitchError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
+    if (pitchError) {
+      return NextResponse.json({ error: pitchError }, { status: 400 });
+    }
+
+    // Validate is_active is boolean
+    const isActiveError = validateBoolean(is_active, "is_active");
+    if (isActiveError) {
+      return NextResponse.json({ error: isActiveError }, { status: 400 });
+    }
+
+    // Validate suggest_when_unavailable is boolean
+    const suggestError = validateBoolean(suggest_when_unavailable, "suggest_when_unavailable");
+    if (suggestError) {
+      return NextResponse.json({ error: suggestError }, { status: 400 });
     }
 
     // Validate services belong to this business
@@ -166,25 +214,27 @@ export async function POST(request: NextRequest) {
 
     if (!services || services.length !== 2) {
       return NextResponse.json(
-        { error: "Invalid service selection" },
+        { error: "One or more services not found or do not belong to your business" },
         { status: 400 }
       );
     }
 
-    // Check upsell count limit (max 20 per business)
+    // Check upsell count limit
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { count: upsellCount } = await (supabase as any)
       .from("upsells")
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
 
-    if ((upsellCount || 0) >= 20) {
+    if ((upsellCount || 0) >= LIMITS.MAX_UPSELLS_PER_BUSINESS) {
       return NextResponse.json(
-        { error: "Maximum of 20 upsells allowed. Delete some before creating new ones." },
+        { error: `Maximum of ${LIMITS.MAX_UPSELLS_PER_BUSINESS} upsells allowed. Delete some before creating new ones.` },
         { status: 400 }
       );
     }
 
     // Check for existing upsell with same service pair
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingUpsell } = await (supabase as any)
       .from("upsells")
       .select("id")
@@ -201,23 +251,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Create upsell
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: upsell, error } = await (supabase as any)
       .from("upsells")
       .insert({
         business_id: businessId,
         source_service_id,
         target_service_id,
-        discount_percent: Math.min(100, Math.max(0, discount_percent)),
+        discount_percent: discount_percent || 0,
         pitch_message: pitch_message?.trim() || null,
         trigger_timing,
-        is_active,
-        suggest_when_unavailable,
+        is_active: is_active ?? true,
+        suggest_when_unavailable: suggest_when_unavailable ?? false,
       })
       .select()
       .single();
 
     if (error) {
-      console.error("[Upsells POST] Error:", error);
+      logError("Upsells POST", error);
       return NextResponse.json({ error: "Failed to create upsell" }, { status: 500 });
     }
 
@@ -231,12 +282,12 @@ export async function POST(request: NextRequest) {
         },
       });
     } catch (inngestError) {
-      console.error("[Upsells POST] Inngest error (non-fatal):", inngestError);
+      logError("Upsells POST Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, upsell });
   } catch (error) {
-    console.error("[Upsells POST] Error:", error);
+    logError("Upsells POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -282,12 +333,54 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate UUID format
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_REGEX.test(upsell.id)) {
+    if (!isValidUUID(upsell.id)) {
       return NextResponse.json({ error: "Invalid upsell ID format" }, { status: 400 });
     }
 
+    // Validate service IDs if provided
+    if (upsell.source_service_id !== undefined && !isValidUUID(upsell.source_service_id)) {
+      return NextResponse.json({ error: "Invalid source service ID format" }, { status: 400 });
+    }
+    if (upsell.target_service_id !== undefined && !isValidUUID(upsell.target_service_id)) {
+      return NextResponse.json({ error: "Invalid target service ID format" }, { status: 400 });
+    }
+
+    // Validate trigger_timing if provided
+    if (upsell.trigger_timing !== undefined) {
+      const triggerError = validateEnum(upsell.trigger_timing, TRIGGER_TIMINGS, "Trigger timing");
+      if (triggerError) {
+        return NextResponse.json({ error: triggerError }, { status: 400 });
+      }
+    }
+
+    // Validate discount_percent if provided (reject invalid values instead of clamping)
+    if (upsell.discount_percent !== undefined) {
+      const discountError = validateDiscountPercent(upsell.discount_percent);
+      if (discountError) {
+        return NextResponse.json({ error: discountError }, { status: 400 });
+      }
+    }
+
+    // Validate pitch_message length if provided
+    if (upsell.pitch_message !== undefined) {
+      const pitchError = validateStringLength(upsell.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
+      if (pitchError) {
+        return NextResponse.json({ error: pitchError }, { status: 400 });
+      }
+    }
+
+    // Validate boolean fields
+    const isActiveError = validateBoolean(upsell.is_active, "is_active");
+    if (isActiveError) {
+      return NextResponse.json({ error: isActiveError }, { status: 400 });
+    }
+    const suggestError = validateBoolean(upsell.suggest_when_unavailable, "suggest_when_unavailable");
+    if (suggestError) {
+      return NextResponse.json({ error: suggestError }, { status: 400 });
+    }
+
     // Fetch the existing upsell to get current values
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingUpsell, error: fetchError } = await (supabase as any)
       .from("upsells")
       .select("source_service_id, target_service_id")
@@ -312,7 +405,7 @@ export async function PUT(request: NextRequest) {
 
     if (!services || services.length !== 2) {
       return NextResponse.json(
-        { error: "Invalid service selection" },
+        { error: "One or more services not found or do not belong to your business" },
         { status: 400 }
       );
     }
@@ -326,6 +419,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check for duplicate (excluding current upsell)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: duplicateUpsell } = await (supabase as any)
       .from("upsells")
       .select("id")
@@ -342,29 +436,26 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Validate trigger_timing
-    const validTimings = ["before_booking", "after_booking"];
-    const triggerTiming = validTimings.includes(upsell.trigger_timing)
-      ? upsell.trigger_timing
-      : "before_booking";
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+    if (upsell.source_service_id !== undefined) updateData.source_service_id = upsell.source_service_id;
+    if (upsell.target_service_id !== undefined) updateData.target_service_id = upsell.target_service_id;
+    if (upsell.discount_percent !== undefined) updateData.discount_percent = upsell.discount_percent;
+    if (upsell.pitch_message !== undefined) updateData.pitch_message = upsell.pitch_message?.trim() || null;
+    if (upsell.trigger_timing !== undefined) updateData.trigger_timing = upsell.trigger_timing;
+    if (upsell.is_active !== undefined) updateData.is_active = upsell.is_active;
+    if (upsell.suggest_when_unavailable !== undefined) updateData.suggest_when_unavailable = upsell.suggest_when_unavailable;
 
     // Update the upsell
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from("upsells")
-      .update({
-        source_service_id: upsell.source_service_id,
-        target_service_id: upsell.target_service_id,
-        discount_percent: Math.min(100, Math.max(0, upsell.discount_percent || 0)),
-        pitch_message: upsell.pitch_message?.trim() || null,
-        trigger_timing: triggerTiming,
-        is_active: upsell.is_active ?? true,
-        suggest_when_unavailable: upsell.suggest_when_unavailable ?? false,
-      })
+      .update(updateData)
       .eq("id", upsell.id)
       .eq("business_id", businessId);
 
     if (error) {
-      console.error("[Upsells PUT] Error:", error);
+      logError("Upsells PUT", error);
       return NextResponse.json({ error: "Failed to update upsell" }, { status: 500 });
     }
 
@@ -378,12 +469,12 @@ export async function PUT(request: NextRequest) {
         },
       });
     } catch (inngestError) {
-      console.error("[Upsells PUT] Inngest error (non-fatal):", inngestError);
+      logError("Upsells PUT Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Upsells PUT] Error:", error);
+    logError("Upsells PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -431,12 +522,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Validate UUID format
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_REGEX.test(upsellId)) {
+    if (!isValidUUID(upsellId)) {
       return NextResponse.json({ error: "Invalid upsell ID format" }, { status: 400 });
     }
 
     // Delete the upsell and return deleted rows
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: deletedRows, error } = await (supabase as any)
       .from("upsells")
       .delete()
@@ -445,7 +536,7 @@ export async function DELETE(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error("[Upsells DELETE] Error:", error);
+      logError("Upsells DELETE", error);
       return NextResponse.json({ error: "Failed to delete upsell" }, { status: 500 });
     }
 
@@ -463,12 +554,12 @@ export async function DELETE(request: NextRequest) {
         },
       });
     } catch (inngestError) {
-      console.error("[Upsells DELETE] Inngest error (non-fatal):", inngestError);
+      logError("Upsells DELETE Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Upsells DELETE] Error:", error);
+    logError("Upsells DELETE", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

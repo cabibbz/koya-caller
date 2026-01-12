@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { logError } from "@/lib/logging";
 
 interface TestResponse {
   success: boolean;
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
       response,
     });
   } catch (error) {
-    console.error("[Knowledge Test] Error:", error);
+    logError("Knowledge Test", error);
     return NextResponse.json(
       { success: false, error: "Failed to generate response" },
       { status: 500 }
@@ -238,7 +239,7 @@ GUIDELINES:
 
     return textBlock.text;
   } catch (error) {
-    console.error("[Knowledge Test] Claude error:", error);
+    logError("Knowledge Test Claude", error);
     return generateMockResponse(context);
   }
 }

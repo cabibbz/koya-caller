@@ -8,10 +8,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { generatePrompts, buildPromptInputFromDatabase } from "@/lib/claude";
+import { logError } from "@/lib/logging";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const supabase = await createClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client for RLS bypass
     const adminSupabase = createAdminClient() as any;
 
     // Get authenticated user
@@ -126,6 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // =========================================================================
     // Step 3: Mark onboarding complete
     // =========================================================================
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client already cast
     const { error: updateError } = await (adminSupabase as any)
       .from("businesses")
       .update({
@@ -148,6 +151,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       message: "Onboarding completed successfully",
     });
   } catch (error) {
+    logError("Onboarding Complete POST", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -158,6 +162,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 /**
  * Fetch all business data needed for prompt generation
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client type
 async function fetchBusinessData(supabase: any, businessId: string) {
   try {
     // Fetch business

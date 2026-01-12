@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendMissedCallAlert, formatPhoneDisplay } from "@/lib/twilio";
+import { logError } from "@/lib/logging";
 
 // Helper to parse Twilio form data
 async function parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
     
     // Look up business from phone number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: phoneRecord } = await (supabase as any)
       .from("phone_numbers")
       .select("business_id")
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
     switch (callStatus) {
       case "completed":
         // Call completed normally - update call record if exists
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from("calls")
           .update({
@@ -109,6 +112,7 @@ export async function POST(request: NextRequest) {
     return new Response("", { status: 200 });
     
   } catch (error) {
+    logError("Twilio Status", error);
     // Still return 200 to prevent Twilio retries
     return new Response("", { status: 200 });
   }
@@ -128,6 +132,7 @@ async function handleMissedCall(params: {
   const { supabase, businessId, fromNumber, toNumber, callStatus, timestamp } = params;
   
   // Create a call record for the missed call
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any)
     .from("calls")
     .insert({
@@ -143,6 +148,7 @@ async function handleMissedCall(params: {
     });
   
   // Check notification settings
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: notificationSettings } = await (supabase as any)
     .from("notification_settings")
     .select("sms_missed")
@@ -154,6 +160,7 @@ async function handleMissedCall(params: {
   }
   
   // Get owner's phone number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
     .select("user_id")
@@ -162,6 +169,7 @@ async function handleMissedCall(params: {
   
   if (!business?.user_id) return;
   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: user } = await (supabase as any)
     .from("users")
     .select("phone")
@@ -187,6 +195,7 @@ async function handleMissedCall(params: {
   
   if (result.success && result.sid) {
     // Record the SMS in database
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("sms_messages")
       .insert({

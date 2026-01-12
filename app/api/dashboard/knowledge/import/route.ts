@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
 
 interface ImportResponse {
   success: boolean;
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    console.error("[Knowledge Import] Error:", error);
+    logError("Knowledge Import", error);
     return NextResponse.json(
       { success: false, error: "Import failed" },
       { status: 500 }

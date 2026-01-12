@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logError } from "@/lib/logging";
 
 interface Service {
   id?: string;
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client for RLS bypass
     const adminClient = createAdminClient() as any;
 
     // Save services
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Onboarding Phase2 POST", error);
     return NextResponse.json(
       { error: "Failed to save" },
       { status: 500 }
@@ -143,6 +146,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ services: [], faqs: [], voiceId: null });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client for RLS bypass
     const adminClient = createAdminClient() as any;
 
     // Fetch existing data
@@ -165,6 +169,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response shape mapping
       services: (servicesRes.data || []).map((s: any) => ({
         id: s.id,
         name: s.name,
@@ -174,6 +179,7 @@ export async function GET(request: NextRequest) {
       voiceId: aiConfigRes.data?.voice_id || null,
     });
   } catch (error) {
+    logError("Onboarding Phase2 GET", error);
     return NextResponse.json(
       { error: "Failed to load data" },
       { status: 500 }

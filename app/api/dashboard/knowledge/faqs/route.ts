@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
 
 export async function PUT(request: NextRequest) {
   try {
@@ -63,6 +64,7 @@ export async function PUT(request: NextRequest) {
 
     // Insert new FAQs
     if (faqs.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type from client
       const faqsToInsert = faqs.map((f: any, index: number) => ({
         business_id: businessId,
         question: f.question,
@@ -70,6 +72,7 @@ export async function PUT(request: NextRequest) {
         sort_order: index,
       }));
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { error: insertError } = await (supabase as any)
         .from("faqs")
         .insert(faqsToInsert);
@@ -90,6 +93,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Knowledge FAQs PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

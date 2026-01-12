@@ -12,24 +12,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import {
+  isValidUUID,
+  validateStringLength,
+  validateInteger,
+  validateBoolean,
+  LIMITS,
+} from "@/lib/validation";
+import { logError } from "@/lib/logging";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// Field length limits
-const MAX_NAME_LENGTH = 100;
-const MAX_DESCRIPTION_LENGTH = 500;
-const MAX_PITCH_LENGTH = 300;
-const MAX_PACKAGES_PER_BUSINESS = 15;
+// Local constants that differ from shared LIMITS
 const MIN_SESSION_COUNT = 2;
-const MAX_SESSION_COUNT = 100;
-const MAX_VALIDITY_DAYS = 730; // 2 years
-
-function validateStringLength(value: string | undefined, maxLength: number, fieldName: string): string | null {
-  if (value && value.trim().length > maxLength) {
-    return `${fieldName} must be ${maxLength} characters or less`;
-  }
-  return null;
-}
+const MAX_VALIDITY_DAYS = 730; // 2 years (exceeds shared 365 limit)
 
 // GET - List all packages for the business
 export async function GET(request: NextRequest) {
@@ -89,13 +83,13 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Packages GET] Error:", error);
+      logError("Packages GET", error);
       return NextResponse.json({ error: "Failed to fetch packages" }, { status: 500 });
     }
 
     return NextResponse.json({ packages: packages || [] });
   } catch (error) {
-    console.error("[Packages GET] Error:", error);
+    logError("Packages GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -157,24 +151,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate field lengths
-    const nameLengthError = validateStringLength(name, MAX_NAME_LENGTH, "Package name");
+    const nameLengthError = validateStringLength(name, LIMITS.MAX_NAME_LENGTH, "Package name");
     if (nameLengthError) {
       return NextResponse.json({ error: nameLengthError }, { status: 400 });
     }
 
-    const descLengthError = validateStringLength(description, MAX_DESCRIPTION_LENGTH, "Description");
+    const descLengthError = validateStringLength(description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
     if (descLengthError) {
       return NextResponse.json({ error: descLengthError }, { status: 400 });
     }
 
-    const pitchLengthError = validateStringLength(pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+    const pitchLengthError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
     if (pitchLengthError) {
       return NextResponse.json({ error: pitchLengthError }, { status: 400 });
     }
 
-    if (!session_count || !Number.isInteger(session_count) || session_count < MIN_SESSION_COUNT || session_count > MAX_SESSION_COUNT) {
+    if (!session_count || !Number.isInteger(session_count) || session_count < MIN_SESSION_COUNT || session_count > LIMITS.MAX_SESSION_COUNT) {
       return NextResponse.json(
-        { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${MAX_SESSION_COUNT}` },
+        { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${LIMITS.MAX_SESSION_COUNT}` },
         { status: 400 }
       );
     }
@@ -198,9 +192,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate min_visits_to_pitch
-    if (!Number.isInteger(min_visits_to_pitch) || min_visits_to_pitch < 0) {
+    if (!Number.isInteger(min_visits_to_pitch) || min_visits_to_pitch < 0 || min_visits_to_pitch > LIMITS.MAX_MIN_VISITS_TO_PITCH) {
       return NextResponse.json(
-        { error: "Minimum visits to pitch must be a non-negative whole number" },
+        { error: `Minimum visits to pitch must be between 0 and ${LIMITS.MAX_MIN_VISITS_TO_PITCH}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate is_active is boolean
+    if (is_active !== undefined && typeof is_active !== "boolean") {
+      return NextResponse.json(
+        { error: "is_active must be a boolean value" },
         { status: 400 }
       );
     }
@@ -222,16 +224,16 @@ export async function POST(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
 
-    if ((packageCount || 0) >= MAX_PACKAGES_PER_BUSINESS) {
+    if ((packageCount || 0) >= LIMITS.MAX_PACKAGES_PER_BUSINESS) {
       return NextResponse.json(
-        { error: `Maximum of ${MAX_PACKAGES_PER_BUSINESS} packages allowed. Delete some before creating new ones.` },
+        { error: `Maximum of ${LIMITS.MAX_PACKAGES_PER_BUSINESS} packages allowed. Delete some before creating new ones.` },
         { status: 400 }
       );
     }
 
     // If service_id provided, validate UUID format and ownership
     if (service_id) {
-      if (!UUID_REGEX.test(service_id)) {
+      if (!isValidUUID(service_id)) {
         return NextResponse.json({ error: "Invalid service ID format" }, { status: 400 });
       }
 
@@ -271,7 +273,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Packages POST] Error:", error);
+      logError("Packages POST", error);
       return NextResponse.json({ error: "Failed to create package" }, { status: 500 });
     }
 
@@ -287,12 +289,12 @@ export async function POST(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Packages POST] Inngest error:", inngestError);
+      logError("Packages POST Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, package: pkg, regenerationQueued });
   } catch (error) {
-    console.error("[Packages POST] Error:", error);
+    logError("Packages POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -337,7 +339,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Package ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(pkg.id)) {
+    if (!isValidUUID(pkg.id)) {
       return NextResponse.json({ error: "Invalid package ID format" }, { status: 400 });
     }
 
@@ -364,21 +366,21 @@ export async function PUT(request: NextRequest) {
 
     // Validate field lengths
     if (pkg.name) {
-      const nameLengthError = validateStringLength(pkg.name, MAX_NAME_LENGTH, "Package name");
+      const nameLengthError = validateStringLength(pkg.name, LIMITS.MAX_NAME_LENGTH, "Package name");
       if (nameLengthError) {
         return NextResponse.json({ error: nameLengthError }, { status: 400 });
       }
     }
 
     if (pkg.description) {
-      const descLengthError = validateStringLength(pkg.description, MAX_DESCRIPTION_LENGTH, "Description");
+      const descLengthError = validateStringLength(pkg.description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
       if (descLengthError) {
         return NextResponse.json({ error: descLengthError }, { status: 400 });
       }
     }
 
     if (pkg.pitch_message) {
-      const pitchLengthError = validateStringLength(pkg.pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+      const pitchLengthError = validateStringLength(pkg.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
       if (pitchLengthError) {
         return NextResponse.json({ error: pitchLengthError }, { status: 400 });
       }
@@ -386,9 +388,9 @@ export async function PUT(request: NextRequest) {
 
     // Validate session_count if provided
     if (pkg.session_count !== undefined) {
-      if (!Number.isInteger(pkg.session_count) || pkg.session_count < MIN_SESSION_COUNT || pkg.session_count > MAX_SESSION_COUNT) {
+      if (!Number.isInteger(pkg.session_count) || pkg.session_count < MIN_SESSION_COUNT || pkg.session_count > LIMITS.MAX_SESSION_COUNT) {
         return NextResponse.json(
-          { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${MAX_SESSION_COUNT}` },
+          { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${LIMITS.MAX_SESSION_COUNT}` },
           { status: 400 }
         );
       }
@@ -406,7 +408,7 @@ export async function PUT(request: NextRequest) {
 
     // If service_id provided, validate UUID format and ownership
     if (pkg.service_id) {
-      if (!UUID_REGEX.test(pkg.service_id)) {
+      if (!isValidUUID(pkg.service_id)) {
         return NextResponse.json({ error: "Invalid service ID format" }, { status: 400 });
       }
 
@@ -437,12 +439,20 @@ export async function PUT(request: NextRequest) {
 
     // Validate min_visits_to_pitch if provided
     if (pkg.min_visits_to_pitch !== undefined && pkg.min_visits_to_pitch !== null) {
-      if (!Number.isInteger(pkg.min_visits_to_pitch) || pkg.min_visits_to_pitch < 0) {
+      if (!Number.isInteger(pkg.min_visits_to_pitch) || pkg.min_visits_to_pitch < 0 || pkg.min_visits_to_pitch > LIMITS.MAX_MIN_VISITS_TO_PITCH) {
         return NextResponse.json(
-          { error: "Minimum visits to pitch must be a non-negative whole number" },
+          { error: `Minimum visits to pitch must be between 0 and ${LIMITS.MAX_MIN_VISITS_TO_PITCH}` },
           { status: 400 }
         );
       }
+    }
+
+    // Validate is_active is boolean
+    if (pkg.is_active !== undefined && typeof pkg.is_active !== "boolean") {
+      return NextResponse.json(
+        { error: "is_active must be a boolean value" },
+        { status: 400 }
+      );
     }
 
     // Validate price_cents if provided
@@ -477,7 +487,7 @@ export async function PUT(request: NextRequest) {
       .eq("business_id", businessId);
 
     if (error) {
-      console.error("[Packages PUT] Error:", error);
+      logError("Packages PUT", error);
       return NextResponse.json({ error: "Failed to update package" }, { status: 500 });
     }
 
@@ -493,12 +503,12 @@ export async function PUT(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Packages PUT] Inngest error:", inngestError);
+      logError("Packages PUT Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Packages PUT] Error:", error);
+    logError("Packages PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -544,7 +554,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Package ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(packageId)) {
+    if (!isValidUUID(packageId)) {
       return NextResponse.json({ error: "Invalid package ID format" }, { status: 400 });
     }
 
@@ -558,7 +568,7 @@ export async function DELETE(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error("[Packages DELETE] Error:", error);
+      logError("Packages DELETE", error);
       return NextResponse.json({ error: "Failed to delete package" }, { status: 500 });
     }
 
@@ -578,12 +588,12 @@ export async function DELETE(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Packages DELETE] Inngest error:", inngestError);
+      logError("Packages DELETE Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Packages DELETE] Error:", error);
+    logError("Packages DELETE", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

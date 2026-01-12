@@ -15,13 +15,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
-import { 
-  getCallsByBusinessId, 
-  getRecentCalls, 
+import {
+  getCallsByBusinessId,
+  getRecentCalls,
   updateCall,
-  getAppointmentByCallId 
+  getAppointmentByCallId
 } from "@/lib/db/calls";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
+import { logError } from "@/lib/logging";
 import type { CallOutcome, CallLanguage } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +95,7 @@ async function handleGet(request: NextRequest) {
       },
     });
   } catch (error) {
+    logError("Dashboard Calls GET", error);
     return NextResponse.json(
       { error: "Failed to fetch calls" },
       { status: 500 }
@@ -172,6 +174,7 @@ async function handlePatch(request: NextRequest) {
     }
 
     // Update the call
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Partial updates passed to db helper
     const updatedCall = await updateCall(id, updates as any);
 
     if (!updatedCall) {
@@ -186,6 +189,7 @@ async function handlePatch(request: NextRequest) {
       data: updatedCall,
     });
   } catch (error) {
+    logError("Dashboard Calls PATCH", error);
     return NextResponse.json(
       { error: "Failed to update call" },
       { status: 500 }

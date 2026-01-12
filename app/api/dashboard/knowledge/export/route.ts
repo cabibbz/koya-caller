@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { logError } from "@/lib/logging";
 
 export async function GET(request: NextRequest) {
   try {
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[Knowledge Export] Error:", error);
+    logError("Knowledge Export", error);
     return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
 }

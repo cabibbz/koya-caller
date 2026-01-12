@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { logError } from "@/lib/logging";
 
 interface SuggestedFaq {
   question: string;
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SuggestRe
       faqs: suggestedFaqs,
     });
   } catch (error) {
-    console.error("[Suggest FAQs] Error:", error);
+    logError("Suggest FAQs", error);
     return NextResponse.json(
       { success: false, error: "Failed to generate suggestions" },
       { status: 500 }
@@ -243,7 +244,7 @@ Make questions sound natural (as a caller would ask), and answers should be help
       return generateMockFaqs(context);
     }
   } catch (error) {
-    console.error("[Suggest FAQs] Claude error:", error);
+    logError("Suggest FAQs Claude", error);
     return generateMockFaqs(context);
   }
 }

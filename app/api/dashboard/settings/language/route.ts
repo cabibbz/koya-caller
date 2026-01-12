@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ async function handler(request: NextRequest) {
     }
 
     // Upsert AI config
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: aiConfig, error: updateError } = await (supabase as any)
       .from("ai_config")
       .upsert(updateData, { onConflict: "business_id" })
@@ -82,6 +84,7 @@ async function handler(request: NextRequest) {
       data: aiConfig,
     });
   } catch (error) {
+    logError("Settings Language PUT", error);
     return NextResponse.json(
       { error: "Failed to update language settings" },
       { status: 500 }

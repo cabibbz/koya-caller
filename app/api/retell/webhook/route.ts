@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/retell";
 import { inngest } from "@/lib/inngest";
 import { createAppointmentEvent } from "@/lib/calendar";
+import { logError } from "@/lib/logging";
 
 // Retell webhook event types
 interface RetellCallEvent {
@@ -306,7 +307,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   } catch (error) {
     // Log the error for debugging
-    console.error("[Retell Webhook] Processing error:", error);
+    logError("Retell Webhook", error);
 
     // Return 500 to trigger Retell retry for transient failures
     // Retell will retry up to 3 times with exponential backoff

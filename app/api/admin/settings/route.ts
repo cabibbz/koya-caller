@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client table query
     let query = (adminClient.from("site_settings") as any).select("*");
 
     if (category) {
@@ -43,6 +45,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ settings: settings || [] });
   } catch (error) {
+    logError("Admin Settings GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -70,6 +73,7 @@ export async function PUT(request: NextRequest) {
     if (!key || value === undefined) {
       return NextResponse.json({ error: "Key and value are required" }, { status: 400 });
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Admin client table query
     const { data: setting, error } = await (adminClient
       .from("site_settings") as any)
       .update({
@@ -87,6 +91,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ setting });
   } catch (error) {
+    logError("Admin Settings PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
