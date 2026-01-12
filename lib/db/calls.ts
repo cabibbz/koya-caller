@@ -5,6 +5,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeSqlPattern } from "@/lib/security";
 import type { Call, CallOutcome, CallLanguage, Appointment, AppointmentStatus } from "@/types";
 
 /**
@@ -145,8 +146,10 @@ export async function getCallsByBusinessId(
   }
 
   // Apply search filter (searches in summary and message_taken)
+  // Sanitize to prevent SQL ILIKE pattern injection
   if (searchQuery) {
-    query = query.or(`summary.ilike.%${searchQuery}%,message_taken.ilike.%${searchQuery}%`);
+    const sanitized = sanitizeSqlPattern(searchQuery);
+    query = query.or(`summary.ilike.%${sanitized}%,message_taken.ilike.%${sanitized}%`);
   }
 
   // Apply pagination

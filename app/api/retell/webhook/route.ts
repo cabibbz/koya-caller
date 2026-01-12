@@ -305,8 +305,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    // Return 200 anyway to prevent retries for transient errors
-    return NextResponse.json({ received: true, error: "Internal error" });
+    // Log the error for debugging
+    console.error("[Retell Webhook] Processing error:", error);
+
+    // Return 500 to trigger Retell retry for transient failures
+    // Retell will retry up to 3 times with exponential backoff
+    // This ensures call data, appointments, and billing are not lost
+    return NextResponse.json(
+      { error: "Internal processing error" },
+      { status: 500 }
+    );
   }
 }
 

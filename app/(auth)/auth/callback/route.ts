@@ -1,7 +1,7 @@
 /**
  * Auth Callback Route Handler
  * Handles email confirmation and OAuth callbacks
- * 
+ *
  * This route is called after:
  * - User clicks email confirmation link
  * - OAuth provider redirects back
@@ -11,10 +11,46 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+/**
+ * Validate redirect path to prevent open redirect attacks
+ * Only allows relative paths that start with / and don't contain protocol markers
+ */
+function validateRedirectPath(path: string | null): string {
+  const defaultPath = "/dashboard";
+
+  if (!path) {
+    return defaultPath;
+  }
+
+  // Must start with a single forward slash (not //)
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    return defaultPath;
+  }
+
+  // Must not contain protocol markers
+  if (path.includes("://") || path.includes("\\")) {
+    return defaultPath;
+  }
+
+  // Must not contain encoded characters that could bypass checks
+  const decoded = decodeURIComponent(path);
+  if (decoded !== path && (decoded.includes("://") || decoded.startsWith("//"))) {
+    return defaultPath;
+  }
+
+  // Only allow alphanumeric, /, -, _, ., ?, =, &
+  const safePathRegex = /^\/[a-zA-Z0-9\-_./?=&]*$/;
+  if (!safePathRegex.test(path)) {
+    return defaultPath;
+  }
+
+  return path;
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = validateRedirectPath(searchParams.get("next"));
   const type = searchParams.get("type");
 
   if (code) {
@@ -30,10 +66,10 @@ export async function GET(request: Request) {
 
       // Get user to determine redirect
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (user) {
         const tenantId = user.app_metadata?.tenant_id;
-        
+
         if (!tenantId) {
           // User confirmed email but hasn't completed onboarding
           return NextResponse.redirect(`${origin}/onboarding`);

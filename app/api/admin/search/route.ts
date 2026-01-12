@@ -8,6 +8,25 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Sanitize search query for safe use in ILIKE patterns
+ * Escapes special PostgreSQL pattern characters: %, _, \
+ */
+function sanitizeSearchQuery(query: string): string {
+  return query
+    .replace(/\\/g, "\\\\") // Escape backslashes first
+    .replace(/%/g, "\\%")   // Escape percent signs
+    .replace(/_/g, "\\_");  // Escape underscores
+}
+
+/**
+ * Validate if a string is a valid UUID format
+ */
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -18,12 +37,20 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get("q")?.trim().toLowerCase();
+    const rawQuery = searchParams.get("q")?.trim().toLowerCase();
     const type = searchParams.get("type");
 
-    if (!query || query.length < 2) {
+    if (!rawQuery || rawQuery.length < 2) {
       return NextResponse.json({ results: [] });
     }
+
+    // Limit query length to prevent abuse
+    if (rawQuery.length > 100) {
+      return NextResponse.json({ error: "Query too long" }, { status: 400 });
+    }
+
+    // Sanitize the query for safe use in ILIKE patterns
+    const query = sanitizeSearchQuery(rawQuery);
 
     const results: any[] = [];
 
@@ -32,7 +59,7 @@ export async function GET(request: NextRequest) {
       const { data: businesses } = await (supabase as any)
         .from("businesses")
         .select("id, name, subscription_status, users(email)")
-        .or(`name.ilike.%${query}%`)
+        .ilike("name", `%${query}%`)
         .limit(10);
 
       (businesses || []).forEach((b: any) => {
@@ -70,12 +97,22 @@ export async function GET(request: NextRequest) {
 
     // Search calls
     if (!type || type === "call") {
-      const { data: calls } = await (supabase as any)
+      // Build query for calls - only use id.eq if it's a valid UUID
+      let callsQuery = (supabase as any)
         .from("calls")
         .select("id, caller_phone, status, created_at, businesses(name)")
-        .or(`caller_phone.ilike.%${query}%,id.eq.${query}`)
         .order("created_at", { ascending: false })
         .limit(10);
+
+      if (isValidUUID(rawQuery)) {
+        // If it's a valid UUID, search by ID or phone
+        callsQuery = callsQuery.or(`caller_phone.ilike.%${query}%,id.eq.${rawQuery}`);
+      } else {
+        // Otherwise only search by phone
+        callsQuery = callsQuery.ilike("caller_phone", `%${query}%`);
+      }
+
+      const { data: calls } = await callsQuery;
 
       (calls || []).forEach((c: any) => {
         results.push({

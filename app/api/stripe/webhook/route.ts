@@ -11,7 +11,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { withWebhook } from "@/lib/rate-limit/middleware";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe/client";
 import type Stripe from "stripe";
@@ -359,90 +358,103 @@ async function handleInvoicePaymentFailed(
 
 /**
  * POST /api/stripe/webhook
- * 
+ *
  * Handles Stripe webhook events with:
- * - Rate limiting: 100 requests/min (global)
- * - Signature verification using stripe-signature header
+ * - Official Stripe SDK signature verification
+ * - Proper error handling for retries
  */
-export const POST = withWebhook(
-  async (request: NextRequest, { payload, verified }) => {
-    // Parse the webhook payload
-    let event: Stripe.Event;
-    try {
-      event = JSON.parse(payload) as Stripe.Event;
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid JSON payload" },
-        { status: 400 }
-      );
+export async function POST(request: NextRequest) {
+  // Get raw payload for signature verification
+  const payload = await request.text();
+  const signature = request.headers.get("stripe-signature");
+
+  if (!signature) {
+    return NextResponse.json(
+      { error: "Missing stripe-signature header" },
+      { status: 401 }
+    );
+  }
+
+  // Verify signature using official Stripe SDK
+  // This handles timestamp validation, replay protection, and proper HMAC verification
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      payload,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  } catch (err) {
+    console.error("[Stripe Webhook] Signature verification failed:", err);
+    return NextResponse.json(
+      { error: "Invalid signature" },
+      { status: 401 }
+    );
+  }
+
+  // Create admin client for database operations
+  const supabase = createAdminClient();
+
+  try {
+    // Handle different event types
+    switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutCompleted(
+          supabase,
+          event.data.object as Stripe.Checkout.Session
+        );
+        break;
+
+      case "customer.subscription.created":
+        await handleSubscriptionCreated(
+          supabase,
+          event.data.object as Stripe.Subscription
+        );
+        break;
+
+      case "customer.subscription.updated":
+        await handleSubscriptionUpdated(
+          supabase,
+          event.data.object as Stripe.Subscription
+        );
+        break;
+
+      case "customer.subscription.deleted":
+        await handleSubscriptionDeleted(
+          supabase,
+          event.data.object as Stripe.Subscription
+        );
+        break;
+
+      case "invoice.payment_succeeded":
+        await handleInvoicePaymentSucceeded(
+          supabase,
+          event.data.object as Stripe.Invoice
+        );
+        break;
+
+      case "invoice.payment_failed":
+        await handleInvoicePaymentFailed(
+          supabase,
+          event.data.object as Stripe.Invoice
+        );
+        break;
+
+      default:
+        // Unhandled event type - ignored
     }
+  } catch (error) {
+    console.error("[Stripe Webhook] Handler error:", error);
+    // Return 500 so Stripe retries
+    return NextResponse.json(
+      { error: "Webhook handler failed" },
+      { status: 500 }
+    );
+  }
 
-    // Webhook event received
-
-    // Create admin client for database operations
-    const supabase = createAdminClient();
-
-    try {
-      // Handle different event types
-      switch (event.type) {
-        case "checkout.session.completed":
-          await handleCheckoutCompleted(
-            supabase,
-            event.data.object as Stripe.Checkout.Session
-          );
-          break;
-
-        case "customer.subscription.created":
-          await handleSubscriptionCreated(
-            supabase,
-            event.data.object as Stripe.Subscription
-          );
-          break;
-
-        case "customer.subscription.updated":
-          await handleSubscriptionUpdated(
-            supabase,
-            event.data.object as Stripe.Subscription
-          );
-          break;
-
-        case "customer.subscription.deleted":
-          await handleSubscriptionDeleted(
-            supabase,
-            event.data.object as Stripe.Subscription
-          );
-          break;
-
-        case "invoice.payment_succeeded":
-          await handleInvoicePaymentSucceeded(
-            supabase,
-            event.data.object as Stripe.Invoice
-          );
-          break;
-
-        case "invoice.payment_failed":
-          await handleInvoicePaymentFailed(
-            supabase,
-            event.data.object as Stripe.Invoice
-          );
-          break;
-
-        default:
-          // Unhandled event type - ignored
-      }
-    } catch (error) {
-      // Return 500 so Stripe retries
-      return NextResponse.json(
-        { error: "Webhook handler failed" },
-        { status: 500 }
-      );
-    }
-
-    // Return success (Stripe expects 200 OK)
-    return NextResponse.json({ received: true });
-  },
-  { provider: "stripe", rateLimit: true }
-);
+  // Return success (Stripe expects 200 OK)
+  return NextResponse.json({ received: true });
+}
 
 // Prevent other HTTP methods
 export async function GET() {

@@ -6,6 +6,7 @@ import { OrganizationJsonLd, SoftwareApplicationJsonLd } from "@/components/json
 import { SkipNavLink } from "@/components/skip-nav";
 import { PageProgress } from "@/components/page-progress";
 import { Toaster } from "@/components/ui/toaster";
+import { QueryProvider } from "@/components/providers/query-provider";
 import "./globals.css";
 
 /**
@@ -73,11 +74,13 @@ export default function RootLayout({
         <SoftwareApplicationJsonLd />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <PageProgress />
-        <SkipNavLink />
-        {children}
-        <Toaster />
-        <CookieConsent />
+        <QueryProvider>
+          <PageProgress />
+          <SkipNavLink />
+          {children}
+          <Toaster />
+          <CookieConsent />
+        </QueryProvider>
       </body>
     </html>
   );
