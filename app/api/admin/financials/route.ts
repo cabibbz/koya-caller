@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all businesses with their plans
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
       `);
 
     if (error) {
+      logError("Admin Financials GET", error);
       return NextResponse.json(
         { error: "Failed to fetch financial data" },
         { status: 500 }
@@ -60,6 +63,7 @@ export async function GET(request: NextRequest) {
     let newCustomers30d = 0;
     let churnedCustomers30d = 0;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (businesses || []).forEach((b: any) => {
       const createdAt = new Date(b.created_at);
       const updatedAt = new Date(b.updated_at);
@@ -81,6 +85,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response filter
     const totalCustomers = (businesses || []).filter(
       (b: any) => b.subscription_status !== "onboarding"
     ).length;
@@ -100,6 +105,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ summary });
   } catch (error) {
+    logError("Admin Financials GET", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

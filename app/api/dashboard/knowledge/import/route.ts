@@ -146,6 +146,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
         const priceType = validatePriceType(row[4]?.trim());
         const isBookable = row[5]?.toLowerCase() !== "no";
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { error: insertError } = await (supabase as any).from("services").insert({
           business_id: businessId,
           name,
@@ -186,6 +187,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
         const question = row[0].trim();
         const answer = row[1].trim();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { error: insertError } = await (supabase as any).from("faqs").insert({
           business_id: businessId,
           question,

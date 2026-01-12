@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all calls
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calls, error: callsError } = await (supabase as any)
       .from("calls")
       .select("id, status, duration_seconds, created_at, business_id");
 
     if (callsError) {
+      logError("Admin Usage GET - calls", callsError);
       return NextResponse.json(
         { error: "Failed to fetch usage data" },
         { status: 500 }
@@ -46,6 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all businesses with plans for revenue calculation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error: bizError } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -62,6 +66,7 @@ export async function GET(request: NextRequest) {
       `);
 
     if (bizError) {
+      logError("Admin Usage GET - businesses", bizError);
       return NextResponse.json(
         { error: "Failed to fetch business data" },
         { status: 500 }
@@ -85,6 +90,7 @@ export async function GET(request: NextRequest) {
 
     const callsByBusiness: Record<string, { total: number; minutes: number }> = {};
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (calls || []).forEach((call: any) => {
       totalCalls++;
       const seconds = call.duration_seconds || 0;
@@ -115,6 +121,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate revenue from active subscriptions
     let revenueCents = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (businesses || []).forEach((b: any) => {
       if (b.subscription_status === "active" && b.plans?.price_cents) {
         revenueCents += b.plans.price_cents;
@@ -127,6 +134,7 @@ export async function GET(request: NextRequest) {
         : 0;
 
     // Format per-business usage
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const businessUsage = (businesses || []).map((b: any) => ({
       business_id: b.id,
       business_name: b.name,
@@ -162,6 +170,7 @@ export async function GET(request: NextRequest) {
       businesses: businessUsage,
     });
   } catch (error) {
+    logError("Admin Usage GET", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Get today's calls
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: todayCalls } = await (supabase as any)
       .from("calls")
       .select("id, status, created_at, business_id, businesses(name)")
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     // Get today's appointments
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: todayAppointments } = await (supabase as any)
       .from("appointments")
       .select("id, created_at, business_id, customer_name, businesses(name)")
@@ -35,20 +38,24 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     // Get new customers today
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: newCustomers } = await (supabase as any)
       .from("businesses")
       .select("id, name, created_at")
       .gte("created_at", todayStart.toISOString());
 
     // Calculate active calls (in-progress status)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response filtering
     const activeCalls = (todayCalls || []).filter(
       (c: any) => c.status === "in-progress" || c.status === "ringing"
     ).length;
 
     // Build activity feed
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic event structure
     const events: any[] = [];
 
     // Add call events
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (todayCalls || []).slice(0, 20).forEach((call: any) => {
       if (call.status === "completed") {
         events.push({
@@ -78,6 +85,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Add appointment events
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (todayAppointments || []).slice(0, 10).forEach((apt: any) => {
       events.push({
         id: `apt-${apt.id}`,
@@ -89,6 +97,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Add customer signup events
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (newCustomers || []).forEach((c: any) => {
       events.push({
         id: `customer-${c.id}`,
@@ -113,6 +122,7 @@ export async function GET(request: NextRequest) {
       events: events.slice(0, 50),
     });
   } catch (error) {
+    logError("Admin Live GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

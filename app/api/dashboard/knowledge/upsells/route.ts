@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
     const businessId = (business as { id: string }).id;
 
     // Fetch upsells with service names
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: upsells, error } = await (supabase as any)
       .from("upsells")
       .select(`

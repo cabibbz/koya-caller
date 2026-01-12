@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     // First, deactivate any existing active numbers for this business
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { error: deactivateError } = await (supabase as any)
       .from("phone_numbers")
       .update({ is_active: false })
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
     // Don't fail the request if deactivation fails
 
     // Insert the new phone number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: phoneRecord, error: insertError } = await (supabase as any)
       .from("phone_numbers")
       .insert({

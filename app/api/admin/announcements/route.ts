@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: announcements, error } = await (supabase as any)
       .from("announcements")
       .select("*")
@@ -28,6 +30,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ announcements: announcements || [] });
   } catch (error) {
+    logError("Admin Announcements GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and content required" }, { status: 400 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: announcement, error } = await (supabase as any)
       .from("announcements")
       .insert({
@@ -63,10 +67,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      logError("Admin Announcements POST", error);
       return NextResponse.json({ error: "Failed to create" }, { status: 500 });
     }
 
     // Log audit
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     await (supabase as any).from("admin_audit_logs").insert({
       admin_user_id: user.id,
       admin_email: user.email,
@@ -79,6 +85,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ announcement });
   } catch (error) {
+    logError("Admin Announcements POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

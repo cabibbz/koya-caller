@@ -67,6 +67,7 @@ export const POST = withRateLimit(
       }
 
       // Get business
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: business, error: businessError } = await (supabase as any)
         .from("businesses")
         .select("id, name, stripe_customer_id, stripe_subscription_id")

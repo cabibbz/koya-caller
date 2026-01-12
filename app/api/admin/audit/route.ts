@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: logs, error } = await (supabase as any)
       .from("admin_audit_logs")
       .select("*")
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ logs: logs || [] });
   } catch (error) {
+    logError("Admin Audit GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

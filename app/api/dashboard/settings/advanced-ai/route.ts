@@ -94,6 +94,7 @@ export async function PUT(request: Request) {
 
   // Update ai_config table
   // Note: prompt_config column added by migration 20250110000001
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
   const { error: updateError } = await (supabase as any)
     .from("ai_config")
     .update({
