@@ -216,16 +216,48 @@ function inMemoryRateLimit(
 // =============================================================================
 
 /**
+ * Get client IP from request headers using platform-specific headers
+ *
+ * Priority order (most trusted first):
+ * 1. cf-connecting-ip (Cloudflare - can't be spoofed behind CF)
+ * 2. x-real-ip (Vercel/nginx - set by reverse proxy)
+ * 3. x-forwarded-for (first IP in chain - less reliable)
+ * 4. Fallback to "unknown"
+ *
+ * @param headers - Request headers
+ * @returns Client IP address
+ */
+export function getClientIP(headers: Headers): string {
+  // Cloudflare - most reliable when behind CF
+  const cfIP = headers.get("cf-connecting-ip");
+  if (cfIP) return cfIP;
+
+  // Vercel/nginx - reliable when set by reverse proxy
+  const realIP = headers.get("x-real-ip");
+  if (realIP) return realIP;
+
+  // x-forwarded-for - use first IP (can be spoofed without proper proxy setup)
+  const forwardedFor = headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const firstIP = forwardedFor.split(",")[0].trim();
+    if (firstIP) return firstIP;
+  }
+
+  return "unknown";
+}
+
+/**
  * Check rate limit for a given type and identifier
- * 
+ *
  * @param type - The rate limiter type
  * @param identifier - The identifier (IP address, user ID, or "global")
  * @returns Rate limit result
- * 
+ *
  * @example
- * const result = await checkRateLimit("auth", clientIP);
+ * const ip = getClientIP(request.headers);
+ * const result = await checkRateLimit("auth", ip);
  * if (!result.success) {
- *   return new Response("Too many requests", { 
+ *   return new Response("Too many requests", {
  *     status: 429,
  *     headers: { "Retry-After": String(result.retryAfter) }
  *   });

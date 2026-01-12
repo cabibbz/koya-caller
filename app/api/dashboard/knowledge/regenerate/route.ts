@@ -9,14 +9,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
 import type { RegenerationTrigger } from "@/lib/claude/types";
 
 export async function POST(request: NextRequest) {
   try {
     // Rate limit check
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const ip = getClientIP(request.headers);
     const rateLimitResult = await checkRateLimit("dashboard", ip);
     if (!rateLimitResult.success) {
       return NextResponse.json(

@@ -13,7 +13,6 @@ import {
   Save,
   Plus,
   Trash2,
-  GripVertical,
   Loader2,
   CheckCircle,
   AlertCircle,
@@ -28,7 +27,12 @@ import {
   Sparkles,
   X,
   Check,
+  Wand2,
+  MessageSquare,
+  Download,
+  Upload,
 } from "lucide-react";
+import { SortableList } from "@/components/ui/sortable-list";
 import {
   Button,
   Card,
@@ -162,6 +166,23 @@ export function KnowledgeClient({
   const [selectedFaqs, setSelectedFaqs] = useState<Set<number>>(new Set());
   const [importBusinessInfo, setImportBusinessInfo] = useState(true);
   const [importAdditionalInfo, setImportAdditionalInfo] = useState(true);
+
+  // FAQ suggestion state
+  const [suggestDialogOpen, setSuggestDialogOpen] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestedFaqs, setSuggestedFaqs] = useState<Array<{ question: string; answer: string }>>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set());
+
+  // Knowledge test state
+  const [testPanelOpen, setTestPanelOpen] = useState(false);
+  const [testQuestion, setTestQuestion] = useState("");
+  const [testResponse, setTestResponse] = useState("");
+  const [testing, setTesting] = useState(false);
+
+  // Import state
+  const [importDialogOpenCsv, setImportDialogOpenCsv] = useState(false);
+  const [importType, setImportType] = useState<"services" | "faqs">("services");
+  const [importingCsv, setImportingCsv] = useState(false);
 
   // Trigger prompt regeneration
   const triggerRegeneration = useCallback(async (triggerType: string) => {
@@ -534,6 +555,145 @@ export function KnowledgeClient({
     toast({ title: "Content imported successfully", description: "Don't forget to save your changes", variant: "success" });
   };
 
+  // FAQ suggestion helpers
+  const generateFaqSuggestions = async () => {
+    setSuggesting(true);
+    setSuggestedFaqs([]);
+    setSelectedSuggestions(new Set());
+
+    try {
+      const res = await fetch("/api/dashboard/knowledge/suggest-faqs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        toast({ title: "Failed to generate suggestions", description: data.error, variant: "destructive" });
+        return;
+      }
+
+      setSuggestedFaqs(data.faqs || []);
+      setSelectedSuggestions(new Set(data.faqs.map((_: unknown, i: number) => i)));
+      setSuggestDialogOpen(true);
+    } catch (err) {
+      toast({ title: "Failed to generate suggestions", variant: "destructive" });
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const toggleSuggestionSelection = (index: number) => {
+    const newSelected = new Set(selectedSuggestions);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedSuggestions(newSelected);
+  };
+
+  const applySuggestedFaqs = () => {
+    if (selectedSuggestions.size === 0) return;
+
+    const newFaqs: FAQ[] = suggestedFaqs
+      .filter((_, i) => selectedSuggestions.has(i))
+      .map((f, i) => ({
+        id: `temp-${crypto.randomUUID()}`,
+        business_id: businessId,
+        question: f.question,
+        answer: f.answer,
+        sort_order: faqs.length + i,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })) as FAQ[];
+
+    setFaqs([...faqs, ...newFaqs]);
+    setFaqsModified(true);
+    setSuggestDialogOpen(false);
+    setSuggestedFaqs([]);
+    setSelectedSuggestions(new Set());
+    toast({ title: `Added ${newFaqs.length} FAQs`, description: "Don't forget to save your changes", variant: "success" });
+  };
+
+  // Knowledge test helper
+  const testKnowledge = async () => {
+    if (!testQuestion.trim()) return;
+
+    setTesting(true);
+    setTestResponse("");
+
+    try {
+      const res = await fetch("/api/dashboard/knowledge/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: testQuestion }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setTestResponse(`Error: ${data.error}`);
+        return;
+      }
+
+      setTestResponse(data.response);
+    } catch (err) {
+      setTestResponse("Error: Failed to test knowledge. Please try again.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Export helper
+  const exportData = (type: "services" | "faqs") => {
+    window.open(`/api/dashboard/knowledge/export?type=${type}`, "_blank");
+  };
+
+  // Import helper
+  const handleCsvImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingCsv(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", importType);
+
+      const res = await fetch("/api/dashboard/knowledge/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        toast({ title: "Import failed", description: data.error, variant: "destructive" });
+        return;
+      }
+
+      toast({
+        title: `Imported ${data.imported} ${importType}`,
+        description: data.errors?.length ? `${data.errors.length} rows had errors` : "Refresh the page to see changes",
+        variant: "success",
+      });
+
+      setImportDialogOpenCsv(false);
+
+      // Reload the page to show new data
+      window.location.reload();
+    } catch (err) {
+      toast({ title: "Import failed", variant: "destructive" });
+    } finally {
+      setImportingCsv(false);
+      // Reset file input
+      event.target.value = "";
+    }
+  };
+
   const tabs = [
     { id: "services" as const, label: "Services", icon: Briefcase, modified: servicesModified },
     { id: "faqs" as const, label: "FAQs", icon: HelpCircle, modified: faqsModified },
@@ -555,6 +715,13 @@ export function KnowledgeClient({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setTestPanelOpen(!testPanelOpen)}
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Test Knowledge
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
@@ -582,6 +749,69 @@ export function KnowledgeClient({
           {regenerating && " Updating Koya..."}
         </AlertDescription>
       </Alert>
+
+      {/* Test Knowledge Panel */}
+      {testPanelOpen && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <CardTitle className="text-base">Test Koya&apos;s Knowledge</CardTitle>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTestPanelOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <CardDescription>
+              Ask a question to see how Koya would respond based on your current knowledge base.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                value={testQuestion}
+                onChange={(e) => setTestQuestion(e.target.value)}
+                placeholder="e.g., What are your business hours?"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !testing) {
+                    testKnowledge();
+                  }
+                }}
+              />
+              <Button onClick={testKnowledge} disabled={testing || !testQuestion.trim()}>
+                {testing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Ask"
+                )}
+              </Button>
+            </div>
+
+            {testResponse && (
+              <div className="p-4 rounded-lg bg-background border">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Brain className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium mb-1">Koya</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{testResponse}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Note: This tests against your current knowledge. Save changes first for accurate results.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b pb-2">
@@ -613,10 +843,32 @@ export function KnowledgeClient({
                   List the services your business offers. Koya will use this to answer questions and book appointments.
                 </CardDescription>
               </div>
-              <Button onClick={addService} size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Service
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => exportData("services")}
+                  title="Export to CSV"
+                  disabled={services.length === 0}
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setImportType("services");
+                    setImportDialogOpenCsv(true);
+                  }}
+                  title="Import from CSV"
+                >
+                  <Upload className="w-4 h-4" />
+                </Button>
+                <Button onClick={addService} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Service
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -625,93 +877,94 @@ export function KnowledgeClient({
                 No services added yet. Click &quot;Add Service&quot; to get started.
               </div>
             ) : (
-              services.map((service, index) => (
-                <div
-                  key={service.id}
-                  className="flex gap-4 p-4 border rounded-lg bg-muted/20"
-                >
-                  <div className="flex items-center text-muted-foreground cursor-move">
-                    <GripVertical className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="sm:col-span-2">
-                      <Label className="text-xs">Service Name</Label>
-                      <Input
-                        value={service.name}
-                        onChange={(e) => updateService(index, { name: e.target.value })}
-                        placeholder="e.g., AC Repair"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Duration (min)</Label>
-                      <Input
-                        type="number"
-                        value={service.duration_minutes}
-                        onChange={(e) =>
-                          updateService(index, { duration_minutes: parseInt(e.target.value) || 60 })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Price Type</Label>
-                      <Select
-                        value={service.price_type}
-                        onValueChange={(v) => updateService(index, { price_type: v as "fixed" | "quote" | "hidden" })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRICE_TYPES.map((pt) => (
-                            <SelectItem key={pt.value} value={pt.value}>
-                              {pt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {service.price_type === "fixed" && (
-                      <div>
-                        <Label className="text-xs">Price ($)</Label>
+              <SortableList
+                items={services}
+                onReorder={(reordered) => {
+                  setServices(reordered);
+                  setServicesModified(true);
+                }}
+                renderItem={(service, index) => (
+                  <div className="flex gap-4 p-4 border rounded-lg bg-muted/20">
+                    <div className="flex-1 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs">Service Name</Label>
                         <Input
-                          type="number"
-                          value={service.price_cents ? service.price_cents / 100 : ""}
-                          onChange={(e) =>
-                            updateService(index, {
-                              price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null,
-                            })
-                          }
-                          placeholder="0.00"
+                          value={service.name}
+                          onChange={(e) => updateService(index, { name: e.target.value })}
+                          placeholder="e.g., AC Repair"
                         />
                       </div>
-                    )}
-                    <div className="sm:col-span-2 lg:col-span-3">
-                      <Label className="text-xs">Description</Label>
-                      <Textarea
-                        value={service.description || ""}
-                        onChange={(e) => updateService(index, { description: e.target.value })}
-                        placeholder="Brief description of this service..."
-                        rows={2}
-                      />
+                      <div>
+                        <Label className="text-xs">Duration (min)</Label>
+                        <Input
+                          type="number"
+                          value={service.duration_minutes}
+                          onChange={(e) =>
+                            updateService(index, { duration_minutes: parseInt(e.target.value) || 60 })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Price Type</Label>
+                        <Select
+                          value={service.price_type}
+                          onValueChange={(v) => updateService(index, { price_type: v as "fixed" | "quote" | "hidden" })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRICE_TYPES.map((pt) => (
+                              <SelectItem key={pt.value} value={pt.value}>
+                                {pt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {service.price_type === "fixed" && (
+                        <div>
+                          <Label className="text-xs">Price ($)</Label>
+                          <Input
+                            type="number"
+                            value={service.price_cents ? service.price_cents / 100 : ""}
+                            onChange={(e) =>
+                              updateService(index, {
+                                price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null,
+                              })
+                            }
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <Label className="text-xs">Description</Label>
+                        <Textarea
+                          value={service.description || ""}
+                          onChange={(e) => updateService(index, { description: e.target.value })}
+                          placeholder="Brief description of this service..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={service.is_bookable}
+                          onCheckedChange={(checked) => updateService(index, { is_bookable: checked })}
+                        />
+                        <Label className="text-xs">Bookable</Label>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={service.is_bookable}
-                        onCheckedChange={(checked) => updateService(index, { is_bookable: checked })}
-                      />
-                      <Label className="text-xs">Bookable</Label>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeService(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => removeService(index)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))
+                )}
+              />
             )}
 
             {/* Save button */}
@@ -740,10 +993,45 @@ export function KnowledgeClient({
                   Common questions and answers. Koya will use these to respond to callers.
                 </CardDescription>
               </div>
-              <Button onClick={addFaq} size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Add FAQ
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => exportData("faqs")}
+                  title="Export to CSV"
+                  disabled={faqs.length === 0}
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setImportType("faqs");
+                    setImportDialogOpenCsv(true);
+                  }}
+                  title="Import from CSV"
+                >
+                  <Upload className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={generateFaqSuggestions}
+                  disabled={suggesting}
+                >
+                  {suggesting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Wand2 className="w-4 h-4 mr-2" />
+                  )}
+                  Generate FAQs
+                </Button>
+                <Button onClick={addFaq} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add FAQ
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -752,43 +1040,44 @@ export function KnowledgeClient({
                 No FAQs added yet. Click &quot;Add FAQ&quot; to get started.
               </div>
             ) : (
-              faqs.map((faq, index) => (
-                <div
-                  key={faq.id}
-                  className="flex gap-4 p-4 border rounded-lg bg-muted/20"
-                >
-                  <div className="flex items-start pt-2 text-muted-foreground cursor-move">
-                    <GripVertical className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <Label className="text-xs">Question</Label>
-                      <Input
-                        value={faq.question}
-                        onChange={(e) => updateFaq(index, { question: e.target.value })}
-                        placeholder="e.g., What are your hours?"
-                      />
+              <SortableList
+                items={faqs}
+                onReorder={(reordered) => {
+                  setFaqs(reordered);
+                  setFaqsModified(true);
+                }}
+                renderItem={(faq, index) => (
+                  <div className="flex gap-4 p-4 border rounded-lg bg-muted/20">
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <Label className="text-xs">Question</Label>
+                        <Input
+                          value={faq.question}
+                          onChange={(e) => updateFaq(index, { question: e.target.value })}
+                          placeholder="e.g., What are your hours?"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Answer</Label>
+                        <Textarea
+                          value={faq.answer}
+                          onChange={(e) => updateFaq(index, { answer: e.target.value })}
+                          placeholder="e.g., We're open Monday through Friday, 8am to 6pm."
+                          rows={3}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs">Answer</Label>
-                      <Textarea
-                        value={faq.answer}
-                        onChange={(e) => updateFaq(index, { answer: e.target.value })}
-                        placeholder="e.g., We're open Monday through Friday, 8am to 6pm."
-                        rows={3}
-                      />
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeFaq(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => removeFaq(index)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))
+                )}
+              />
             )}
 
             {/* Save button */}
@@ -1236,6 +1525,148 @@ export function KnowledgeClient({
                 <p>Enter your website URL and click Analyze to extract content</p>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* FAQ Suggestion Dialog */}
+      <Dialog open={suggestDialogOpen} onOpenChange={setSuggestDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-primary" />
+              AI-Generated FAQ Suggestions
+            </DialogTitle>
+            <DialogDescription>
+              Select the FAQs you want to add to your knowledge base.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {suggestedFaqs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No suggestions available. Add some services first!</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedSuggestions.size} of {suggestedFaqs.length} selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedSuggestions.size === suggestedFaqs.length) {
+                        setSelectedSuggestions(new Set());
+                      } else {
+                        setSelectedSuggestions(new Set(suggestedFaqs.map((_, i) => i)));
+                      }
+                    }}
+                  >
+                    {selectedSuggestions.size === suggestedFaqs.length ? "Deselect All" : "Select All"}
+                  </Button>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {suggestedFaqs.map((faq, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                        selectedSuggestions.has(index)
+                          ? "bg-primary/5 border-primary"
+                          : "bg-muted/30 hover:bg-muted/50"
+                      }`}
+                      onClick={() => toggleSuggestionSelection(index)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={selectedSuggestions.has(index)}
+                          onCheckedChange={() => toggleSuggestionSelection(index)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <p className="font-medium text-sm">{faq.question}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {faq.answer}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setSuggestDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={applySuggestedFaqs}
+                    disabled={selectedSuggestions.size === 0}
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Add {selectedSuggestions.size} FAQs
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={importDialogOpenCsv} onOpenChange={setImportDialogOpenCsv}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-primary" />
+              Import {importType === "services" ? "Services" : "FAQs"} from CSV
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to bulk import {importType}.
+              {importType === "services"
+                ? " Expected columns: Name, Description, Duration (minutes), Price ($), Price Type, Bookable"
+                : " Expected columns: Question, Answer"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <Upload className="w-10 h-10 mx-auto mb-4 text-muted-foreground" />
+              <Label
+                htmlFor="csv-upload"
+                className="cursor-pointer text-primary hover:underline"
+              >
+                {importingCsv ? "Importing..." : "Click to select a CSV file"}
+              </Label>
+              <input
+                id="csv-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleCsvImport}
+                disabled={importingCsv}
+                className="hidden"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Maximum 500 rows per import
+              </p>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => exportData(importType)}
+                className="text-muted-foreground"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Download template
+              </Button>
+              <Button variant="outline" onClick={() => setImportDialogOpenCsv(false)}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

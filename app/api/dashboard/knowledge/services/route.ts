@@ -6,12 +6,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { inngest } from "@/lib/inngest/client";
 
 export async function PUT(request: NextRequest) {
   try {
     // Rate limit check
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const ip = getClientIP(request.headers);
     const rateLimitResult = await checkRateLimit("dashboard", ip);
     if (!rateLimitResult.success) {
       return NextResponse.json(
@@ -81,6 +82,15 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: "Failed to save services" }, { status: 500 });
       }
     }
+
+    // Trigger Retell AI sync via prompt regeneration
+    await inngest.send({
+      name: "prompt/regeneration.requested",
+      data: {
+        businessId,
+        triggeredBy: "services_update",
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

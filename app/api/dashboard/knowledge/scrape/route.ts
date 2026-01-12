@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 interface ExtractedContent {
   businessName?: string;
@@ -44,7 +44,7 @@ const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
 export async function POST(request: NextRequest): Promise<NextResponse<ScrapeResponse>> {
   try {
     // Rate limit check
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const ip = getClientIP(request.headers);
     const rateLimitResult = await checkRateLimit("dashboard", ip);
     if (!rateLimitResult.success) {
       return NextResponse.json(
@@ -79,8 +79,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
     const body = await request.json();
     const { url } = body;
 
-    if (!url) {
+    if (!url || typeof url !== "string") {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
+    }
+
+    // Input length validation
+    const MAX_URL_LENGTH = 2048;
+    if (url.length > MAX_URL_LENGTH) {
+      return NextResponse.json(
+        { success: false, error: `URL too long. Maximum ${MAX_URL_LENGTH} characters.` },
+        { status: 400 }
+      );
     }
 
     // Validate URL
@@ -89,6 +98,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
       validatedUrl = new URL(url.startsWith("http") ? url : `https://${url}`);
     } catch {
       return NextResponse.json({ success: false, error: "Invalid URL format" }, { status: 400 });
+    }
+
+    // SSRF Protection - Block internal/dangerous URLs
+    if (isBlockedUrl(validatedUrl)) {
+      return NextResponse.json(
+        { success: false, error: "This URL is not allowed for security reasons" },
+        { status: 400 }
+      );
     }
 
     // Scrape the website
@@ -126,6 +143,54 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
       { status: 500 }
     );
   }
+}
+
+/**
+ * SSRF Protection - Block internal and dangerous URLs
+ */
+const BLOCKED_HOSTS = [
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+  "169.254.169.254", // AWS metadata
+  "metadata.google.internal", // GCP metadata
+  "metadata.azure.com", // Azure metadata
+];
+
+const BLOCKED_IP_PATTERNS = [
+  /^10\./, // Private Class A
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // Private Class B
+  /^192\.168\./, // Private Class C
+  /^fc00:/, // IPv6 private
+  /^fe80:/, // IPv6 link-local
+];
+
+function isBlockedUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+
+  // Block known dangerous hosts
+  if (BLOCKED_HOSTS.includes(hostname)) {
+    return true;
+  }
+
+  // Block private IP ranges
+  if (BLOCKED_IP_PATTERNS.some((regex) => regex.test(hostname))) {
+    return true;
+  }
+
+  // Only allow http/https
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return true;
+  }
+
+  // Block uncommon ports (only allow 80, 443, 8080, 8443)
+  const port = url.port ? parseInt(url.port) : url.protocol === "https:" ? 443 : 80;
+  if (![80, 443, 8080, 8443].includes(port)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
