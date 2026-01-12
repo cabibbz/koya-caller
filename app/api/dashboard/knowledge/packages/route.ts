@@ -66,8 +66,7 @@ export async function GET(request: NextRequest) {
     const businessId = (business as { id: string }).id;
 
     // Fetch packages with service names
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: packages, error } = await (supabase as any)
+    const { data: packages, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .select(`
         id,
@@ -216,8 +215,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check package count limit
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: packageCount } = await (supabase as any)
+    const { count: packageCount } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
@@ -251,8 +249,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create package
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: pkg, error } = await (supabase as any)
+    const { data: pkg, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .insert({
         business_id: businessId,
@@ -342,8 +339,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify package exists and belongs to business
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingPkg, error: fetchError } = await (supabase as any)
+    const { data: existingPkg, error: fetchError } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .select("id")
       .eq("id", pkg.id)
@@ -469,8 +465,7 @@ export async function PUT(request: NextRequest) {
     if (pkg.is_active !== undefined) updateData.is_active = pkg.is_active;
 
     // Update package
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .update(updateData)
       .eq("id", pkg.id)
@@ -549,8 +544,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete package
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: deletedRows, error } = await (supabase as any)
+    const { data: deletedRows, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("packages")
       .delete()
       .eq("id", packageId)

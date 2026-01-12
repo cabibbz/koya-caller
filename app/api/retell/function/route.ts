@@ -15,6 +15,7 @@ import {
   type Personality,
   type ErrorType,
 } from "@/lib/claude/error-templates";
+import { createCalendarClient } from "@/lib/calendar";
 
 // =============================================================================
 // Types
@@ -196,7 +197,7 @@ async function handleCheckAvailability(
     // Get existing appointments for that day
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
-    
+
     const { data: appointments } = await supabase
       .from("appointments")
       .select("scheduled_at, duration_minutes")
@@ -210,6 +211,21 @@ async function handleCheckAvailability(
       duration_minutes: number;
     }>;
 
+    // Also check external calendar if connected (Google/Outlook)
+    let externalBusySlots: Array<{ start: Date; end: Date }> = [];
+    try {
+      const calendarClient = await createCalendarClient(body.business_id);
+      if (calendarClient) {
+        const freeBusy = await calendarClient.getFreeBusy({
+          timeMin: new Date(`${date}T${hoursData.open_time}`),
+          timeMax: new Date(`${date}T${hoursData.close_time}`),
+        });
+        externalBusySlots = freeBusy.busy;
+      }
+    } catch {
+      // Calendar not connected or error - continue with database only
+    }
+
     // Generate available slots
     const slots: string[] = [];
     const openTime = new Date(`${date}T${hoursData.open_time}`);
@@ -219,14 +235,20 @@ async function handleCheckAvailability(
     while (currentSlot.getTime() + serviceDuration * 60000 <= closeTime.getTime()) {
       // Check if slot conflicts with existing appointment
       const slotEnd = new Date(currentSlot.getTime() + serviceDuration * 60000);
-      
-      const hasConflict = appointmentsArray.some(apt => {
+
+      // Check database appointments
+      const hasDbConflict = appointmentsArray.some(apt => {
         const aptStart = new Date(apt.scheduled_at);
         const aptEnd = new Date(aptStart.getTime() + apt.duration_minutes * 60000);
         return currentSlot < aptEnd && slotEnd > aptStart;
       });
 
-      if (!hasConflict) {
+      // Check external calendar busy times
+      const hasCalendarConflict = externalBusySlots.some(busy => {
+        return currentSlot < busy.end && slotEnd > busy.start;
+      });
+
+      if (!hasDbConflict && !hasCalendarConflict) {
         slots.push(currentSlot.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
@@ -333,7 +355,7 @@ async function handleBookAppointment(
         service_name: serviceInfo?.name || service,
         scheduled_at: scheduledAt.toISOString(),
         duration_minutes: serviceDuration,
-        status: "scheduled",
+        status: "confirmed",
         notes: notes || null,
       })
       .select()

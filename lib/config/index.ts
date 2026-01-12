@@ -71,7 +71,7 @@ export const EXTERNAL_URLS = {
 
   // Retell AI
   retell: {
-    api: "https://api.retellai.com/v2",
+    api: "https://api.retellai.com",
     voiceSamples: "https://retell-utils-public.s3.us-west-2.amazonaws.com",
   },
 

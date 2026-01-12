@@ -230,8 +230,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check bundle count limit
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: bundleCount } = await (supabase as any)
+    const { count: bundleCount } = await (supabase as ReturnType<typeof supabase.from>)
       .from("bundles")
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
@@ -258,8 +257,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create bundle
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: bundle, error: bundleError } = await (supabase as any)
+    const { data: bundle, error: bundleError } = await (supabase as ReturnType<typeof supabase.from>)
       .from("bundles")
       .insert({
         business_id: businessId,
@@ -284,16 +282,14 @@ export async function POST(request: NextRequest) {
       sort_order: index,
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: servicesError } = await (supabase as any)
+    const { error: servicesError } = await (supabase as ReturnType<typeof supabase.from>)
       .from("bundle_services")
       .insert(bundleServicesData);
 
     if (servicesError) {
       console.error("[Bundles POST] Services error:", servicesError);
       // Clean up the bundle if services failed
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: cleanupError } = await (supabase as any)
+      const { error: cleanupError } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundles")
         .delete()
         .eq("id", bundle.id);
@@ -375,8 +371,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify bundle exists and belongs to business
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingBundle, error: fetchError } = await (supabase as any)
+    const { data: existingBundle, error: fetchError } = await (supabase as ReturnType<typeof supabase.from>)
       .from("bundles")
       .select("id")
       .eq("id", bundle.id)
@@ -446,15 +441,13 @@ export async function PUT(request: NextRequest) {
       }
 
       // RACE CONDITION FIX: Save existing services before delete so we can restore on failure
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existingServices } = await (supabase as any)
+      const { data: existingServices } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundle_services")
         .select("service_id, sort_order")
         .eq("bundle_id", bundle.id);
 
       // Delete existing services
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: deleteError } = await (supabase as any)
+      const { error: deleteError } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundle_services")
         .delete()
         .eq("bundle_id", bundle.id);
@@ -471,8 +464,7 @@ export async function PUT(request: NextRequest) {
         sort_order: index,
       }));
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: servicesError } = await (supabase as any)
+      const { error: servicesError } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundle_services")
         .insert(bundleServicesData);
 
@@ -485,15 +477,13 @@ export async function PUT(request: NextRequest) {
             service_id: s.service_id,
             sort_order: s.sort_order,
           }));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: restoreError } = await (supabase as any)
+          const { error: restoreError } = await (supabase as ReturnType<typeof supabase.from>)
             .from("bundle_services")
             .insert(restoreData);
           if (restoreError) {
             console.error("[Bundles PUT] Failed to restore services:", restoreError);
             // If restore fails, deactivate the bundle to prevent inconsistent state
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any)
+            await (supabase as ReturnType<typeof supabase.from>)
               .from("bundles")
               .update({ is_active: false })
               .eq("id", bundle.id);
@@ -525,8 +515,7 @@ export async function PUT(request: NextRequest) {
 
     // Update bundle (only if there are fields to update)
     if (Object.keys(updateData).length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundles")
         .update(updateData)
         .eq("id", bundle.id)
@@ -606,8 +595,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete bundle (cascade will delete bundle_services)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: deletedRows, error } = await (supabase as any)
+    const { data: deletedRows, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("bundles")
       .delete()
       .eq("id", bundleId)

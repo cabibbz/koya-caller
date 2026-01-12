@@ -102,7 +102,7 @@ function VoiceCard({
     <motion.div
       layout
       onClick={onSelect}
-      className={`relative cursor-pointer rounded-2xl p-4 transition-all ${
+      className={`relative cursor-pointer rounded-xl p-3 transition-all ${
         isActive
           ? "glass border-2 border-purple-500/50"
           : "bg-white/5 hover:bg-white/10 border-2 border-transparent"
@@ -114,55 +114,50 @@ function VoiceCard({
       {isActive && (
         <motion.div
           layoutId="activeVoice"
-          className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20"
+          className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20"
           initial={false}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         />
       )}
 
-      <div className="relative z-10 flex items-center gap-4">
+      <div className="relative z-10 flex flex-col items-center gap-2 text-center">
         {/* Avatar */}
         <div
-          className={`w-14 h-14 rounded-full flex items-center justify-center ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
             voice.gender === "female"
               ? "bg-gradient-to-br from-pink-500 to-purple-500"
               : "bg-gradient-to-br from-blue-500 to-cyan-500"
           }`}
         >
-          <User className="w-7 h-7 text-white" />
+          {isActive && isPlaying ? (
+            <Pause className="w-4 h-4 text-white" />
+          ) : (
+            <User className="w-5 h-5 text-white" />
+          )}
         </div>
 
         {/* Info */}
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-white">{voice.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-zinc-400">
-              {voice.style}
-            </span>
-          </div>
-          <p className="text-sm text-zinc-400">{voice.styleDescription}</p>
+        <div className="min-w-0">
+          <span className="font-medium text-white text-sm block truncate">{voice.name}</span>
+          <span className="text-xs text-zinc-400 block">{voice.style}</span>
         </div>
 
-        {/* Play button */}
+        {/* Play indicator for active card */}
         {isActive && (
           <motion.button
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
             onClick={(e) => {
               e.stopPropagation();
               onPlay();
             }}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+            className={`text-xs px-3 py-1 rounded-full transition-colors ${
               isPlaying
                 ? "bg-purple-500 text-white"
                 : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
-            {isPlaying ? (
-              <Pause className="w-5 h-5" />
-            ) : (
-              <Play className="w-5 h-5 ml-0.5" />
-            )}
+            {isPlaying ? "Pause" : "Play"}
           </motion.button>
         )}
       </div>
@@ -365,7 +360,7 @@ export function VoicePreviewWidget() {
               <ChevronLeft className="w-5 h-5" />
             </button>
 
-            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
               {voices.map((voice) => (
                 <VoiceCard
                   key={voice.id}

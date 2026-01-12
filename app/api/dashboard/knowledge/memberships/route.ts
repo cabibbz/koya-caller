@@ -68,8 +68,7 @@ export async function GET(request: NextRequest) {
     const businessId = (business as { id: string }).id;
 
     // Fetch memberships
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: memberships, error } = await (supabase as any)
+    const { data: memberships, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .select(`
         id,
@@ -217,8 +216,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check membership count limit
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: membershipCount } = await (supabase as any)
+    const { count: membershipCount } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
@@ -231,8 +229,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create membership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: membership, error } = await (supabase as any)
+    const { data: membership, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .insert({
         business_id: businessId,
@@ -321,8 +318,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Verify membership exists and belongs to business
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingMembership, error: fetchError } = await (supabase as any)
+    const { data: existingMembership, error: fetchError } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .select("id")
       .eq("id", membership.id)
@@ -425,8 +421,7 @@ export async function PUT(request: NextRequest) {
     if (membership.is_active !== undefined) updateData.is_active = membership.is_active;
 
     // Update membership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
+    const { error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .update(updateData)
       .eq("id", membership.id)
@@ -505,8 +500,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete membership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: deletedRows, error } = await (supabase as any)
+    const { data: deletedRows, error } = await (supabase as ReturnType<typeof supabase.from>)
       .from("memberships")
       .delete()
       .eq("id", membershipId)

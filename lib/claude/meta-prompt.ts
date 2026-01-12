@@ -46,14 +46,18 @@ Generate the prompt with these exact sections:
 2. # Environment
    Describe the context of interactions (phone calls, what callers expect).
 
-3. # Tone
-   Specific voice and speech guidelines based on the personality type.
-
-4. # Goal
+3. # Goal
    Numbered workflow steps for handling calls. Mark critical steps with "This step is important."
 
-5. # Guardrails
+4. # Guardrails
    Non-negotiable rules the AI must follow.
+
+5. # Frequently Asked Questions
+   IMPORTANT: Include ALL FAQs from the additional_context VERBATIM in Q&A format.
+   The AI should use these exact answers when callers ask these questions.
+   Format each as:
+   Q: [exact question]
+   A: [exact answer]
 
 6. # Tools
    When and how to use each function (check_availability, book_appointment, transfer_call, take_message, send_sms, end_call).
@@ -64,7 +68,7 @@ Generate the prompt with these exact sections:
 </output_structure>
 
 <constraints>
-- Keep total prompt under 1500 tokens
+- Keep total prompt under 2500 tokens (longer prompts OK if needed for FAQs)
 - Use action-oriented language
 - Mark critical instructions with "This step is important."
 - Design for voice: responses should be 2-3 sentences max
@@ -482,15 +486,25 @@ Convert spoken words to proper format:
 - Dates: "next Tuesday" → use actual date
 - Times: "two thirty pm" → "2:30 PM"
 
-# Dynamic Context
+# Dynamic Context (Updated Each Call)
 Business: {{business_name}}
 Your name: {{ai_name}}
-Minutes exhausted: {{minutes_exhausted}}
-After hours: {{after_hours}}
-Can book: {{can_book}}
-Transfer enabled: {{transfer_enabled}}
-Today: {{today_date}}
-Time: {{current_time}}`;
+Today: {{current_date}}
+Time: {{current_time}}
+Today's Hours: {{todays_hours}}
+After hours: {{is_after_hours}}
+
+# Live Knowledge Base
+Use this information to answer caller questions. This is always current:
+
+## Services Available
+{{services_list}}
+
+## Frequently Asked Questions
+{{faqs}}
+
+## Additional Business Info
+{{additional_knowledge}}`;
 }
 
 /**
@@ -567,12 +581,22 @@ Convierte palabras habladas al formato correcto:
 # Contexto Dinámico
 Negocio: {{business_name}}
 Tu nombre: {{ai_name}}
-Minutos agotados: {{minutes_exhausted}}
-Fuera de horario: {{after_hours}}
-Puede reservar: {{can_book}}
-Transferencia habilitada: {{transfer_enabled}}
-Hoy: {{today_date}}
-Hora: {{current_time}}`;
+Hoy: {{current_date}}
+Hora: {{current_time}}
+Horario de hoy: {{todays_hours}}
+Fuera de horario: {{is_after_hours}}
+
+# Base de Conocimiento en Vivo
+Usa esta información para responder preguntas. Siempre está actualizada:
+
+## Servicios Disponibles
+{{services_list}}
+
+## Preguntas Frecuentes
+{{faqs}}
+
+## Información Adicional del Negocio
+{{additional_knowledge}}`;
 }
 
 // =============================================================================

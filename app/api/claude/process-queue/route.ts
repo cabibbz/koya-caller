@@ -41,7 +41,14 @@ interface QueueItem {
 export async function POST(request: NextRequest): Promise<NextResponse<ProcessQueueResponse>> {
   try {
     // Verify cron secret if configured (for production security)
-    if (CRON_SECRET) {
+    // Skip auth check for internal calls (localhost with businessId)
+    const body = await request.json().catch(() => ({}));
+    const directBusinessId = body.businessId;
+    const isInternalCall = directBusinessId &&
+      (request.headers.get("host")?.includes("localhost") ||
+       request.headers.get("x-internal-call") === "true");
+
+    if (CRON_SECRET && !isInternalCall) {
       const authHeader = request.headers.get("authorization");
       if (authHeader !== `Bearer ${CRON_SECRET}`) {
         return NextResponse.json(
@@ -53,6 +60,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
 
     const supabase = createServiceClient();
 
+    // Direct business processing mode (fallback when Inngest not configured)
+    if (directBusinessId) {
+      console.log(`[Process Queue] Direct processing for business ${directBusinessId}`);
+      const result = await processBusinessDirectly(supabase, directBusinessId, body.triggeredBy || "direct");
+
+      return NextResponse.json({
+        success: result.success,
+        processed: result.success ? 1 : 0,
+        failed: result.success ? 0 : 1,
+        errors: result.error ? [{ businessId: directBusinessId, error: result.error }] : undefined,
+      });
+    }
+
+    // Normal queue processing mode
     // Fetch pending queue items
     const { data: queueItems, error: fetchError } = await supabase
       .from("prompt_regeneration_queue")
@@ -112,6 +133,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
+    console.error("[Process Queue] Error:", error);
     return NextResponse.json(
       { success: false, processed: 0, failed: 0, errors: [{ businessId: "", error: "Internal server error" }] },
       { status: 500 }
@@ -157,6 +179,69 @@ export async function GET(): Promise<NextResponse> {
       { error: "Failed to fetch queue status" },
       { status: 500 }
     );
+  }
+}
+
+// =============================================================================
+// Direct Business Processing (Fallback Mode)
+// =============================================================================
+
+/**
+ * Process a business directly without going through the queue
+ * Used when Inngest is not configured
+ */
+async function processBusinessDirectly(
+  supabase: any,
+  businessId: string,
+  triggeredBy: string
+): Promise<ProcessResult> {
+  console.log(`[Process Queue] Starting direct regeneration for ${businessId} (triggered by: ${triggeredBy})`);
+
+  try {
+    // Fetch business data
+    const businessData = await fetchBusinessData(supabase, businessId);
+    if (!businessData.success) {
+      console.error(`[Process Queue] Failed to fetch business data: ${businessData.error}`);
+      return { success: false, error: businessData.error };
+    }
+
+    // Build prompt input
+    const promptInput = buildPromptInputFromDatabase(businessData.data);
+
+    // Generate prompts using Claude
+    console.log(`[Process Queue] Generating prompts for ${businessId}...`);
+    const result = await generatePrompts(promptInput);
+    if (!result.success) {
+      console.error(`[Process Queue] Prompt generation failed: ${result.error}`);
+      return { success: false, error: result.error };
+    }
+
+    // Save prompts to ai_config
+    console.log(`[Process Queue] Saving prompts for ${businessId}...`);
+    const saveResult = await savePrompts(supabase, businessId, result.prompts!);
+    if (!saveResult.success) {
+      console.error(`[Process Queue] Failed to save prompts: ${saveResult.error}`);
+      return { success: false, error: saveResult.error };
+    }
+
+    // Update Retell agent if exists
+    if (saveResult.retellAgentId) {
+      console.log(`[Process Queue] Syncing to Retell agent ${saveResult.retellAgentId}...`);
+      await updateRetellAgent(
+        supabase,
+        businessId,
+        saveResult.retellAgentId,
+        result.prompts!.englishPrompt,
+        result.prompts!.spanishPrompt
+      );
+    }
+
+    console.log(`[Process Queue] Successfully processed business ${businessId}`);
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[Process Queue] Direct processing error: ${errorMessage}`);
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -281,11 +366,12 @@ async function fetchBusinessData(
     // Fetch business
     const { data: business, error: bizError } = await supabase
       .from("businesses")
-      .select("name, type, address, website, service_area, differentiator, timezone, minutes_used, minutes_limit")
+      .select("name, business_type, address, website, service_area, differentiator, timezone, minutes_used_this_cycle, minutes_included")
       .eq("id", businessId)
       .single();
 
     if (bizError || !business) {
+      console.error("[Process Queue] Business fetch error:", bizError);
       return { success: false, error: "Business not found" };
     }
 
@@ -299,22 +385,20 @@ async function fetchBusinessData(
     // Fetch services
     const { data: services } = await supabase
       .from("services")
-      .select("name, description, duration_minutes, price")
-      .eq("business_id", businessId)
-      .eq("active", true);
+      .select("name, description, duration_minutes, price_cents")
+      .eq("business_id", businessId);
 
     // Fetch FAQs
     const { data: faqs } = await supabase
       .from("faqs")
       .select("question, answer")
       .eq("business_id", businessId)
-      .eq("active", true)
-      .order("display_order");
+      .order("sort_order");
 
     // Fetch knowledge
     const { data: knowledge } = await supabase
       .from("knowledge")
-      .select("additional_info, never_say")
+      .select("content, never_say")
       .eq("business_id", businessId)
       .single();
 
@@ -344,7 +428,7 @@ async function fetchBusinessData(
 
     const minutesRemaining = Math.max(
       0,
-      (business.minutes_limit || 200) - (business.minutes_used || 0)
+      (business.minutes_included || 200) - (business.minutes_used_this_cycle || 0)
     );
 
     return {
@@ -429,24 +513,27 @@ async function savePrompts(
  * Spec Reference: Lines 1907-1908
  */
 async function updateRetellAgent(
-
   supabase: any,
   businessId: string,
   agentId: string,
   englishPrompt: string,
   spanishPrompt?: string
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     const RETELL_API_KEY = process.env.RETELL_API_KEY;
 
     if (!RETELL_API_KEY) {
-      return;
+      const errorMsg = "RETELL_API_KEY not configured";
+      console.error(`[Retell Sync] ${errorMsg}`);
+      await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     // Update the Retell LLM with new prompt
     // First, get the LLM ID from the agent
+    console.log(`[Retell Sync] Fetching agent ${agentId}...`);
     const agentResponse = await fetch(
-      `https://api.retellai.com/v2/agent/${agentId}`,
+      `https://api.retellai.com/get-agent/${agentId}`,
       {
         headers: {
           Authorization: `Bearer ${RETELL_API_KEY}`,
@@ -455,19 +542,27 @@ async function updateRetellAgent(
     );
 
     if (!agentResponse.ok) {
-      return;
+      const errorText = await agentResponse.text();
+      const errorMsg = `Failed to fetch Retell agent: ${agentResponse.status} - ${errorText}`;
+      console.error(`[Retell Sync] ${errorMsg}`);
+      await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     const agentData = await agentResponse.json();
-    const llmId = agentData.llm_id;
+    const llmId = agentData.response_engine?.llm_id;
 
     if (!llmId) {
-      return;
+      const errorMsg = "Retell agent has no LLM ID configured";
+      console.error(`[Retell Sync] ${errorMsg}`);
+      await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     // Update the LLM prompt
+    console.log(`[Retell Sync] Updating LLM ${llmId} with new prompt...`);
     const updateResponse = await fetch(
-      `https://api.retellai.com/v2/llm/${llmId}`,
+      `https://api.retellai.com/update-retell-llm/${llmId}`,
       {
         method: "PATCH",
         headers: {
@@ -481,7 +576,11 @@ async function updateRetellAgent(
     );
 
     if (!updateResponse.ok) {
-      return;
+      const errorText = await updateResponse.text();
+      const errorMsg = `Failed to update Retell LLM: ${updateResponse.status} - ${errorText}`;
+      console.error(`[Retell Sync] ${errorMsg}`);
+      await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     // Increment Retell agent version in database
@@ -491,14 +590,42 @@ async function updateRetellAgent(
       .eq("business_id", businessId)
       .single();
 
-    // @ts-ignore - Supabase type inference issue
     await supabase
       .from("ai_config")
       .update({
         retell_agent_version: (config?.retell_agent_version || 0) + 1,
+        retell_synced_at: new Date().toISOString(),
       })
       .eq("business_id", businessId);
+
+    console.log(`[Retell Sync] Successfully synced prompt to Retell for business ${businessId}`);
+    await logToSystemLogs(supabase, businessId, "retell_sync_success", "Prompt synced to Retell agent");
+    return { success: true };
   } catch (error) {
-    // Error handled silently
+    const errorMsg = `Retell sync exception: ${error instanceof Error ? error.message : "Unknown error"}`;
+    console.error(`[Retell Sync] ${errorMsg}`);
+    await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Log to system_logs table for visibility
+ */
+async function logToSystemLogs(
+  supabase: any,
+  businessId: string,
+  eventType: string,
+  message: string
+): Promise<void> {
+  try {
+    await supabase.from("system_logs").insert({
+      business_id: businessId,
+      event_type: eventType,
+      message,
+      created_at: new Date().toISOString(),
+    });
+  } catch {
+    // Don't fail if logging fails
   }
 }

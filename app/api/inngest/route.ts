@@ -11,7 +11,8 @@ import { serve } from "inngest/next";
 import { inngest, functions } from "@/lib/inngest";
 
 // Create the serve handler for Next.js App Router
+// Use the base Inngest client for the serve handler (our wrapper is for send() only)
 export const { GET, POST, PUT } = serve({
-  client: inngest,
+  client: inngest._base,
   functions,
 });

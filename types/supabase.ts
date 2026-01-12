@@ -371,6 +371,13 @@ export interface Database {
           retell_agent_id: string | null
           retell_agent_id_spanish: string | null
           retell_agent_version: number
+          // Enhanced prompt system (migration 20250110000001)
+          prompt_config: Json | null
+          // Upselling feature flags (migrations 20250111000001, 20250112000001)
+          upsells_enabled: boolean
+          bundles_enabled: boolean
+          packages_enabled: boolean
+          memberships_enabled: boolean
           created_at: string
           updated_at: string
         }
@@ -396,6 +403,11 @@ export interface Database {
           retell_agent_id?: string | null
           retell_agent_id_spanish?: string | null
           retell_agent_version?: number
+          prompt_config?: Json | null
+          upsells_enabled?: boolean
+          bundles_enabled?: boolean
+          packages_enabled?: boolean
+          memberships_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -421,6 +433,11 @@ export interface Database {
           retell_agent_id?: string | null
           retell_agent_id_spanish?: string | null
           retell_agent_version?: number
+          prompt_config?: Json | null
+          upsells_enabled?: boolean
+          bundles_enabled?: boolean
+          packages_enabled?: boolean
+          memberships_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -674,6 +691,12 @@ export interface Database {
           lead_info: Json | null
           message_taken: string | null
           cost_cents: number | null
+          // Added in migration 20250109000001
+          flagged: boolean
+          notes: string | null
+          // Enhanced prompt system (migration 20250110000001)
+          sentiment_detected: string | null
+          error_recovery_used: boolean
           created_at: string
         }
         Insert: {
@@ -694,6 +717,10 @@ export interface Database {
           lead_info?: Json | null
           message_taken?: string | null
           cost_cents?: number | null
+          flagged?: boolean
+          notes?: string | null
+          sentiment_detected?: string | null
+          error_recovery_used?: boolean
           created_at?: string
         }
         Update: {
@@ -714,6 +741,10 @@ export interface Database {
           lead_info?: Json | null
           message_taken?: string | null
           cost_cents?: number | null
+          flagged?: boolean
+          notes?: string | null
+          sentiment_detected?: string | null
+          error_recovery_used?: boolean
           created_at?: string
         }
         Relationships: [
@@ -746,6 +777,8 @@ export interface Database {
           external_event_id: string | null
           confirmation_sent_at: string | null
           reminder_sent_at: string | null
+          reminder_1hr_sent_at: string | null
+          reminder_24hr_sent_at: string | null
           created_at: string
           updated_at: string
         }
@@ -765,6 +798,8 @@ export interface Database {
           external_event_id?: string | null
           confirmation_sent_at?: string | null
           reminder_sent_at?: string | null
+          reminder_1hr_sent_at?: string | null
+          reminder_24hr_sent_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -784,6 +819,8 @@ export interface Database {
           external_event_id?: string | null
           confirmation_sent_at?: string | null
           reminder_sent_at?: string | null
+          reminder_1hr_sent_at?: string | null
+          reminder_24hr_sent_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1265,6 +1302,337 @@ export interface Database {
           }
         ]
       }
+
+      // ============================================
+      // Caller Profiles (migration 20250110000001)
+      // ============================================
+      caller_profiles: {
+        Row: {
+          id: string
+          business_id: string
+          phone_number: string
+          name: string | null
+          email: string | null
+          preferences: Json
+          call_count: number
+          last_call_at: string
+          last_outcome: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          phone_number: string
+          name?: string | null
+          email?: string | null
+          preferences?: Json
+          call_count?: number
+          last_call_at?: string
+          last_outcome?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          phone_number?: string
+          name?: string | null
+          email?: string | null
+          preferences?: Json
+          call_count?: number
+          last_call_at?: string
+          last_outcome?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caller_profiles_business_id_fkey"
+            columns: ["business_id"]
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Upsells (migration 20250111000001)
+      // ============================================
+      upsells: {
+        Row: {
+          id: string
+          business_id: string
+          source_service_id: string
+          target_service_id: string
+          discount_percent: number
+          pitch_message: string | null
+          trigger_timing: string
+          suggest_when_unavailable: boolean
+          is_active: boolean
+          times_offered: number
+          times_accepted: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          source_service_id: string
+          target_service_id: string
+          discount_percent?: number
+          pitch_message?: string | null
+          trigger_timing?: string
+          suggest_when_unavailable?: boolean
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          source_service_id?: string
+          target_service_id?: string
+          discount_percent?: number
+          pitch_message?: string | null
+          trigger_timing?: string
+          suggest_when_unavailable?: boolean
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upsells_business_id_fkey"
+            columns: ["business_id"]
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upsells_source_service_id_fkey"
+            columns: ["source_service_id"]
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upsells_target_service_id_fkey"
+            columns: ["target_service_id"]
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Site Settings (migration 20241229000001)
+      // ============================================
+      site_settings: {
+        Row: {
+          id: string
+          key: string
+          value: Json
+          category: string
+          description: string | null
+          updated_by: string | null
+          updated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          value: Json
+          category?: string
+          description?: string | null
+          updated_by?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          value?: Json
+          category?: string
+          description?: string | null
+          updated_by?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+
+      // ============================================
+      // Blog Posts (migration 20241229000003)
+      // ============================================
+      blog_posts: {
+        Row: {
+          id: string
+          title: string
+          slug: string
+          excerpt: string | null
+          content: string
+          meta_title: string | null
+          meta_description: string | null
+          target_keyword: string | null
+          lsi_keywords: string[] | null
+          featured_image_url: string | null
+          featured_image_alt: string | null
+          category: string | null
+          tags: string[] | null
+          status: string
+          published_at: string | null
+          scheduled_for: string | null
+          generation_config: Json
+          view_count: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          slug: string
+          excerpt?: string | null
+          content: string
+          meta_title?: string | null
+          meta_description?: string | null
+          target_keyword?: string | null
+          lsi_keywords?: string[] | null
+          featured_image_url?: string | null
+          featured_image_alt?: string | null
+          category?: string | null
+          tags?: string[] | null
+          status?: string
+          published_at?: string | null
+          scheduled_for?: string | null
+          generation_config?: Json
+          view_count?: number
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          slug?: string
+          excerpt?: string | null
+          content?: string
+          meta_title?: string | null
+          meta_description?: string | null
+          target_keyword?: string | null
+          lsi_keywords?: string[] | null
+          featured_image_url?: string | null
+          featured_image_alt?: string | null
+          category?: string | null
+          tags?: string[] | null
+          status?: string
+          published_at?: string | null
+          scheduled_for?: string | null
+          generation_config?: Json
+          view_count?: number
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Blog Generation Queue (migration 20241229000003)
+      // ============================================
+      blog_generation_queue: {
+        Row: {
+          id: string
+          topic: string
+          target_keyword: string | null
+          config: Json
+          status: string
+          error_message: string | null
+          blog_post_id: string | null
+          created_by: string | null
+          created_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          topic: string
+          target_keyword?: string | null
+          config?: Json
+          status?: string
+          error_message?: string | null
+          blog_post_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          topic?: string
+          target_keyword?: string | null
+          config?: Json
+          status?: string
+          error_message?: string | null
+          blog_post_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          completed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_generation_queue_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_generation_queue_created_by_fkey"
+            columns: ["created_by"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Blog Presets (migration 20241229000003)
+      // ============================================
+      blog_presets: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          config: Json
+          is_default: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          config?: Json
+          is_default?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          config?: Json
+          is_default?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1312,6 +1680,13 @@ export type BundleRow = Database['public']['Tables']['bundles']['Row']
 export type BundleServiceRow = Database['public']['Tables']['bundle_services']['Row']
 export type PackageRow = Database['public']['Tables']['packages']['Row']
 export type MembershipRow = Database['public']['Tables']['memberships']['Row']
+// New tables (migrations 20241229, 20250110, 20250111)
+export type CallerProfileRow = Database['public']['Tables']['caller_profiles']['Row']
+export type UpsellRow = Database['public']['Tables']['upsells']['Row']
+export type SiteSettingRow = Database['public']['Tables']['site_settings']['Row']
+export type BlogPostRow = Database['public']['Tables']['blog_posts']['Row']
+export type BlogGenerationQueueRow = Database['public']['Tables']['blog_generation_queue']['Row']
+export type BlogPresetRow = Database['public']['Tables']['blog_presets']['Row']
 
 // Extract Insert types
 export type UserInsert = Database['public']['Tables']['users']['Insert']
@@ -1337,6 +1712,13 @@ export type BundleInsert = Database['public']['Tables']['bundles']['Insert']
 export type BundleServiceInsert = Database['public']['Tables']['bundle_services']['Insert']
 export type PackageInsert = Database['public']['Tables']['packages']['Insert']
 export type MembershipInsert = Database['public']['Tables']['memberships']['Insert']
+// New tables (migrations 20241229, 20250110, 20250111)
+export type CallerProfileInsert = Database['public']['Tables']['caller_profiles']['Insert']
+export type UpsellInsert = Database['public']['Tables']['upsells']['Insert']
+export type SiteSettingInsert = Database['public']['Tables']['site_settings']['Insert']
+export type BlogPostInsert = Database['public']['Tables']['blog_posts']['Insert']
+export type BlogGenerationQueueInsert = Database['public']['Tables']['blog_generation_queue']['Insert']
+export type BlogPresetInsert = Database['public']['Tables']['blog_presets']['Insert']
 
 // Extract Update types
 export type UserUpdate = Database['public']['Tables']['users']['Update']
@@ -1362,3 +1744,10 @@ export type BundleUpdate = Database['public']['Tables']['bundles']['Update']
 export type BundleServiceUpdate = Database['public']['Tables']['bundle_services']['Update']
 export type PackageUpdate = Database['public']['Tables']['packages']['Update']
 export type MembershipUpdate = Database['public']['Tables']['memberships']['Update']
+// New tables (migrations 20241229, 20250110, 20250111)
+export type CallerProfileUpdate = Database['public']['Tables']['caller_profiles']['Update']
+export type UpsellUpdate = Database['public']['Tables']['upsells']['Update']
+export type SiteSettingUpdate = Database['public']['Tables']['site_settings']['Update']
+export type BlogPostUpdate = Database['public']['Tables']['blog_posts']['Update']
+export type BlogGenerationQueueUpdate = Database['public']['Tables']['blog_generation_queue']['Update']
+export type BlogPresetUpdate = Database['public']['Tables']['blog_presets']['Update']
