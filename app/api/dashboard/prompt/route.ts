@@ -7,7 +7,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/server";
 
 // GET - Read current prompt and config
 export async function GET(request: NextRequest) {
@@ -19,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: business } = await supabase
+    const { data: business } = await (supabase as any)
       .from("businesses")
       .select("id")
       .eq("user_id", user.id)
@@ -29,7 +28,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    const { data: config } = await supabase
+    const businessId = business.id;
+
+    const { data: config } = await (supabase as any)
       .from("ai_config")
       .select(`
         system_prompt,
@@ -42,15 +43,18 @@ export async function GET(request: NextRequest) {
         retell_agent_id,
         retell_synced_at
       `)
-      .eq("business_id", business.id)
+      .eq("business_id", businessId)
       .single();
 
     // Also get FAQs, services, knowledge for context
-    const [faqsRes, servicesRes, knowledgeRes] = await Promise.all([
-      supabase.from("faqs").select("question, answer").eq("business_id", business.id).order("sort_order"),
-      supabase.from("services").select("name, description").eq("business_id", business.id),
-      supabase.from("knowledge").select("content, never_say").eq("business_id", business.id).single(),
-    ]);
+    const faqsRes = await (supabase as any).from("faqs").select("question, answer").eq("business_id", businessId).order("sort_order");
+    const servicesRes = await (supabase as any).from("services").select("name, description").eq("business_id", businessId);
+    const knowledgeRes = await (supabase as any).from("knowledge").select("content, never_say").eq("business_id", businessId).single();
+
+    // Extract data
+    const faqs = faqsRes.data || [];
+    const services = servicesRes.data || [];
+    const knowledgeData = knowledgeRes.data;
 
     return NextResponse.json({
       prompt: config?.system_prompt || null,
@@ -63,10 +67,10 @@ export async function GET(request: NextRequest) {
       greeting: config?.greeting || null,
       retellAgentId: config?.retell_agent_id || null,
       // Context data
-      faqs: faqsRes.data || [],
-      services: servicesRes.data || [],
-      knowledge: knowledgeRes.data?.content || null,
-      neverSay: knowledgeRes.data?.never_say || null,
+      faqs,
+      services,
+      knowledge: knowledgeData?.content || null,
+      neverSay: knowledgeData?.never_say || null,
     });
   } catch (error) {
     console.error("[Prompt API] GET error:", error);
@@ -84,7 +88,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: business } = await supabase
+    const { data: business } = await (supabase as any)
       .from("businesses")
       .select("id")
       .eq("user_id", user.id)
@@ -94,6 +98,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
+    const businessId = business.id;
+
     const body = await request.json();
     const { prompt, promptSpanish, syncToRetell } = body;
 
@@ -102,16 +108,16 @@ export async function PUT(request: NextRequest) {
     }
 
     // Get current version
-    const { data: current } = await supabase
+    const { data: current } = await (supabase as any)
       .from("ai_config")
       .select("system_prompt_version, retell_agent_id")
-      .eq("business_id", business.id)
+      .eq("business_id", businessId)
       .single();
 
     const newVersion = (current?.system_prompt_version || 0) + 1;
 
     // Update the prompt directly
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from("ai_config")
       .update({
         system_prompt: prompt,
@@ -119,7 +125,7 @@ export async function PUT(request: NextRequest) {
         system_prompt_version: newVersion,
         system_prompt_generated_at: new Date().toISOString(),
       })
-      .eq("business_id", business.id);
+      .eq("business_id", businessId);
 
     if (updateError) {
       return NextResponse.json({ error: "Failed to save prompt" }, { status: 500 });
@@ -152,10 +158,10 @@ export async function PUT(request: NextRequest) {
 
               if (updateRes.ok) {
                 synced = true;
-                await supabase
+                await (supabase as any)
                   .from("ai_config")
                   .update({ retell_synced_at: new Date().toISOString() })
-                  .eq("business_id", business.id);
+                  .eq("business_id", businessId);
               }
             }
           }
@@ -186,7 +192,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: business } = await supabase
+    const { data: business } = await (supabase as any)
       .from("businesses")
       .select("id")
       .eq("user_id", user.id)
@@ -195,6 +201,8 @@ export async function POST(request: NextRequest) {
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
+
+    const businessId = business.id;
 
     const body = await request.json();
     const { syncToRetell = true, waitForResult = false } = body;
@@ -212,7 +220,7 @@ export async function POST(request: NextRequest) {
           "x-internal-call": "true",
         },
         body: JSON.stringify({
-          businessId: business.id,
+          businessId: businessId,
           triggeredBy: "manual_regeneration",
         }),
       });
@@ -229,7 +237,7 @@ export async function POST(request: NextRequest) {
       await inngest.send({
         name: "prompt/regeneration.requested",
         data: {
-          businessId: business.id,
+          businessId: businessId,
           triggeredBy: "manual_regeneration",
         },
       });
