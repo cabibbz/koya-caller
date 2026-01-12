@@ -169,6 +169,102 @@ function buildAdditionalContext(input: PromptGenerationInput): string {
     sections.push(`\nFrequently Asked Questions:\n${formatFAQs(input.faqs)}`);
   }
 
+  // Upsells
+  if (input.upsells && input.upsells.length > 0) {
+    const regularUpsells = input.upsells.filter(u => !u.suggestWhenUnavailable);
+    const availabilityUpsells = input.upsells.filter(u => u.suggestWhenUnavailable);
+
+    if (regularUpsells.length > 0) {
+      const upsellsText = regularUpsells.map((u) => {
+        let text = `- When customer wants "${u.sourceServiceName}", suggest upgrading to "${u.targetServiceName}"`;
+        if (u.discountPercent > 0) {
+          text += ` (${u.discountPercent}% off the upgrade)`;
+        }
+        if (u.pitchMessage) {
+          text += `\n  Pitch: "${u.pitchMessage}"`;
+        }
+        text += `\n  Timing: ${u.triggerTiming === "before_booking" ? "Suggest before confirming the booking" : "Mention after booking is confirmed"}`;
+        return text;
+      }).join("\n");
+      sections.push(`\nUpsell Opportunities:\n${upsellsText}\n\nGuidelines for upselling:
+- Only suggest upsells when naturally relevant to the conversation
+- Don't be pushy - accept "no" gracefully and proceed with original booking
+- Frame upgrades as added value, not a sales pitch
+- If customer declines, do NOT mention the upsell again in the same call`);
+    }
+
+    if (availabilityUpsells.length > 0) {
+      const availText = availabilityUpsells.map(u => {
+        let text = `- When "${u.sourceServiceName}" is unavailable, suggest "${u.targetServiceName}" instead`;
+        if (u.discountPercent > 0) text += ` (${u.discountPercent}% off)`;
+        if (u.pitchMessage) text += `\n  Pitch: "${u.pitchMessage}"`;
+        return text;
+      }).join("\n");
+      sections.push(`\nAvailability-Based Alternatives:\n${availText}\n\nWhen the requested time slot is unavailable, check if an alternative service might work for the customer.`);
+    }
+  }
+
+  // Bundles
+  if (input.bundles && input.bundles.length > 0) {
+    const bundlesText = input.bundles.map((b) => {
+      let text = `- "${b.name}" bundle: ${b.serviceNames.join(" + ")}`;
+      if (b.discountPercent > 0) {
+        text += ` (${b.discountPercent}% off when booked together)`;
+      }
+      if (b.pitchMessage) {
+        text += `\n  Pitch: "${b.pitchMessage}"`;
+      }
+      return text;
+    }).join("\n");
+    sections.push(`\nBundle Deals:\n${bundlesText}\n\nGuidelines for bundles:
+- When a customer books a service that's part of a bundle, mention the bundle deal
+- Calculate and state the savings clearly
+- Don't force bundles - accept if they only want one service`);
+  }
+
+  // Packages
+  if (input.packages && input.packages.length > 0) {
+    const packagesText = input.packages.map((p) => {
+      let text = `- "${p.name}": ${p.sessionCount} sessions`;
+      if (p.serviceName) {
+        text += ` of ${p.serviceName}`;
+      }
+      if (p.discountPercent > 0) {
+        text += ` at ${p.discountPercent}% off`;
+      }
+      if (p.pitchMessage) {
+        text += `\n  Pitch: "${p.pitchMessage}"`;
+      }
+      if (p.minVisitsToPitch > 0) {
+        text += `\n  Only mention to callers with ${p.minVisitsToPitch}+ previous visits`;
+      }
+      return text;
+    }).join("\n");
+    sections.push(`\nMulti-Visit Packages:\n${packagesText}\n\nGuidelines for packages:
+- Pitch packages when appropriate based on visit count threshold
+- Emphasize long-term value and convenience
+- Calculate per-session savings when explaining`);
+  }
+
+  // Memberships
+  if (input.memberships && input.memberships.length > 0) {
+    const membershipsText = input.memberships.map((m) => {
+      let text = `- "${m.name}": $${m.pricePerMonth}/month`;
+      if (m.billingPeriod !== "monthly") {
+        text += ` (billed ${m.billingPeriod})`;
+      }
+      text += `\n  Benefits: ${m.benefits}`;
+      if (m.pitchMessage) {
+        text += `\n  Pitch: "${m.pitchMessage}"`;
+      }
+      return text;
+    }).join("\n");
+    sections.push(`\nMembership Plans:\n${membershipsText}\n\nGuidelines for memberships:
+- Mention membership benefits when relevant
+- Pitch after larger bookings or to repeat callers
+- Don't pressure - just inform about the option`);
+  }
+
   // Additional knowledge
   if (input.additionalKnowledge) {
     sections.push(`\nAdditional Business Information:\n${input.additionalKnowledge}`);

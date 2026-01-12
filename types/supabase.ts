@@ -1035,6 +1035,236 @@ export interface Database {
           }
         ]
       }
+
+      // ============================================
+      // Bundles (Advanced Upselling)
+      // ============================================
+      bundles: {
+        Row: {
+          id: string
+          business_id: string | null
+          name: string
+          description: string | null
+          discount_percent: number
+          pitch_message: string | null
+          is_active: boolean
+          times_offered: number
+          times_accepted: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id?: string | null
+          name: string
+          description?: string | null
+          discount_percent?: number
+          pitch_message?: string | null
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string | null
+          name?: string
+          description?: string | null
+          discount_percent?: number
+          pitch_message?: string | null
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bundles_business_id_fkey"
+            columns: ["business_id"]
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Bundle Services (Junction table)
+      // ============================================
+      bundle_services: {
+        Row: {
+          id: string
+          bundle_id: string
+          service_id: string
+          sort_order: number
+        }
+        Insert: {
+          id?: string
+          bundle_id: string
+          service_id: string
+          sort_order?: number
+        }
+        Update: {
+          id?: string
+          bundle_id?: string
+          service_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bundle_services_bundle_id_fkey"
+            columns: ["bundle_id"]
+            referencedRelation: "bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bundle_services_service_id_fkey"
+            columns: ["service_id"]
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Packages (Multi-visit packages)
+      // ============================================
+      packages: {
+        Row: {
+          id: string
+          business_id: string | null
+          name: string
+          description: string | null
+          service_id: string | null
+          session_count: number
+          discount_percent: number
+          price_cents: number | null
+          validity_days: number | null
+          pitch_message: string | null
+          min_visits_to_pitch: number
+          is_active: boolean
+          times_offered: number
+          times_accepted: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id?: string | null
+          name: string
+          description?: string | null
+          service_id?: string | null
+          session_count: number
+          discount_percent?: number
+          price_cents?: number | null
+          validity_days?: number | null
+          pitch_message?: string | null
+          min_visits_to_pitch?: number
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string | null
+          name?: string
+          description?: string | null
+          service_id?: string | null
+          session_count?: number
+          discount_percent?: number
+          price_cents?: number | null
+          validity_days?: number | null
+          pitch_message?: string | null
+          min_visits_to_pitch?: number
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packages_business_id_fkey"
+            columns: ["business_id"]
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_service_id_fkey"
+            columns: ["service_id"]
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+
+      // ============================================
+      // Memberships (Subscription plans)
+      // ============================================
+      memberships: {
+        Row: {
+          id: string
+          business_id: string | null
+          name: string
+          description: string | null
+          price_cents: number
+          billing_period: string
+          benefits: string
+          pitch_message: string | null
+          pitch_after_booking_amount_cents: number | null
+          pitch_after_visit_count: number | null
+          is_active: boolean
+          times_offered: number
+          times_accepted: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id?: string | null
+          name: string
+          description?: string | null
+          price_cents: number
+          billing_period?: string
+          benefits: string
+          pitch_message?: string | null
+          pitch_after_booking_amount_cents?: number | null
+          pitch_after_visit_count?: number | null
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string | null
+          name?: string
+          description?: string | null
+          price_cents?: number
+          billing_period?: string
+          benefits?: string
+          pitch_message?: string | null
+          pitch_after_booking_amount_cents?: number | null
+          pitch_after_visit_count?: number | null
+          is_active?: boolean
+          times_offered?: number
+          times_accepted?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_business_id_fkey"
+            columns: ["business_id"]
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1078,6 +1308,10 @@ export type NotificationSettingsRow = Database['public']['Tables']['notification
 export type BusinessTemplateRow = Database['public']['Tables']['business_templates']['Row']
 export type DemoLeadRow = Database['public']['Tables']['demo_leads']['Row']
 export type PromptRegenerationQueueRow = Database['public']['Tables']['prompt_regeneration_queue']['Row']
+export type BundleRow = Database['public']['Tables']['bundles']['Row']
+export type BundleServiceRow = Database['public']['Tables']['bundle_services']['Row']
+export type PackageRow = Database['public']['Tables']['packages']['Row']
+export type MembershipRow = Database['public']['Tables']['memberships']['Row']
 
 // Extract Insert types
 export type UserInsert = Database['public']['Tables']['users']['Insert']
@@ -1099,6 +1333,10 @@ export type NotificationSettingsInsert = Database['public']['Tables']['notificat
 export type BusinessTemplateInsert = Database['public']['Tables']['business_templates']['Insert']
 export type DemoLeadInsert = Database['public']['Tables']['demo_leads']['Insert']
 export type PromptRegenerationQueueInsert = Database['public']['Tables']['prompt_regeneration_queue']['Insert']
+export type BundleInsert = Database['public']['Tables']['bundles']['Insert']
+export type BundleServiceInsert = Database['public']['Tables']['bundle_services']['Insert']
+export type PackageInsert = Database['public']['Tables']['packages']['Insert']
+export type MembershipInsert = Database['public']['Tables']['memberships']['Insert']
 
 // Extract Update types
 export type UserUpdate = Database['public']['Tables']['users']['Update']
@@ -1120,3 +1358,7 @@ export type NotificationSettingsUpdate = Database['public']['Tables']['notificat
 export type BusinessTemplateUpdate = Database['public']['Tables']['business_templates']['Update']
 export type DemoLeadUpdate = Database['public']['Tables']['demo_leads']['Update']
 export type PromptRegenerationQueueUpdate = Database['public']['Tables']['prompt_regeneration_queue']['Update']
+export type BundleUpdate = Database['public']['Tables']['bundles']['Update']
+export type BundleServiceUpdate = Database['public']['Tables']['bundle_services']['Update']
+export type PackageUpdate = Database['public']['Tables']['packages']['Update']
+export type MembershipUpdate = Database['public']['Tables']['memberships']['Update']

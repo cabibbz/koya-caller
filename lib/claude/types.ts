@@ -95,6 +95,53 @@ export interface BookingSettings {
 }
 
 /**
+ * Upsell offer context
+ */
+export interface UpsellContext {
+  sourceServiceName: string;
+  targetServiceName: string;
+  discountPercent: number;
+  pitchMessage?: string;
+  triggerTiming: "before_booking" | "after_booking";
+  suggestWhenUnavailable?: boolean;
+}
+
+/**
+ * Bundle offer context - group multiple services together
+ */
+export interface BundleContext {
+  name: string;
+  serviceNames: string[];
+  discountPercent: number;
+  pitchMessage?: string;
+}
+
+/**
+ * Package subscription context - multi-visit packages
+ */
+export interface PackageContext {
+  name: string;
+  serviceName?: string;
+  sessionCount: number;
+  discountPercent: number;
+  pitchMessage?: string;
+  minVisitsToPitch: number;
+}
+
+/**
+ * Membership plan context
+ */
+export interface MembershipContext {
+  name: string;
+  pricePerMonth: number;
+  billingPeriod: "monthly" | "quarterly" | "annual";
+  benefits: string;
+  pitchMessage?: string;
+  pitchAfterBookingAmount?: number;
+  pitchAfterVisitCount?: number;
+}
+
+/**
  * Complete input for prompt generation
  * Spec Reference: Lines 1848-1878
  */
@@ -102,6 +149,10 @@ export interface PromptGenerationInput {
   business: BusinessContext;
   services: ServiceContext[];
   faqs: FAQContext[];
+  upsells?: UpsellContext[];
+  bundles?: BundleContext[];
+  packages?: PackageContext[];
+  memberships?: MembershipContext[];
   additionalKnowledge?: string;
   neverSay?: string;
   aiConfig: AIConfigContext;

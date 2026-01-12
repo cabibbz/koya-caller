@@ -344,6 +344,37 @@ export function buildPromptInputFromDatabase(data: {
     buffer_minutes: number;
     max_advance_days: number;
   } | null;
+  upsells?: Array<{
+    source_service?: { name: string } | null;
+    target_service?: { name: string } | null;
+    discount_percent: number;
+    pitch_message?: string | null;
+    trigger_timing: string;
+    suggest_when_unavailable?: boolean;
+  }>;
+  bundles?: Array<{
+    name: string;
+    discount_percent: number;
+    pitch_message?: string | null;
+    services: Array<{ name: string }>;
+  }>;
+  packages?: Array<{
+    name: string;
+    session_count: number;
+    discount_percent: number;
+    pitch_message?: string | null;
+    min_visits_to_pitch: number;
+    service?: { name: string } | null;
+  }>;
+  memberships?: Array<{
+    name: string;
+    price_cents: number;
+    billing_period: string;
+    benefits: string;
+    pitch_message?: string | null;
+    pitch_after_booking_amount_cents?: number | null;
+    pitch_after_visit_count?: number | null;
+  }>;
   minutesRemaining: number;
   minutesExhausted: boolean;
 }): PromptGenerationInput {
@@ -409,6 +440,49 @@ export function buildPromptInputFromDatabase(data: {
       bufferMinutes: data.bookingSettings?.buffer_minutes ?? 15,
       maxAdvanceDays: data.bookingSettings?.max_advance_days ?? 30,
     },
+    upsells: data.upsells?.filter(u => u.source_service?.name && u.target_service?.name).map((u) => ({
+      sourceServiceName: u.source_service!.name,
+      targetServiceName: u.target_service!.name,
+      discountPercent: u.discount_percent,
+      pitchMessage: u.pitch_message || undefined,
+      triggerTiming: (u.trigger_timing || "before_booking") as "before_booking" | "after_booking",
+      suggestWhenUnavailable: u.suggest_when_unavailable || false,
+    })),
+    bundles: data.bundles?.map((b) => ({
+      name: b.name,
+      serviceNames: b.services.map(s => s.name),
+      discountPercent: b.discount_percent,
+      pitchMessage: b.pitch_message || undefined,
+    })),
+    packages: data.packages?.map((p) => ({
+      name: p.name,
+      serviceName: p.service?.name,
+      sessionCount: p.session_count,
+      discountPercent: p.discount_percent,
+      pitchMessage: p.pitch_message || undefined,
+      minVisitsToPitch: p.min_visits_to_pitch,
+    })),
+    memberships: data.memberships?.map((m) => {
+      // Normalize to monthly price in cents first (integer math), then convert to dollars
+      // Using Math.round to avoid floating-point precision issues
+      const monthlyPriceCents = m.billing_period === "annual"
+        ? Math.round(m.price_cents / 12)
+        : m.billing_period === "quarterly"
+          ? Math.round(m.price_cents / 3)
+          : m.price_cents;
+      return {
+        name: m.name,
+        // Use toFixed to ensure consistent decimal representation
+        pricePerMonth: Number((monthlyPriceCents / 100).toFixed(2)),
+        billingPeriod: m.billing_period as "monthly" | "quarterly" | "annual",
+        benefits: m.benefits,
+        pitchMessage: m.pitch_message || undefined,
+        pitchAfterBookingAmount: m.pitch_after_booking_amount_cents
+          ? Number((m.pitch_after_booking_amount_cents / 100).toFixed(2))
+          : undefined,
+        pitchAfterVisitCount: m.pitch_after_visit_count || undefined,
+      };
+    }),
     planMinutesRemaining: data.minutesRemaining,
     isMinutesExhausted: data.minutesExhausted,
   };

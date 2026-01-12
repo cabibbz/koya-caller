@@ -1,9 +1,9 @@
 /**
  * Database Helpers - Core Tables
  * Type-safe database operations for users, plans, businesses, business_hours, services
- * 
+ *
  * Spec Reference: Part 9, Lines 852-936
- * 
+ *
  * Note: These helpers use types from @/types/index.ts for application-level types.
  * Supabase Database types in @/types/supabase.ts are for client type hints.
  */
@@ -15,14 +15,8 @@ import type {
   Plan,
   Service,
 } from "@/types";
-
-/**
- * Helper to get a loosely-typed Supabase client for write operations
- * This works around Supabase type inference issues in strict mode
- */
-async function getWriteClient(): Promise<any> {
-  return createClient();
-}
+import type { TableInsert, TableUpdate } from "./types";
+import { typedInsert, typedInsertMany, typedUpdate, typedUpdateNoReturn } from "./types";
 
 // ============================================
 // Plans (Spec Lines 863-874)
@@ -32,7 +26,7 @@ async function getWriteClient(): Promise<any> {
  * Get all active plans
  */
 export async function getActivePlans(): Promise<Plan[]> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("plans")
     .select("*")
@@ -47,7 +41,7 @@ export async function getActivePlans(): Promise<Plan[]> {
  * Get a plan by slug
  */
 export async function getPlanBySlug(slug: string): Promise<Plan | null> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("plans")
     .select("*")
@@ -62,7 +56,7 @@ export async function getPlanBySlug(slug: string): Promise<Plan | null> {
  * Get a plan by ID
  */
 export async function getPlanById(id: string): Promise<Plan | null> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("plans")
     .select("*")
@@ -81,7 +75,7 @@ export async function getPlanById(id: string): Promise<Plan | null> {
  * Get a business by ID
  */
 export async function getBusinessById(id: string): Promise<Business | null> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("businesses")
     .select("*")
@@ -96,7 +90,7 @@ export async function getBusinessById(id: string): Promise<Business | null> {
  * Get a business by user ID
  */
 export async function getBusinessByUserId(userId: string): Promise<Business | null> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("businesses")
     .select("*")
@@ -111,12 +105,19 @@ export async function getBusinessByUserId(userId: string): Promise<Business | nu
  * Create a new business
  */
 export async function createBusiness(business: Partial<Business> & { name: string }): Promise<Business> {
-  const supabase = await getWriteClient();
-  const { data, error } = await supabase
-    .from("businesses")
-    .insert(business as any)
-    .select()
-    .single();
+  const supabase = await createClient();
+  const insertData: TableInsert<"businesses"> = {
+    name: business.name,
+    user_id: business.user_id,
+    business_type: business.business_type,
+    address: business.address,
+    website: business.website,
+    service_area: business.service_area,
+    differentiator: business.differentiator,
+    timezone: business.timezone,
+    plan_id: business.plan_id,
+  };
+  const { data, error } = await typedInsert(supabase, "businesses", insertData);
 
   if (error) throw error;
   if (!data) throw new Error("Failed to create business");
@@ -130,13 +131,9 @@ export async function updateBusiness(
   id: string,
   updates: Partial<Business>
 ): Promise<Business> {
-  const supabase = await getWriteClient();
-  const { data, error } = await (supabase as any)
-    .from("businesses")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
+  const supabase = await createClient();
+  const updateData: TableUpdate<"businesses"> = updates;
+  const { data, error } = await typedUpdate(supabase, "businesses", updateData, { column: "id", value: id });
 
   if (error) throw error;
   if (!data) throw new Error("Failed to update business");
@@ -151,19 +148,16 @@ export async function updateOnboardingStep(
   businessId: string,
   step: number
 ): Promise<void> {
-  const supabase = await getWriteClient();
-  const updates: Record<string, unknown> = { onboarding_step: step };
+  const supabase = await createClient();
+  const updateData: TableUpdate<"businesses"> = { onboarding_step: step };
 
   // If completing onboarding (step 8 done), mark completion
   if (step > 8) {
-    updates.onboarding_completed_at = new Date().toISOString();
-    updates.subscription_status = "active";
+    updateData.onboarding_completed_at = new Date().toISOString();
+    updateData.subscription_status = "active";
   }
 
-  const { error } = await supabase
-    .from("businesses")
-    .update(updates)
-    .eq("id", businessId);
+  const { error } = await typedUpdateNoReturn(supabase, "businesses", updateData, { column: "id", value: businessId });
 
   if (error) throw error;
 }
@@ -176,7 +170,7 @@ export async function incrementUsageMinutes(
   businessId: string,
   minutes: number
 ): Promise<Business> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
 
   // First get current usage
   const { data: business, error: fetchError } = await supabase
@@ -188,15 +182,11 @@ export async function incrementUsageMinutes(
   if (fetchError) throw fetchError;
   if (!business) throw new Error("Business not found");
 
-  // Update with new total
+  // Update with new total - cast needed due to Supabase RLS type limitations on partial selects
   const currentMinutes = (business as { minutes_used_this_cycle: number }).minutes_used_this_cycle ?? 0;
   const newTotal = currentMinutes + minutes;
-  const { data, error } = await supabase
-    .from("businesses")
-    .update({ minutes_used_this_cycle: newTotal })
-    .eq("id", businessId)
-    .select()
-    .single();
+  const updateData: TableUpdate<"businesses"> = { minutes_used_this_cycle: newTotal };
+  const { data, error } = await typedUpdate(supabase, "businesses", updateData, { column: "id", value: businessId });
 
   if (error) throw error;
   if (!data) throw new Error("Failed to update usage minutes");
@@ -212,16 +202,14 @@ export async function resetBillingCycle(
   cycleStart: Date,
   cycleEnd: Date
 ): Promise<void> {
-  const supabase = await getWriteClient();
-  const { error } = await supabase
-    .from("businesses")
-    .update({
-      current_cycle_start: cycleStart.toISOString().split("T")[0],
-      current_cycle_end: cycleEnd.toISOString().split("T")[0],
-      minutes_used_this_cycle: 0,
-      last_usage_alert_percent: 0,
-    })
-    .eq("id", businessId);
+  const supabase = await createClient();
+  const updateData: TableUpdate<"businesses"> = {
+    current_cycle_start: cycleStart.toISOString().split("T")[0],
+    current_cycle_end: cycleEnd.toISOString().split("T")[0],
+    minutes_used_this_cycle: 0,
+    last_usage_alert_percent: 0,
+  };
+  const { error } = await typedUpdateNoReturn(supabase, "businesses", updateData, { column: "id", value: businessId });
 
   if (error) throw error;
 }
@@ -234,7 +222,7 @@ export async function resetBillingCycle(
  * Get business hours for a business
  */
 export async function getBusinessHours(businessId: string): Promise<BusinessHours[]> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("business_hours")
     .select("*")
@@ -252,7 +240,7 @@ export async function setBusinessHours(
   businessId: string,
   hours: Omit<BusinessHours, "id" | "business_id">[]
 ): Promise<void> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
 
   // Delete existing hours
   const { error: deleteError } = await supabase
@@ -263,14 +251,15 @@ export async function setBusinessHours(
   if (deleteError) throw deleteError;
 
   // Insert new hours
-  const hoursWithBusiness = hours.map((h) => ({
-    ...h,
+  const hoursWithBusiness: TableInsert<"business_hours">[] = hours.map((h) => ({
+    day_of_week: h.day_of_week,
+    open_time: h.open_time,
+    close_time: h.close_time,
+    is_closed: h.is_closed,
     business_id: businessId,
   }));
 
-  const { error } = await supabase
-    .from("business_hours")
-    .insert(hoursWithBusiness as any[]);
+  const { error } = await typedInsertMany(supabase, "business_hours", hoursWithBusiness);
 
   if (error) throw error;
 }
@@ -300,7 +289,7 @@ export async function createDefaultBusinessHours(businessId: string): Promise<vo
  * Get all services for a business
  */
 export async function getServices(businessId: string): Promise<Service[]> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
     .select("*")
@@ -315,7 +304,7 @@ export async function getServices(businessId: string): Promise<Service[]> {
  * Get a single service by ID
  */
 export async function getServiceById(id: string): Promise<Service | null> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
     .select("*")
@@ -330,12 +319,18 @@ export async function getServiceById(id: string): Promise<Service | null> {
  * Create a new service
  */
 export async function createService(service: Partial<Service> & { name: string; business_id: string }): Promise<Service> {
-  const supabase = await getWriteClient();
-  const { data, error } = await supabase
-    .from("services")
-    .insert(service as any)
-    .select()
-    .single();
+  const supabase = await createClient();
+  const insertData: TableInsert<"services"> = {
+    name: service.name,
+    business_id: service.business_id,
+    description: service.description,
+    duration_minutes: service.duration_minutes,
+    price_cents: service.price_cents,
+    price_type: service.price_type,
+    is_bookable: service.is_bookable,
+    sort_order: service.sort_order,
+  };
+  const { data, error } = await typedInsert(supabase, "services", insertData);
 
   if (error) throw error;
   if (!data) throw new Error("Failed to create service");
@@ -349,14 +344,21 @@ export async function createService(service: Partial<Service> & { name: string; 
 export async function createServices(
   services: (Partial<Service> & { name: string; business_id: string })[]
 ): Promise<Service[]> {
-  const supabase = await getWriteClient();
-  const { data, error } = await supabase
-    .from("services")
-    .insert(services as any[])
-    .select();
+  const supabase = await createClient();
+  const insertData: TableInsert<"services">[] = services.map((s) => ({
+    name: s.name,
+    business_id: s.business_id,
+    description: s.description,
+    duration_minutes: s.duration_minutes,
+    price_cents: s.price_cents,
+    price_type: s.price_type,
+    is_bookable: s.is_bookable,
+    sort_order: s.sort_order,
+  }));
+  const { data, error } = await typedInsertMany(supabase, "services", insertData);
 
   if (error) throw error;
-  return (data ?? []) as Service[];
+  return data as Service[];
 }
 
 /**
@@ -366,13 +368,9 @@ export async function updateService(
   id: string,
   updates: Partial<Service>
 ): Promise<Service> {
-  const supabase = await getWriteClient();
-  const { data, error } = await supabase
-    .from("services")
-    .update(updates as any)
-    .eq("id", id)
-    .select()
-    .single();
+  const supabase = await createClient();
+  const updateData: TableUpdate<"services"> = updates;
+  const { data, error } = await typedUpdate(supabase, "services", updateData, { column: "id", value: id });
 
   if (error) throw error;
   if (!data) throw new Error("Failed to update service");
@@ -383,7 +381,7 @@ export async function updateService(
  * Delete a service
  */
 export async function deleteService(id: string): Promise<void> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("services").delete().eq("id", id);
 
   if (error) throw error;
@@ -393,7 +391,7 @@ export async function deleteService(id: string): Promise<void> {
  * Delete all services for a business
  */
 export async function deleteAllServices(businessId: string): Promise<void> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("services")
     .delete()
@@ -408,14 +406,12 @@ export async function deleteAllServices(businessId: string): Promise<void> {
 export async function reorderServices(
   serviceIds: string[]
 ): Promise<void> {
-  const supabase = await getWriteClient();
+  const supabase = await createClient();
 
   // Update each service with its new sort order
   for (let i = 0; i < serviceIds.length; i++) {
-    const { error } = await supabase
-      .from("services")
-      .update({ sort_order: i })
-      .eq("id", serviceIds[i]);
+    const updateData: TableUpdate<"services"> = { sort_order: i };
+    const { error } = await typedUpdateNoReturn(supabase, "services", updateData, { column: "id", value: serviceIds[i] });
 
     if (error) throw error;
   }

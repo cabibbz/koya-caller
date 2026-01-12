@@ -10,11 +10,79 @@ import type { Database } from "@/types/supabase";
 // TYPE EXPORTS
 // =============================================================================
 
-export type TypedSupabaseClient = SupabaseClient<Database>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type TypedSupabaseClient = SupabaseClient<Database, "public", any>;
 
-// Table types
+// Table types - generic accessors for any table
 export type Tables = Database["public"]["Tables"];
 export type TableName = keyof Tables;
+
+// Generic table type accessors - use these to get typed rows for any table
+export type TableRow<T extends TableName> = Tables[T]["Row"];
+export type TableInsert<T extends TableName> = Tables[T]["Insert"];
+export type TableUpdate<T extends TableName> = Tables[T]["Update"];
+
+/**
+ * Typed write client for Supabase operations
+ *
+ * Supabase's TypeScript types with RLS return 'never' for insert/update
+ * because they can't determine permissions at compile time. This helper
+ * provides a typed wrapper that maintains data type safety while working
+ * around the RLS limitation.
+ *
+ * Usage:
+ *   const { data, error } = await typedInsert(supabase, "businesses", insertData);
+ *   const { error } = await typedUpdate(supabase, "services", updateData, { id: serviceId });
+ */
+export async function typedInsert<T extends TableName>(
+  client: TypedSupabaseClient,
+  table: T,
+  data: TableInsert<T>
+): Promise<{ data: TableRow<T> | null; error: Error | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (client as any).from(table).insert(data).select().single();
+  return { data: result.data as TableRow<T> | null, error: result.error };
+}
+
+export async function typedInsertMany<T extends TableName>(
+  client: TypedSupabaseClient,
+  table: T,
+  data: TableInsert<T>[]
+): Promise<{ data: TableRow<T>[]; error: Error | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (client as any).from(table).insert(data).select();
+  return { data: (result.data ?? []) as TableRow<T>[], error: result.error };
+}
+
+export async function typedUpdate<T extends TableName>(
+  client: TypedSupabaseClient,
+  table: T,
+  data: TableUpdate<T>,
+  filter: { column: string; value: string }
+): Promise<{ data: TableRow<T> | null; error: Error | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (client as any)
+    .from(table)
+    .update(data)
+    .eq(filter.column, filter.value)
+    .select()
+    .single();
+  return { data: result.data as TableRow<T> | null, error: result.error };
+}
+
+export async function typedUpdateNoReturn<T extends TableName>(
+  client: TypedSupabaseClient,
+  table: T,
+  data: TableUpdate<T>,
+  filter: { column: string; value: string }
+): Promise<{ error: Error | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (client as any)
+    .from(table)
+    .update(data)
+    .eq(filter.column, filter.value);
+  return { error: result.error };
+}
 
 // Row types for each table
 export type BusinessRow = Tables["businesses"]["Row"];

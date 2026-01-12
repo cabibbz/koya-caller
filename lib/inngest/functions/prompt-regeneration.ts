@@ -164,7 +164,7 @@ async function fetchBusinessData(
   try {
     const { data: business, error: bizError } = await supabase
       .from("businesses")
-      .select("name, type, address, website, service_area, differentiator, timezone, minutes_used, minutes_limit")
+      .select("name, business_type, address, website, service_area, differentiator, timezone, minutes_used, minutes_limit")
       .eq("id", businessId)
       .single();
 
@@ -180,20 +180,19 @@ async function fetchBusinessData(
 
     const { data: services } = await supabase
       .from("services")
-      .select("name, description, duration_minutes, price")
+      .select("name, description, duration_minutes, price_cents")
       .eq("business_id", businessId)
-      .eq("active", true);
+      .order("sort_order");
 
     const { data: faqs } = await supabase
       .from("faqs")
       .select("question, answer")
       .eq("business_id", businessId)
-      .eq("active", true)
-      .order("display_order");
+      .order("sort_order");
 
     const { data: knowledge } = await supabase
       .from("knowledge")
-      .select("additional_info, never_say")
+      .select("content, never_say")
       .eq("business_id", businessId)
       .single();
 
@@ -204,7 +203,11 @@ async function fetchBusinessData(
         greeting, greeting_spanish,
         spanish_enabled, language_mode,
         retell_agent_id, retell_agent_id_spanish,
-        system_prompt_version
+        system_prompt_version,
+        upsells_enabled,
+        bundles_enabled,
+        packages_enabled,
+        memberships_enabled
       `)
       .eq("business_id", businessId)
       .single();
@@ -218,6 +221,88 @@ async function fetchBusinessData(
       `)
       .eq("business_id", businessId)
       .single();
+
+    // Fetch upsells with service names (only if upsells are enabled)
+    let upsells: any[] = [];
+    if (aiConfig?.upsells_enabled !== false) {
+      const { data: upsellsData } = await supabase
+        .from("upsells")
+        .select(`
+          source_service_id,
+          target_service_id,
+          discount_percent,
+          pitch_message,
+          trigger_timing,
+          suggest_when_unavailable,
+          source_service:services!upsells_source_service_id_fkey(name),
+          target_service:services!upsells_target_service_id_fkey(name)
+        `)
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .limit(20);
+      upsells = upsellsData || [];
+    }
+
+    // Fetch bundles with their services (only if bundles are enabled)
+    let bundles: any[] = [];
+    if (aiConfig?.bundles_enabled !== false) {
+      const { data: bundlesData } = await supabase
+        .from("bundles")
+        .select(`
+          name,
+          discount_percent,
+          pitch_message,
+          bundle_services(
+            service:services(name)
+          )
+        `)
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .limit(10);
+      bundles = (bundlesData || []).map((b: any) => ({
+        ...b,
+        services: (b.bundle_services || []).map((bs: any) => bs.service).filter(Boolean),
+      }));
+    }
+
+    // Fetch packages (only if packages are enabled)
+    let packages: any[] = [];
+    if (aiConfig?.packages_enabled !== false) {
+      const { data: packagesData } = await supabase
+        .from("packages")
+        .select(`
+          name,
+          session_count,
+          discount_percent,
+          pitch_message,
+          min_visits_to_pitch,
+          service:services(name)
+        `)
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .limit(15);
+      packages = packagesData || [];
+    }
+
+    // Fetch memberships (only if memberships are enabled)
+    let memberships: any[] = [];
+    if (aiConfig?.memberships_enabled !== false) {
+      const { data: membershipsData } = await supabase
+        .from("memberships")
+        .select(`
+          name,
+          price_cents,
+          billing_period,
+          benefits,
+          pitch_message,
+          pitch_after_booking_amount_cents,
+          pitch_after_visit_count
+        `)
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .limit(5);
+      memberships = membershipsData || [];
+    }
 
     const minutesRemaining = Math.max(
       0,
@@ -249,6 +334,10 @@ async function fetchBusinessData(
           after_hours_enabled: true,
           after_hours_can_book: true,
         },
+        upsells,
+        bundles,
+        packages,
+        memberships,
         minutesRemaining,
         minutesExhausted: minutesRemaining <= 0,
       },

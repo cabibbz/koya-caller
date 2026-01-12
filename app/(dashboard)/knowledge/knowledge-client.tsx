@@ -8,7 +8,7 @@
  * All save buttons trigger prompt regeneration (Line 720, 727, 733, 741, 746)
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Save,
   Plus,
@@ -31,6 +31,9 @@ import {
   MessageSquare,
   Download,
   Upload,
+  TrendingUp,
+  ArrowRight,
+  Percent,
 } from "lucide-react";
 import { SortableList } from "@/components/ui/sortable-list";
 import {
@@ -100,7 +103,65 @@ interface KnowledgeClientProps {
   lastPromptGenerated: string | null;
 }
 
-type Tab = "services" | "faqs" | "business" | "additional";
+type Tab = "services" | "faqs" | "business" | "additional" | "offers";
+
+// Offer sub-tab type
+type OfferSubTab = "upsells" | "bundles" | "packages" | "memberships";
+
+// Upsell type
+interface Upsell {
+  id: string;
+  source_service_id: string;
+  target_service_id: string;
+  discount_percent: number;
+  pitch_message: string | null;
+  trigger_timing: "before_booking" | "after_booking";
+  is_active: boolean;
+  suggest_when_unavailable: boolean;
+  source_service?: { id: string; name: string };
+  target_service?: { id: string; name: string };
+}
+
+// Bundle type
+interface Bundle {
+  id: string;
+  name: string;
+  description: string | null;
+  discount_percent: number;
+  pitch_message: string | null;
+  is_active: boolean;
+  services: Array<{ id: string; name: string; duration_minutes: number; price_cents: number | null }>;
+}
+
+// Package type
+interface Package {
+  id: string;
+  name: string;
+  description: string | null;
+  service_id: string | null;
+  session_count: number;
+  discount_percent: number;
+  price_cents: number | null;
+  validity_days: number | null;
+  pitch_message: string | null;
+  min_visits_to_pitch: number;
+  is_active: boolean;
+  service?: { id: string; name: string } | null;
+}
+
+// Membership type
+interface Membership {
+  id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  billing_period: "monthly" | "quarterly" | "annual";
+  benefits: string;
+  pitch_message: string | null;
+  pitch_after_booking_amount_cents: number | null;
+  pitch_after_visit_count: number | null;
+  is_active: boolean;
+}
 
 const PRICE_TYPES = [
   { value: "fixed", label: "Fixed Price" },
@@ -155,6 +216,40 @@ export function KnowledgeClient({
   // Knowledge state
   const [knowledge, setKnowledge] = useState(initialKnowledge);
   const [knowledgeModified, setKnowledgeModified] = useState(false);
+
+  // Upsells state
+  const [upsells, setUpsells] = useState<Upsell[]>([]);
+  const [upsellsLoaded, setUpsellsLoaded] = useState(false);
+  const [upsellsLoading, setUpsellsLoading] = useState(false);
+  const [editingUpsell, setEditingUpsell] = useState<Upsell | null>(null);
+  const [newUpsell, setNewUpsell] = useState<Partial<Upsell>>({
+    source_service_id: "",
+    target_service_id: "",
+    discount_percent: 0,
+    pitch_message: "",
+    trigger_timing: "before_booking",
+    is_active: true,
+    suggest_when_unavailable: false,
+  });
+  const [savingUpsell, setSavingUpsell] = useState(false);
+
+  // Offers sub-tab state
+  const [offerSubTab, setOfferSubTab] = useState<OfferSubTab>("upsells");
+
+  // Bundles state
+  const [bundles, setBundles] = useState<Bundle[]>([]);
+  const [bundlesLoaded, setBundlesLoaded] = useState(false);
+  const [bundlesLoading, setBundlesLoading] = useState(false);
+
+  // Packages state
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+
+  // Memberships state
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [membershipsLoaded, setMembershipsLoaded] = useState(false);
+  const [membershipsLoading, setMembershipsLoading] = useState(false);
 
   // Website import state
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -694,11 +789,198 @@ export function KnowledgeClient({
     }
   };
 
+  // Load upsells when tab is selected
+  const loadUpsells = useCallback(async () => {
+    if (upsellsLoaded || upsellsLoading) return;
+    setUpsellsLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/upsells");
+      if (res.ok) {
+        const data = await res.json();
+        setUpsells(data.upsells || []);
+        setUpsellsLoaded(true);
+      }
+    } catch (err) {
+      toast({ title: "Failed to load upsells", variant: "destructive" });
+    } finally {
+      setUpsellsLoading(false);
+    }
+  }, [upsellsLoaded, upsellsLoading]);
+
+  // Create new upsell
+  const createUpsell = async () => {
+    if (!newUpsell.source_service_id || !newUpsell.target_service_id) {
+      toast({ title: "Please select both services", variant: "warning" });
+      return;
+    }
+    if (newUpsell.source_service_id === newUpsell.target_service_id) {
+      toast({ title: "Source and target must be different services", variant: "warning" });
+      return;
+    }
+
+    setSavingUpsell(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/upsells", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newUpsell),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to create upsell");
+      }
+
+      const data = await res.json();
+
+      // Add the new upsell with service names
+      const sourceService = services.find(s => s.id === newUpsell.source_service_id);
+      const targetService = services.find(s => s.id === newUpsell.target_service_id);
+
+      setUpsells([
+        {
+          ...data.upsell,
+          source_service: sourceService ? { id: sourceService.id, name: sourceService.name } : undefined,
+          target_service: targetService ? { id: targetService.id, name: targetService.name } : undefined,
+        },
+        ...upsells,
+      ]);
+
+      // Reset form
+      setNewUpsell({
+        source_service_id: "",
+        target_service_id: "",
+        discount_percent: 0,
+        pitch_message: "",
+        trigger_timing: "before_booking",
+        is_active: true,
+      });
+
+      toast({ title: "Upsell created", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to create upsell", variant: "destructive" });
+    } finally {
+      setSavingUpsell(false);
+    }
+  };
+
+  // Update upsell
+  const updateUpsell = async (upsell: Upsell) => {
+    setSavingUpsell(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/upsells", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upsell }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update upsell");
+      }
+
+      // Update local state
+      setUpsells(upsells.map(u => u.id === upsell.id ? upsell : u));
+      setEditingUpsell(null);
+      toast({ title: "Upsell updated", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to update upsell", variant: "destructive" });
+    } finally {
+      setSavingUpsell(false);
+    }
+  };
+
+  // Delete upsell
+  const deleteUpsell = async (id: string) => {
+    try {
+      const res = await fetch(`/api/dashboard/knowledge/upsells?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete upsell");
+      }
+
+      setUpsells(upsells.filter(u => u.id !== id));
+      toast({ title: "Upsell deleted", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to delete upsell", variant: "destructive" });
+    }
+  };
+
+  // Load bundles
+  const loadBundles = useCallback(async () => {
+    if (bundlesLoaded || bundlesLoading) return;
+    setBundlesLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/bundles");
+      if (res.ok) {
+        const data = await res.json();
+        setBundles(data.bundles || []);
+        setBundlesLoaded(true);
+      }
+    } catch (err) {
+      toast({ title: "Failed to load bundles", variant: "destructive" });
+    } finally {
+      setBundlesLoading(false);
+    }
+  }, [bundlesLoaded, bundlesLoading]);
+
+  // Load packages
+  const loadPackages = useCallback(async () => {
+    if (packagesLoaded || packagesLoading) return;
+    setPackagesLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/packages");
+      if (res.ok) {
+        const data = await res.json();
+        setPackages(data.packages || []);
+        setPackagesLoaded(true);
+      }
+    } catch (err) {
+      toast({ title: "Failed to load packages", variant: "destructive" });
+    } finally {
+      setPackagesLoading(false);
+    }
+  }, [packagesLoaded, packagesLoading]);
+
+  // Load memberships
+  const loadMemberships = useCallback(async () => {
+    if (membershipsLoaded || membershipsLoading) return;
+    setMembershipsLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/memberships");
+      if (res.ok) {
+        const data = await res.json();
+        setMemberships(data.memberships || []);
+        setMembershipsLoaded(true);
+      }
+    } catch (err) {
+      toast({ title: "Failed to load memberships", variant: "destructive" });
+    } finally {
+      setMembershipsLoading(false);
+    }
+  }, [membershipsLoaded, membershipsLoading]);
+
+  // Load offers data when switching to offers tab
+  useEffect(() => {
+    if (activeTab === "offers") {
+      if (offerSubTab === "upsells" && !upsellsLoaded && !upsellsLoading) {
+        loadUpsells();
+      } else if (offerSubTab === "bundles" && !bundlesLoaded && !bundlesLoading) {
+        loadBundles();
+      } else if (offerSubTab === "packages" && !packagesLoaded && !packagesLoading) {
+        loadPackages();
+      } else if (offerSubTab === "memberships" && !membershipsLoaded && !membershipsLoading) {
+        loadMemberships();
+      }
+    }
+  }, [activeTab, offerSubTab, upsellsLoaded, upsellsLoading, loadUpsells, bundlesLoaded, bundlesLoading, loadBundles, packagesLoaded, packagesLoading, loadPackages, membershipsLoaded, membershipsLoading, loadMemberships]);
+
   const tabs = [
     { id: "services" as const, label: "Services", icon: Briefcase, modified: servicesModified },
     { id: "faqs" as const, label: "FAQs", icon: HelpCircle, modified: faqsModified },
     { id: "business" as const, label: "Business Info", icon: Building2, modified: businessModified },
     { id: "additional" as const, label: "Additional", icon: FileText, modified: knowledgeModified },
+    { id: "offers" as const, label: "Offers", icon: TrendingUp, modified: false },
   ];
 
   return (
@@ -1291,6 +1573,278 @@ export function KnowledgeClient({
         </Card>
       )}
 
+      {/* Offers Tab */}
+      {activeTab === "offers" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Offers & Upsells
+            </CardTitle>
+            <CardDescription>
+              Configure offers, bundles, packages, and memberships that Koya will suggest to customers.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Sub-tabs */}
+            <div className="flex flex-wrap gap-2 border-b pb-2">
+              {[
+                { id: "upsells" as const, label: "Service Upgrades" },
+                { id: "bundles" as const, label: "Bundle Deals" },
+                { id: "packages" as const, label: "Multi-Visit Packages" },
+                { id: "memberships" as const, label: "Memberships" },
+              ].map((subTab) => (
+                <Button
+                  key={subTab.id}
+                  variant={offerSubTab === subTab.id ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setOfferSubTab(subTab.id)}
+                >
+                  {subTab.label}
+                </Button>
+              ))}
+            </div>
+
+            {/* Upsells Sub-Tab */}
+            {offerSubTab === "upsells" && (
+              <div className="space-y-6">
+                {/* Loading state */}
+                {upsellsLoading && (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+                    <p className="text-sm text-muted-foreground mt-2">Loading upsells...</p>
+                  </div>
+                )}
+
+                {/* No services warning */}
+                {!upsellsLoading && services.length < 2 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      You need at least 2 services to create upsell offers. Add more services in the Services tab first.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Create new upsell form */}
+                {!upsellsLoading && services.length >= 2 && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    <h3 className="font-medium">Create New Upsell</h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>When booking...</Label>
+                        <Select
+                          value={newUpsell.source_service_id}
+                          onValueChange={(value) => setNewUpsell({ ...newUpsell, source_service_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a service" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {services.map((service) => (
+                              <SelectItem key={service.id} value={service.id}>
+                                {service.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Suggest upgrading to...</Label>
+                        <Select
+                          value={newUpsell.target_service_id}
+                          onValueChange={(value) => setNewUpsell({ ...newUpsell, target_service_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select upgrade option" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {services
+                              .filter((s) => s.id !== newUpsell.source_service_id)
+                              .map((service) => (
+                                <SelectItem key={service.id} value={service.id}>
+                                  {service.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Discount Percentage</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={newUpsell.discount_percent || 0}
+                            onChange={(e) =>
+                              setNewUpsell({
+                                ...newUpsell,
+                                discount_percent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                              })
+                            }
+                            className="w-24"
+                          />
+                          <Percent className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">off the upgrade</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>When to Suggest</Label>
+                        <Select
+                          value={newUpsell.trigger_timing}
+                          onValueChange={(value: "before_booking" | "after_booking") =>
+                            setNewUpsell({ ...newUpsell, trigger_timing: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="before_booking">Before confirming booking</SelectItem>
+                            <SelectItem value="after_booking">After booking is confirmed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Custom Pitch Message (Optional)</Label>
+                      <Textarea
+                        value={newUpsell.pitch_message || ""}
+                        onChange={(e) => setNewUpsell({ ...newUpsell, pitch_message: e.target.value })}
+                        placeholder="e.g., It's 20% cheaper to upgrade to 1 hour instead of 30 minutes!"
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="suggest-when-unavailable"
+                        checked={newUpsell.suggest_when_unavailable || false}
+                        onCheckedChange={(checked) =>
+                          setNewUpsell({ ...newUpsell, suggest_when_unavailable: checked as boolean })
+                        }
+                      />
+                      <Label htmlFor="suggest-when-unavailable" className="text-sm cursor-pointer">
+                        Suggest this upgrade when the requested time slot is unavailable
+                      </Label>
+                    </div>
+
+                    <Button onClick={createUpsell} disabled={savingUpsell}>
+                      {savingUpsell ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4 mr-2" />
+                      )}
+                      Create Upsell
+                    </Button>
+                  </div>
+                )}
+
+                {/* Existing upsells list */}
+                {!upsellsLoading && upsells.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Active Upsells</h3>
+                    {upsells.map((upsell) => (
+                      <div
+                        key={upsell.id}
+                        className={`p-4 border rounded-lg ${upsell.is_active ? "bg-background" : "bg-muted/50 opacity-60"}`}
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{upsell.source_service?.name || "Unknown"}</Badge>
+                              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                              <Badge variant="default">{upsell.target_service?.name || "Unknown"}</Badge>
+                            </div>
+                            {upsell.discount_percent > 0 && (
+                              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                {upsell.discount_percent}% off
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              {upsell.trigger_timing === "before_booking" ? "Before booking" : "After booking"}
+                            </Badge>
+                            {upsell.suggest_when_unavailable && (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                                Availability alternative
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={upsell.is_active}
+                              onCheckedChange={(checked) => updateUpsell({ ...upsell, is_active: checked })}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteUpsell(upsell.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                        {upsell.pitch_message && (
+                          <p className="text-sm text-muted-foreground mt-2 italic">
+                            &quot;{upsell.pitch_message}&quot;
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!upsellsLoading && upsells.length === 0 && services.length >= 2 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No upsells configured yet.</p>
+                    <p className="text-sm">Create your first upsell offer above!</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bundles Sub-Tab */}
+            {offerSubTab === "bundles" && (
+              <BundlesSection
+                bundles={bundles}
+                setBundles={setBundles}
+                services={services}
+                loading={bundlesLoading}
+              />
+            )}
+
+            {/* Packages Sub-Tab */}
+            {offerSubTab === "packages" && (
+              <PackagesSection
+                packages={packages}
+                setPackages={setPackages}
+                services={services}
+                loading={packagesLoading}
+              />
+            )}
+
+            {/* Memberships Sub-Tab */}
+            {offerSubTab === "memberships" && (
+              <MembershipsSection
+                memberships={memberships}
+                setMemberships={setMemberships}
+                loading={membershipsLoading}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Website Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => {
         setImportDialogOpen(open);
@@ -1670,6 +2224,769 @@ export function KnowledgeClient({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// =============================================================================
+// Bundles Section Component
+// =============================================================================
+
+interface BundlesSectionProps {
+  bundles: Bundle[];
+  setBundles: React.Dispatch<React.SetStateAction<Bundle[]>>;
+  services: Service[];
+  loading: boolean;
+}
+
+function BundlesSection({ bundles, setBundles, services, loading }: BundlesSectionProps) {
+  const [saving, setSaving] = useState(false);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [newBundle, setNewBundle] = useState({
+    name: "",
+    description: "",
+    discount_percent: 10,
+    pitch_message: "",
+  });
+
+  const createBundle = async () => {
+    if (!newBundle.name.trim()) {
+      toast({ title: "Please enter a bundle name", variant: "warning" });
+      return;
+    }
+    if (selectedServices.length < 2) {
+      toast({ title: "A bundle must include at least 2 services", variant: "warning" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newBundle,
+          service_ids: selectedServices,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create bundle");
+      }
+
+      const data = await res.json();
+      setBundles([data.bundle, ...bundles]);
+      setNewBundle({ name: "", description: "", discount_percent: 10, pitch_message: "" });
+      setSelectedServices([]);
+      toast({ title: "Bundle created", variant: "success" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed to create bundle", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteBundle = async (id: string) => {
+    try {
+      const res = await fetch(`/api/dashboard/knowledge/bundles?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete bundle");
+      setBundles(bundles.filter((b) => b.id !== id));
+      toast({ title: "Bundle deleted", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to delete bundle", variant: "destructive" });
+    }
+  };
+
+  const toggleBundleActive = async (bundle: Bundle) => {
+    try {
+      const res = await fetch("/api/dashboard/knowledge/bundles", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bundle: { ...bundle, is_active: !bundle.is_active } }),
+      });
+      if (!res.ok) throw new Error("Failed to update bundle");
+      setBundles(bundles.map((b) => (b.id === bundle.id ? { ...b, is_active: !b.is_active } : b)));
+    } catch (err) {
+      toast({ title: "Failed to update bundle", variant: "destructive" });
+    }
+  };
+
+  const toggleServiceInBundle = (serviceId: string) => {
+    setSelectedServices((prev) =>
+      prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId]
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground mt-2">Loading bundles...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {services.length < 2 && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You need at least 2 services to create bundle deals. Add more services in the Services tab first.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {services.length >= 2 && (
+        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+          <h3 className="font-medium">Create New Bundle</h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Bundle Name</Label>
+              <Input
+                value={newBundle.name}
+                onChange={(e) => setNewBundle({ ...newBundle, name: e.target.value })}
+                placeholder="e.g., Full Spa Package"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Discount</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={newBundle.discount_percent}
+                  onChange={(e) =>
+                    setNewBundle({
+                      ...newBundle,
+                      discount_percent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                    })
+                  }
+                  className="w-24"
+                />
+                <Percent className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">off combined price</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Select Services (minimum 2)</Label>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 border rounded-lg bg-background">
+              {services.map((service) => (
+                <div
+                  key={service.id}
+                  className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                    selectedServices.includes(service.id) ? "bg-primary/10" : "hover:bg-muted"
+                  }`}
+                  onClick={() => toggleServiceInBundle(service.id)}
+                >
+                  <Checkbox checked={selectedServices.includes(service.id)} />
+                  <span className="text-sm truncate">{service.name}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedServices.length} service(s) selected
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Pitch Message (Optional)</Label>
+            <Textarea
+              value={newBundle.pitch_message}
+              onChange={(e) => setNewBundle({ ...newBundle, pitch_message: e.target.value })}
+              placeholder="e.g., Get our complete spa experience and save 15%!"
+              rows={2}
+            />
+          </div>
+
+          <Button onClick={createBundle} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+            Create Bundle
+          </Button>
+        </div>
+      )}
+
+      {bundles.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-medium">Active Bundles</h3>
+          {bundles.map((bundle) => (
+            <div
+              key={bundle.id}
+              className={`p-4 border rounded-lg ${bundle.is_active ? "bg-background" : "bg-muted/50 opacity-60"}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{bundle.name}</span>
+                    {bundle.discount_percent > 0 && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        {bundle.discount_percent}% off
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {bundle.services.map((s) => (
+                      <Badge key={s.id} variant="outline" className="text-xs">
+                        {s.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={bundle.is_active} onCheckedChange={() => toggleBundleActive(bundle)} />
+                  <Button variant="ghost" size="icon" onClick={() => deleteBundle(bundle.id)}>
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+              {bundle.pitch_message && (
+                <p className="text-sm text-muted-foreground mt-2 italic">&quot;{bundle.pitch_message}&quot;</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {bundles.length === 0 && services.length >= 2 && (
+        <div className="text-center py-8 text-muted-foreground">
+          <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No bundles configured yet.</p>
+          <p className="text-sm">Create your first bundle deal above!</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Packages Section Component
+// =============================================================================
+
+interface PackagesSectionProps {
+  packages: Package[];
+  setPackages: React.Dispatch<React.SetStateAction<Package[]>>;
+  services: Service[];
+  loading: boolean;
+}
+
+function PackagesSection({ packages, setPackages, services, loading }: PackagesSectionProps) {
+  const [saving, setSaving] = useState(false);
+  const [newPackage, setNewPackage] = useState({
+    name: "",
+    service_id: "",
+    session_count: 5,
+    discount_percent: 20,
+    validity_days: 365,
+    pitch_message: "",
+    min_visits_to_pitch: 3,
+  });
+
+  const createPackage = async () => {
+    if (!newPackage.name.trim()) {
+      toast({ title: "Please enter a package name", variant: "warning" });
+      return;
+    }
+    if (newPackage.session_count < 2) {
+      toast({ title: "A package must have at least 2 sessions", variant: "warning" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/packages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newPackage,
+          service_id: newPackage.service_id || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create package");
+      }
+
+      const data = await res.json();
+      setPackages([data.package, ...packages]);
+      setNewPackage({
+        name: "",
+        service_id: "",
+        session_count: 5,
+        discount_percent: 20,
+        validity_days: 365,
+        pitch_message: "",
+        min_visits_to_pitch: 3,
+      });
+      toast({ title: "Package created", variant: "success" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed to create package", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePackage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/dashboard/knowledge/packages?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete package");
+      setPackages(packages.filter((p) => p.id !== id));
+      toast({ title: "Package deleted", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to delete package", variant: "destructive" });
+    }
+  };
+
+  const togglePackageActive = async (pkg: Package) => {
+    try {
+      const res = await fetch("/api/dashboard/knowledge/packages", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ package: { ...pkg, is_active: !pkg.is_active } }),
+      });
+      if (!res.ok) throw new Error("Failed to update package");
+      setPackages(packages.map((p) => (p.id === pkg.id ? { ...p, is_active: !p.is_active } : p)));
+    } catch (err) {
+      toast({ title: "Failed to update package", variant: "destructive" });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground mt-2">Loading packages...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+        <h3 className="font-medium">Create New Multi-Visit Package</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Package Name</Label>
+            <Input
+              value={newPackage.name}
+              onChange={(e) => setNewPackage({ ...newPackage, name: e.target.value })}
+              placeholder="e.g., 5-Session Package"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Applicable Service (Optional)</Label>
+            <Select
+              value={newPackage.service_id}
+              onValueChange={(value) => setNewPackage({ ...newPackage, service_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="All services" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All services</SelectItem>
+                {services.map((service) => (
+                  <SelectItem key={service.id} value={service.id}>
+                    {service.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>Number of Sessions</Label>
+            <Input
+              type="number"
+              min="2"
+              max="100"
+              value={newPackage.session_count}
+              onChange={(e) =>
+                setNewPackage({ ...newPackage, session_count: Math.max(2, parseInt(e.target.value) || 2) })
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Discount</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={newPackage.discount_percent}
+                onChange={(e) =>
+                  setNewPackage({
+                    ...newPackage,
+                    discount_percent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                  })
+                }
+                className="w-24"
+              />
+              <Percent className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Valid for (days)</Label>
+            <Input
+              type="number"
+              min="30"
+              max="730"
+              value={newPackage.validity_days}
+              onChange={(e) =>
+                setNewPackage({ ...newPackage, validity_days: Math.max(30, parseInt(e.target.value) || 365) })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Pitch after how many visits?</Label>
+          <Input
+            type="number"
+            min="0"
+            max="10"
+            value={newPackage.min_visits_to_pitch}
+            onChange={(e) =>
+              setNewPackage({ ...newPackage, min_visits_to_pitch: Math.max(0, parseInt(e.target.value) || 0) })
+            }
+            className="w-24"
+          />
+          <p className="text-xs text-muted-foreground">Koya will suggest this package after the customer has visited this many times</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Pitch Message (Optional)</Label>
+          <Textarea
+            value={newPackage.pitch_message}
+            onChange={(e) => setNewPackage({ ...newPackage, pitch_message: e.target.value })}
+            placeholder="e.g., Buy 5 sessions and save 20%! Great for regular clients."
+            rows={2}
+          />
+        </div>
+
+        <Button onClick={createPackage} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          Create Package
+        </Button>
+      </div>
+
+      {packages.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-medium">Active Packages</h3>
+          {packages.map((pkg) => (
+            <div
+              key={pkg.id}
+              className={`p-4 border rounded-lg ${pkg.is_active ? "bg-background" : "bg-muted/50 opacity-60"}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{pkg.name}</span>
+                    <Badge variant="outline">{pkg.session_count} sessions</Badge>
+                    {pkg.discount_percent > 0 && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        {pkg.discount_percent}% off
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {pkg.service?.name || "All services"} • Valid for {pkg.validity_days || 365} days
+                    {pkg.min_visits_to_pitch > 0 && ` • Pitch after ${pkg.min_visits_to_pitch} visits`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={pkg.is_active} onCheckedChange={() => togglePackageActive(pkg)} />
+                  <Button variant="ghost" size="icon" onClick={() => deletePackage(pkg.id)}>
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+              {pkg.pitch_message && (
+                <p className="text-sm text-muted-foreground mt-2 italic">&quot;{pkg.pitch_message}&quot;</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {packages.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No multi-visit packages configured yet.</p>
+          <p className="text-sm">Create your first package above!</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Memberships Section Component
+// =============================================================================
+
+interface MembershipsSectionProps {
+  memberships: Membership[];
+  setMemberships: React.Dispatch<React.SetStateAction<Membership[]>>;
+  loading: boolean;
+}
+
+function MembershipsSection({ memberships, setMemberships, loading }: MembershipsSectionProps) {
+  const [saving, setSaving] = useState(false);
+  const [newMembership, setNewMembership] = useState({
+    name: "",
+    price_cents: 9900,
+    billing_period: "monthly" as "monthly" | "quarterly" | "annual",
+    benefits: "",
+    pitch_message: "",
+    pitch_after_booking_amount_cents: 10000,
+    pitch_after_visit_count: 3,
+  });
+
+  const createMembership = async () => {
+    if (!newMembership.name.trim()) {
+      toast({ title: "Please enter a membership name", variant: "warning" });
+      return;
+    }
+    if (!newMembership.benefits.trim()) {
+      toast({ title: "Please describe the membership benefits", variant: "warning" });
+      return;
+    }
+    if (newMembership.price_cents <= 0) {
+      toast({ title: "Please enter a valid price", variant: "warning" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/knowledge/memberships", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMembership),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create membership");
+      }
+
+      const data = await res.json();
+      setMemberships([data.membership, ...memberships]);
+      setNewMembership({
+        name: "",
+        price_cents: 9900,
+        billing_period: "monthly",
+        benefits: "",
+        pitch_message: "",
+        pitch_after_booking_amount_cents: 10000,
+        pitch_after_visit_count: 3,
+      });
+      toast({ title: "Membership created", variant: "success" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed to create membership", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteMembership = async (id: string) => {
+    try {
+      const res = await fetch(`/api/dashboard/knowledge/memberships?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete membership");
+      setMemberships(memberships.filter((m) => m.id !== id));
+      toast({ title: "Membership deleted", variant: "success" });
+    } catch (err) {
+      toast({ title: "Failed to delete membership", variant: "destructive" });
+    }
+  };
+
+  const toggleMembershipActive = async (membership: Membership) => {
+    try {
+      const res = await fetch("/api/dashboard/knowledge/memberships", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ membership: { ...membership, is_active: !membership.is_active } }),
+      });
+      if (!res.ok) throw new Error("Failed to update membership");
+      setMemberships(memberships.map((m) => (m.id === membership.id ? { ...m, is_active: !m.is_active } : m)));
+    } catch (err) {
+      toast({ title: "Failed to update membership", variant: "destructive" });
+    }
+  };
+
+  const formatPrice = (cents: number) => {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground mt-2">Loading memberships...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+        <h3 className="font-medium">Create New Membership Plan</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>Membership Name</Label>
+            <Input
+              value={newMembership.name}
+              onChange={(e) => setNewMembership({ ...newMembership, name: e.target.value })}
+              placeholder="e.g., VIP Membership"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Price</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">$</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={(newMembership.price_cents / 100).toFixed(2)}
+                onChange={(e) =>
+                  setNewMembership({
+                    ...newMembership,
+                    price_cents: Math.round(parseFloat(e.target.value || "0") * 100),
+                  })
+                }
+                className="w-28"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Billing Period</Label>
+            <Select
+              value={newMembership.billing_period}
+              onValueChange={(value: "monthly" | "quarterly" | "annual") =>
+                setNewMembership({ ...newMembership, billing_period: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="quarterly">Quarterly</SelectItem>
+                <SelectItem value="annual">Annual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Benefits Description</Label>
+          <Textarea
+            value={newMembership.benefits}
+            onChange={(e) => setNewMembership({ ...newMembership, benefits: e.target.value })}
+            placeholder="e.g., 10% off all services, priority booking, free monthly consultation"
+            rows={2}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Pitch after booking amount ($)</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={(newMembership.pitch_after_booking_amount_cents / 100).toFixed(2)}
+              onChange={(e) =>
+                setNewMembership({
+                  ...newMembership,
+                  pitch_after_booking_amount_cents: Math.round(parseFloat(e.target.value || "0") * 100),
+                })
+              }
+              className="w-28"
+            />
+            <p className="text-xs text-muted-foreground">Suggest membership when booking exceeds this amount</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Pitch after how many visits?</Label>
+            <Input
+              type="number"
+              min="0"
+              max="20"
+              value={newMembership.pitch_after_visit_count}
+              onChange={(e) =>
+                setNewMembership({ ...newMembership, pitch_after_visit_count: Math.max(0, parseInt(e.target.value) || 0) })
+              }
+              className="w-24"
+            />
+            <p className="text-xs text-muted-foreground">Suggest membership after this many visits</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Pitch Message (Optional)</Label>
+          <Textarea
+            value={newMembership.pitch_message}
+            onChange={(e) => setNewMembership({ ...newMembership, pitch_message: e.target.value })}
+            placeholder="e.g., As one of our valued customers, you might be interested in our VIP membership..."
+            rows={2}
+          />
+        </div>
+
+        <Button onClick={createMembership} disabled={saving}>
+          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          Create Membership
+        </Button>
+      </div>
+
+      {memberships.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-medium">Active Memberships</h3>
+          {memberships.map((membership) => (
+            <div
+              key={membership.id}
+              className={`p-4 border rounded-lg ${membership.is_active ? "bg-background" : "bg-muted/50 opacity-60"}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{membership.name}</span>
+                    <Badge variant="default">{formatPrice(membership.price_cents)}/{membership.billing_period}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{membership.benefits}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pitch after {formatPrice(membership.pitch_after_booking_amount_cents || 0)} booking or {membership.pitch_after_visit_count || 0} visits
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={membership.is_active} onCheckedChange={() => toggleMembershipActive(membership)} />
+                  <Button variant="ghost" size="icon" onClick={() => deleteMembership(membership.id)}>
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+              {membership.pitch_message && (
+                <p className="text-sm text-muted-foreground mt-2 italic">&quot;{membership.pitch_message}&quot;</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {memberships.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No membership plans configured yet.</p>
+          <p className="text-sm">Create your first membership plan above!</p>
+        </div>
+      )}
     </div>
   );
 }

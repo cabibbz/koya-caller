@@ -1,0 +1,589 @@
+/**
+ * Packages Knowledge API Route
+ * Manages multi-visit package offers for the AI phone receptionist
+ *
+ * GET /api/dashboard/knowledge/packages - List all packages
+ * POST /api/dashboard/knowledge/packages - Create new package
+ * PUT /api/dashboard/knowledge/packages - Update package
+ * DELETE /api/dashboard/knowledge/packages?id=xxx - Delete package
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { inngest } from "@/lib/inngest/client";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Field length limits
+const MAX_NAME_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_PITCH_LENGTH = 300;
+const MAX_PACKAGES_PER_BUSINESS = 15;
+const MIN_SESSION_COUNT = 2;
+const MAX_SESSION_COUNT = 100;
+const MAX_VALIDITY_DAYS = 730; // 2 years
+
+function validateStringLength(value: string | undefined, maxLength: number, fieldName: string): string | null {
+  if (value && value.trim().length > maxLength) {
+    return `${fieldName} must be ${maxLength} characters or less`;
+  }
+  return null;
+}
+
+// GET - List all packages for the business
+export async function GET(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+
+    // Fetch packages with service names
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: packages, error } = await (supabase as any)
+      .from("packages")
+      .select(`
+        id,
+        name,
+        description,
+        service_id,
+        session_count,
+        discount_percent,
+        price_cents,
+        validity_days,
+        pitch_message,
+        min_visits_to_pitch,
+        is_active,
+        times_offered,
+        times_accepted,
+        service:services(id, name)
+      `)
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[Packages GET] Error:", error);
+      return NextResponse.json({ error: "Failed to fetch packages" }, { status: 500 });
+    }
+
+    return NextResponse.json({ packages: packages || [] });
+  } catch (error) {
+    console.error("[Packages GET] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// POST - Create a new package
+export async function POST(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+    const body = await request.json();
+
+    const {
+      name,
+      description,
+      service_id,
+      session_count,
+      discount_percent = 0,
+      price_cents,
+      validity_days,
+      pitch_message,
+      min_visits_to_pitch = 0,
+      is_active = true,
+    } = body;
+
+    // Validate required fields
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: "Package name is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate field lengths
+    const nameLengthError = validateStringLength(name, MAX_NAME_LENGTH, "Package name");
+    if (nameLengthError) {
+      return NextResponse.json({ error: nameLengthError }, { status: 400 });
+    }
+
+    const descLengthError = validateStringLength(description, MAX_DESCRIPTION_LENGTH, "Description");
+    if (descLengthError) {
+      return NextResponse.json({ error: descLengthError }, { status: 400 });
+    }
+
+    const pitchLengthError = validateStringLength(pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+    if (pitchLengthError) {
+      return NextResponse.json({ error: pitchLengthError }, { status: 400 });
+    }
+
+    if (!session_count || !Number.isInteger(session_count) || session_count < MIN_SESSION_COUNT || session_count > MAX_SESSION_COUNT) {
+      return NextResponse.json(
+        { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${MAX_SESSION_COUNT}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate validity_days if provided
+    if (validity_days !== undefined && validity_days !== null) {
+      if (!Number.isInteger(validity_days) || validity_days < 1 || validity_days > MAX_VALIDITY_DAYS) {
+        return NextResponse.json(
+          { error: `Validity days must be a whole number between 1 and ${MAX_VALIDITY_DAYS}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate discount_percent (reject invalid values instead of silent clamp)
+    if (!Number.isInteger(discount_percent) || discount_percent < 0 || discount_percent > 100) {
+      return NextResponse.json(
+        { error: "Discount percent must be a whole number between 0 and 100" },
+        { status: 400 }
+      );
+    }
+
+    // Validate min_visits_to_pitch
+    if (!Number.isInteger(min_visits_to_pitch) || min_visits_to_pitch < 0) {
+      return NextResponse.json(
+        { error: "Minimum visits to pitch must be a non-negative whole number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate price_cents if provided
+    if (price_cents !== undefined && price_cents !== null) {
+      if (!Number.isInteger(price_cents) || price_cents < 0) {
+        return NextResponse.json(
+          { error: "Price must be a non-negative whole number" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check package count limit
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { count: packageCount } = await (supabase as any)
+      .from("packages")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId);
+
+    if ((packageCount || 0) >= MAX_PACKAGES_PER_BUSINESS) {
+      return NextResponse.json(
+        { error: `Maximum of ${MAX_PACKAGES_PER_BUSINESS} packages allowed. Delete some before creating new ones.` },
+        { status: 400 }
+      );
+    }
+
+    // If service_id provided, validate UUID format and ownership
+    if (service_id) {
+      if (!UUID_REGEX.test(service_id)) {
+        return NextResponse.json({ error: "Invalid service ID format" }, { status: 400 });
+      }
+
+      const { data: service } = await supabase
+        .from("services")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("id", service_id)
+        .single();
+
+      if (!service) {
+        return NextResponse.json(
+          { error: "Service not found or does not belong to your business" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Create package
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: pkg, error } = await (supabase as any)
+      .from("packages")
+      .insert({
+        business_id: businessId,
+        name: name.trim(),
+        description: description?.trim() || null,
+        service_id: service_id || null,
+        session_count,
+        discount_percent,
+        price_cents: price_cents || null,
+        validity_days: validity_days || null,
+        pitch_message: pitch_message?.trim() || null,
+        min_visits_to_pitch,
+        is_active,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[Packages POST] Error:", error);
+      return NextResponse.json({ error: "Failed to create package" }, { status: 500 });
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "packages_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      console.error("[Packages POST] Inngest error:", inngestError);
+    }
+
+    return NextResponse.json({ success: true, package: pkg, regenerationQueued });
+  } catch (error) {
+    console.error("[Packages POST] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// PUT - Update a package
+export async function PUT(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+    const body = await request.json();
+    const { package: pkg } = body;
+
+    if (!pkg || !pkg.id) {
+      return NextResponse.json({ error: "Package ID required" }, { status: 400 });
+    }
+
+    if (!UUID_REGEX.test(pkg.id)) {
+      return NextResponse.json({ error: "Invalid package ID format" }, { status: 400 });
+    }
+
+    // Verify package exists and belongs to business
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingPkg, error: fetchError } = await (supabase as any)
+      .from("packages")
+      .select("id")
+      .eq("id", pkg.id)
+      .eq("business_id", businessId)
+      .single();
+
+    if (fetchError || !existingPkg) {
+      return NextResponse.json({ error: "Package not found" }, { status: 404 });
+    }
+
+    // Validate name if provided
+    if (pkg.name !== undefined && !pkg.name?.trim()) {
+      return NextResponse.json(
+        { error: "Package name is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate field lengths
+    if (pkg.name) {
+      const nameLengthError = validateStringLength(pkg.name, MAX_NAME_LENGTH, "Package name");
+      if (nameLengthError) {
+        return NextResponse.json({ error: nameLengthError }, { status: 400 });
+      }
+    }
+
+    if (pkg.description) {
+      const descLengthError = validateStringLength(pkg.description, MAX_DESCRIPTION_LENGTH, "Description");
+      if (descLengthError) {
+        return NextResponse.json({ error: descLengthError }, { status: 400 });
+      }
+    }
+
+    if (pkg.pitch_message) {
+      const pitchLengthError = validateStringLength(pkg.pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+      if (pitchLengthError) {
+        return NextResponse.json({ error: pitchLengthError }, { status: 400 });
+      }
+    }
+
+    // Validate session_count if provided
+    if (pkg.session_count !== undefined) {
+      if (!Number.isInteger(pkg.session_count) || pkg.session_count < MIN_SESSION_COUNT || pkg.session_count > MAX_SESSION_COUNT) {
+        return NextResponse.json(
+          { error: `Session count must be a whole number between ${MIN_SESSION_COUNT} and ${MAX_SESSION_COUNT}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate validity_days if provided
+    if (pkg.validity_days !== undefined && pkg.validity_days !== null) {
+      if (!Number.isInteger(pkg.validity_days) || pkg.validity_days < 1 || pkg.validity_days > MAX_VALIDITY_DAYS) {
+        return NextResponse.json(
+          { error: `Validity days must be a whole number between 1 and ${MAX_VALIDITY_DAYS}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // If service_id provided, validate UUID format and ownership
+    if (pkg.service_id) {
+      if (!UUID_REGEX.test(pkg.service_id)) {
+        return NextResponse.json({ error: "Invalid service ID format" }, { status: 400 });
+      }
+
+      const { data: service } = await supabase
+        .from("services")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("id", pkg.service_id)
+        .single();
+
+      if (!service) {
+        return NextResponse.json(
+          { error: "Service not found or does not belong to your business" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate discount_percent if provided (reject invalid values instead of silent clamp)
+    if (pkg.discount_percent !== undefined) {
+      if (!Number.isInteger(pkg.discount_percent) || pkg.discount_percent < 0 || pkg.discount_percent > 100) {
+        return NextResponse.json(
+          { error: "Discount percent must be a whole number between 0 and 100" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate min_visits_to_pitch if provided
+    if (pkg.min_visits_to_pitch !== undefined && pkg.min_visits_to_pitch !== null) {
+      if (!Number.isInteger(pkg.min_visits_to_pitch) || pkg.min_visits_to_pitch < 0) {
+        return NextResponse.json(
+          { error: "Minimum visits to pitch must be a non-negative whole number" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate price_cents if provided
+    if (pkg.price_cents !== undefined && pkg.price_cents !== null) {
+      if (!Number.isInteger(pkg.price_cents) || pkg.price_cents < 0) {
+        return NextResponse.json(
+          { error: "Price must be a non-negative whole number" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+    if (pkg.name !== undefined) updateData.name = pkg.name.trim();
+    if (pkg.description !== undefined) updateData.description = pkg.description?.trim() || null;
+    if (pkg.service_id !== undefined) updateData.service_id = pkg.service_id || null;
+    if (pkg.session_count !== undefined) updateData.session_count = pkg.session_count;
+    if (pkg.discount_percent !== undefined) updateData.discount_percent = pkg.discount_percent;
+    if (pkg.price_cents !== undefined) updateData.price_cents = pkg.price_cents || null;
+    if (pkg.validity_days !== undefined) updateData.validity_days = pkg.validity_days || null;
+    if (pkg.pitch_message !== undefined) updateData.pitch_message = pkg.pitch_message?.trim() || null;
+    if (pkg.min_visits_to_pitch !== undefined) updateData.min_visits_to_pitch = pkg.min_visits_to_pitch || 0;
+    if (pkg.is_active !== undefined) updateData.is_active = pkg.is_active;
+
+    // Update package
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("packages")
+      .update(updateData)
+      .eq("id", pkg.id)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("[Packages PUT] Error:", error);
+      return NextResponse.json({ error: "Failed to update package" }, { status: 500 });
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "packages_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      console.error("[Packages PUT] Inngest error:", inngestError);
+    }
+
+    return NextResponse.json({ success: true, regenerationQueued });
+  } catch (error) {
+    console.error("[Packages PUT] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// DELETE - Delete a package
+export async function DELETE(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+
+    const { searchParams } = new URL(request.url);
+    const packageId = searchParams.get("id");
+
+    if (!packageId) {
+      return NextResponse.json({ error: "Package ID required" }, { status: 400 });
+    }
+
+    if (!UUID_REGEX.test(packageId)) {
+      return NextResponse.json({ error: "Invalid package ID format" }, { status: 400 });
+    }
+
+    // Delete package
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: deletedRows, error } = await (supabase as any)
+      .from("packages")
+      .delete()
+      .eq("id", packageId)
+      .eq("business_id", businessId)
+      .select();
+
+    if (error) {
+      console.error("[Packages DELETE] Error:", error);
+      return NextResponse.json({ error: "Failed to delete package" }, { status: 500 });
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      return NextResponse.json({ error: "Package not found" }, { status: 404 });
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "packages_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      console.error("[Packages DELETE] Inngest error:", inngestError);
+    }
+
+    return NextResponse.json({ success: true, regenerationQueued });
+  } catch (error) {
+    console.error("[Packages DELETE] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
