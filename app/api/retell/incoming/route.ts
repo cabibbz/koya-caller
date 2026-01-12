@@ -103,7 +103,6 @@ export async function POST(request: NextRequest) {
       .from("faqs")
       .select("question, answer")
       .eq("business_id", businessId)
-      .eq("is_active", true)
       .order("sort_order")
       .limit(20);
 
@@ -116,7 +115,6 @@ export async function POST(request: NextRequest) {
       .from("services")
       .select("name, description, duration_minutes, price_cents")
       .eq("business_id", businessId)
-      .eq("is_active", true)
       .order("sort_order")
       .limit(20);
 
@@ -125,21 +123,32 @@ export async function POST(request: NextRequest) {
       return `- ${s.name}: ${s.description || "No description"} (${s.duration_minutes} min, ${price})`;
     }).join("\n");
 
-    // Fetch today's business hours
+    // Fetch all business hours
     const now = new Date();
     const dayOfWeek = now.getDay();
-    const { data: todayHours } = await supabase
+    const { data: allHours } = await supabase
       .from("business_hours")
-      .select("open_time, close_time, is_closed")
+      .select("day_of_week, open_time, close_time, is_closed")
       .eq("business_id", businessId)
-      .eq("day_of_week", dayOfWeek)
-      .single() as { data: { open_time: string | null; close_time: string | null; is_closed: boolean } | null };
+      .order("day_of_week") as { data: Array<{ day_of_week: number; open_time: string | null; close_time: string | null; is_closed: boolean }> | null };
 
+    // Format today's hours
+    const todayHours = allHours?.find(h => h.day_of_week === dayOfWeek);
     const hoursInfo = todayHours?.is_closed
       ? "Closed today"
       : todayHours?.open_time && todayHours?.close_time
         ? `Open ${todayHours.open_time} - ${todayHours.close_time}`
         : "Hours not set";
+
+    // Format full weekly schedule
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const fullHoursSchedule = (allHours || []).map(h => {
+      const dayName = dayNames[h.day_of_week];
+      if (h.is_closed) {
+        return `${dayName}: Closed`;
+      }
+      return `${dayName}: ${h.open_time || "?"} - ${h.close_time || "?"}`;
+    }).join("\n");
 
     // Fetch additional knowledge
     const { data: knowledge } = await supabase
@@ -208,6 +217,9 @@ export async function POST(request: NextRequest) {
 
           // Today's hours
           todays_hours: hoursInfo,
+
+          // Full weekly business hours
+          business_hours: fullHoursSchedule || "Hours not configured",
 
           // Services (formatted list)
           services_list: serviceList || "No services configured",
