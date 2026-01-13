@@ -164,7 +164,7 @@ async function fetchBusinessData(
   try {
     const { data: business, error: bizError } = await supabase
       .from("businesses")
-      .select("name, business_type, address, website, service_area, differentiator, timezone, minutes_used, minutes_limit")
+      .select("name, business_type, address, website, service_area, differentiator, timezone, minutes_used_this_cycle, minutes_included")
       .eq("id", businessId)
       .single();
 
@@ -306,7 +306,7 @@ async function fetchBusinessData(
 
     const minutesRemaining = Math.max(
       0,
-      (business.minutes_limit || 200) - (business.minutes_used || 0)
+      (business.minutes_included || 200) - (business.minutes_used_this_cycle || 0)
     );
 
     return {
@@ -400,7 +400,7 @@ async function updateRetellAgent(
     }
 
     const agentResponse = await fetch(
-      `https://api.retellai.com/v2/agent/${agentId}`,
+      `https://api.retellai.com/get-agent/${agentId}`,
       {
         headers: {
           Authorization: `Bearer ${RETELL_API_KEY}`,
@@ -413,14 +413,14 @@ async function updateRetellAgent(
     }
 
     const agentData = await agentResponse.json();
-    const llmId = agentData.llm_id;
+    const llmId = agentData.response_engine?.llm_id;
 
     if (!llmId) {
       return;
     }
 
     const updateResponse = await fetch(
-      `https://api.retellai.com/v2/llm/${llmId}`,
+      `https://api.retellai.com/update-retell-llm/${llmId}`,
       {
         method: "PATCH",
         headers: {

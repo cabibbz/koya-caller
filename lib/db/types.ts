@@ -10,7 +10,7 @@ import type { Database } from "@/types/supabase";
 // TYPE EXPORTS
 // =============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Using 'any' for schema parameter to work around Supabase RLS type limitations
 export type TypedSupabaseClient = SupabaseClient<Database, "public", any>;
 
 // Table types - generic accessors for any table
@@ -39,8 +39,7 @@ export async function typedInsert<T extends TableName>(
   table: T,
   data: TableInsert<T>
 ): Promise<{ data: TableRow<T> | null; error: Error | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (client as any).from(table).insert(data).select().single();
+  const result = await (client as unknown as { from: (t: string) => { insert: (d: unknown) => { select: () => { single: () => Promise<{ data: unknown; error: Error | null }> } } } }).from(table).insert(data).select().single();
   return { data: result.data as TableRow<T> | null, error: result.error };
 }
 
@@ -49,8 +48,7 @@ export async function typedInsertMany<T extends TableName>(
   table: T,
   data: TableInsert<T>[]
 ): Promise<{ data: TableRow<T>[]; error: Error | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (client as any).from(table).insert(data).select();
+  const result = await (client as unknown as { from: (t: string) => { insert: (d: unknown) => { select: () => Promise<{ data: unknown[] | null; error: Error | null }> } } }).from(table).insert(data).select();
   return { data: (result.data ?? []) as TableRow<T>[], error: result.error };
 }
 
@@ -60,8 +58,7 @@ export async function typedUpdate<T extends TableName>(
   data: TableUpdate<T>,
   filter: { column: string; value: string }
 ): Promise<{ data: TableRow<T> | null; error: Error | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (client as any)
+  const result = await (client as unknown as { from: (t: string) => { update: (d: unknown) => { eq: (c: string, v: string) => { select: () => { single: () => Promise<{ data: unknown; error: Error | null }> } } } } })
     .from(table)
     .update(data)
     .eq(filter.column, filter.value)
@@ -76,8 +73,7 @@ export async function typedUpdateNoReturn<T extends TableName>(
   data: TableUpdate<T>,
   filter: { column: string; value: string }
 ): Promise<{ error: Error | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (client as any)
+  const result = await (client as unknown as { from: (t: string) => { update: (d: unknown) => { eq: (c: string, v: string) => Promise<{ error: Error | null }> } } })
     .from(table)
     .update(data)
     .eq(filter.column, filter.value);

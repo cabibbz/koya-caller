@@ -83,13 +83,79 @@ export async function POST(request: NextRequest) {
     // Get AI config with Retell agent ID
     const { data: aiConfig } = await supabase
       .from("ai_config")
-      .select("retell_agent_id, retell_agent_id_spanish, language_mode")
+      .select("retell_agent_id, retell_agent_id_spanish, language_mode, ai_name, greeting, greeting_spanish, spanish_enabled")
       .eq("business_id", businessId)
-      .single() as { data: { retell_agent_id: string | null; retell_agent_id_spanish: string | null; language_mode: string } | null };
-    
+      .single() as { data: { retell_agent_id: string | null; retell_agent_id_spanish: string | null; language_mode: string; ai_name: string | null; greeting: string | null; greeting_spanish: string | null; spanish_enabled: boolean } | null };
+
     if (!aiConfig?.retell_agent_id) {
       return twimlResponse(twimlRedirect(`${appUrl}/api/twilio/fallback`));
     }
+
+    // Fetch business knowledge to pass to Retell as dynamic variables
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("name, business_type, timezone, address, service_area, differentiator")
+      .eq("id", businessId)
+      .single() as { data: { name: string; business_type: string | null; timezone: string | null; address: string | null; service_area: string | null; differentiator: string | null } | null };
+
+    // Fetch FAQs
+    const { data: faqs } = await supabase
+      .from("faqs")
+      .select("question, answer")
+      .eq("business_id", businessId)
+      .order("sort_order")
+      .limit(20);
+
+    const faqList = (faqs || []).map((f: { question: string; answer: string }) =>
+      `Q: ${f.question}\nA: ${f.answer}`
+    ).join("\n\n");
+
+    // Fetch services
+    const { data: services } = await supabase
+      .from("services")
+      .select("name, description, duration_minutes, price_cents")
+      .eq("business_id", businessId)
+      .order("sort_order")
+      .limit(20);
+
+    const serviceList = (services || []).map((s: { name: string; description: string | null; duration_minutes: number; price_cents: number | null }) => {
+      const price = s.price_cents ? `$${(s.price_cents / 100).toFixed(0)}` : "Price varies";
+      return `- ${s.name}: ${s.description || "No description"} (${s.duration_minutes} min, ${price})`;
+    }).join("\n");
+
+    // Fetch all business hours
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const { data: allHours } = await supabase
+      .from("business_hours")
+      .select("day_of_week, open_time, close_time, is_closed")
+      .eq("business_id", businessId)
+      .order("day_of_week") as { data: Array<{ day_of_week: number; open_time: string | null; close_time: string | null; is_closed: boolean }> | null };
+
+    // Format today's hours
+    const todayHours = allHours?.find(h => h.day_of_week === dayOfWeek);
+    const hoursInfo = todayHours?.is_closed
+      ? "Closed today"
+      : todayHours?.open_time && todayHours?.close_time
+        ? `Open ${todayHours.open_time} - ${todayHours.close_time}`
+        : "Hours not set";
+
+    // Format full weekly schedule
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const fullHoursSchedule = (allHours || []).map(h => {
+      const dayName = dayNames[h.day_of_week];
+      if (h.is_closed) {
+        return `${dayName}: Closed`;
+      }
+      return `${dayName}: ${h.open_time || "?"} - ${h.close_time || "?"}`;
+    }).join("\n");
+
+    // Fetch additional knowledge
+    const { data: knowledge } = await supabase
+      .from("knowledge")
+      .select("content")
+      .eq("business_id", businessId)
+      .single() as { data: { content: string | null } | null };
     
     // Check if Retell is configured
     if (!retellApiKey) {
@@ -133,7 +199,37 @@ export async function POST(request: NextRequest) {
           is_after_hours: isAfterHours ? "true" : "false",
         },
         retell_llm_dynamic_variables: {
+          // Call context
           is_after_hours: isAfterHours ? "true" : "false",
+          current_date: now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+          current_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+
+          // Business info
+          business_name: business?.name || "the business",
+          business_type: business?.business_type || "business",
+          business_address: business?.address || "Address not available",
+          service_area: business?.service_area || "",
+          differentiator: business?.differentiator || "",
+
+          // AI personality
+          ai_name: aiConfig.ai_name || "Koya",
+          greeting: aiConfig.greeting || `Thanks for calling ${business?.name || "us"}. How can I help you today?`,
+          spanish_enabled: aiConfig.spanish_enabled ? "true" : "false",
+
+          // Today's hours
+          todays_hours: hoursInfo,
+
+          // Full weekly business hours
+          business_hours: fullHoursSchedule || "Hours not configured",
+
+          // Services (formatted list)
+          services_list: serviceList || "No services configured",
+
+          // FAQs (formatted Q&A)
+          faqs: faqList || "No FAQs available",
+
+          // Additional knowledge
+          additional_knowledge: knowledge?.content || "",
         },
       });
       
