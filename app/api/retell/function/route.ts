@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
+    console.error("[Retell Function] Unhandled error:", error);
     return NextResponse.json({
       success: false,
       message: "An error occurred processing this request",
@@ -800,6 +801,7 @@ async function handleBookAppointment(
     };
 
   } catch (error) {
+    console.error("[Book Appointment] Error:", error);
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
