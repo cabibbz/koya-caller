@@ -59,7 +59,8 @@ interface FunctionResult {
  */
 function parseRetellRequest(retellBody: RetellFunctionRequest): FunctionCallRequest {
   return {
-    call_id: retellBody.call?.call_id || "",
+    // Use our internal koya_call_id (UUID), not Retell's call_id (string)
+    call_id: retellBody.call?.metadata?.koya_call_id || "",
     business_id: retellBody.call?.metadata?.business_id || "",
     function_name: retellBody.name || "",
     arguments: retellBody.args || {},
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
+    console.error("[Retell Function] Unhandled error:", error);
     return NextResponse.json({
       success: false,
       message: "An error occurred processing this request",
@@ -547,6 +549,9 @@ async function handleBookAppointment(
     notes?: string;
   };
 
+  // Log what we received from the AI
+  console.log("[Book Appointment] Received args:", { date, time, customer_name, customer_phone, service });
+
   if (!date || !time || !customer_name || !customer_phone || !service) {
     return {
       success: false,
@@ -594,12 +599,25 @@ async function handleBookAppointment(
 
     // Parse in business timezone, then convert to JS Date (UTC internally)
     const dt = DateTime.fromISO(`${date}T${normalizedTime}`, { zone: timezone });
+    console.log("[Book Appointment] Parsed date:", {
+      input: `${date}T${normalizedTime}`,
+      parsed: dt.toISO(),
+      valid: dt.isValid,
+      timezone,
+    });
+
     if (!dt.isValid) {
       throw new Error(`Invalid date/time: ${date} ${time}`);
     }
 
     // Validation: Can't book in the past
     const now = DateTime.now().setZone(timezone);
+    console.log("[Book Appointment] Date comparison:", {
+      requested: dt.toISO(),
+      now: now.toISO(),
+      isPast: dt < now,
+    });
+
     if (dt < now) {
       return {
         success: false,
@@ -696,12 +714,23 @@ async function handleBookAppointment(
     }
 
     // Create appointment
+    console.log("[Book Appointment] Creating appointment:", {
+      business_id: body.business_id,
+      customer_name,
+      customer_phone,
+      service: serviceInfo?.name || service,
+      scheduled_at: scheduledAt.toISOString(),
+    });
+
+    // Only include call_id if it's a valid UUID (not empty or Retell's format)
+    const callId = body.call_id && body.call_id.length === 36 ? body.call_id : null;
+
     const { data: appointment, error: aptError } = await supabase
       .from("appointments")
       // @ts-ignore - Supabase generated types issue
       .insert({
         business_id: body.business_id,
-        call_id: body.call_id || null,
+        call_id: callId,
         customer_name,
         customer_phone,
         customer_email: customer_email || null,
@@ -715,10 +744,18 @@ async function handleBookAppointment(
       .select()
       .single();
 
-    const aptData = appointment as { id: string; service_name: string } | null;
-    if (aptError || !aptData) {
-      throw new Error("Failed to create appointment");
+    if (aptError) {
+      console.error("[Book Appointment] Database error:", aptError);
+      throw new Error(`Failed to create appointment: ${aptError.message}`);
     }
+
+    const aptData = appointment as { id: string; service_name: string } | null;
+    if (!aptData) {
+      console.error("[Book Appointment] No data returned from insert");
+      throw new Error("Failed to create appointment: no data returned");
+    }
+
+    console.log("[Book Appointment] Success! Appointment ID:", aptData.id);
 
     // Sync to external calendar (Google/Outlook)
     try {
@@ -784,6 +821,7 @@ async function handleBookAppointment(
     };
 
   } catch (error) {
+    console.error("[Book Appointment] Error:", error);
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,

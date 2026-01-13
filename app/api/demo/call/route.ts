@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 // Check if Retell is configured
 const RETELL_API_KEY = process.env.RETELL_API_KEY;
@@ -116,7 +117,27 @@ function getClientIP(request: NextRequest): string {
 // Check rate limit using in-memory store (for edge runtime compatibility)
 const rateLimitStore = new Map<string, { count: number; windowStart: number }>();
 
+// Cleanup tracking for memory leak prevention
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+
+function cleanupExpiredEntries(): void {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+
+  lastCleanup = now;
+  const windowMs = RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
+  for (const [key, record] of rateLimitStore.entries()) {
+    if (now - record.windowStart > windowMs + 60000) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
+
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  // Clean up expired entries periodically
+  cleanupExpiredEntries();
+
   const now = Date.now();
   const windowMs = RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
 
@@ -158,7 +179,34 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const clientIP = getClientIP(request);
 
-    // Rate limiting for demo calls (not test calls from onboarding)
+    // Test calls (businessId) require authentication and ownership verification
+    if (businessId) {
+      const supabase = await createServerClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        return NextResponse.json(
+          { success: false, error: "Authentication required for test calls" },
+          { status: 401 }
+        );
+      }
+
+      // Verify user owns the business
+      const { data: business, error: bizError } = await (supabase as any)
+        .from("businesses")
+        .select("id, user_id")
+        .eq("id", businessId)
+        .single() as { data: { id: string; user_id: string } | null; error: any };
+
+      if (bizError || !business || business.user_id !== user.id) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Rate limit demo calls (unauthenticated calls with email)
     if (email && !businessId) {
       const rateCheck = checkRateLimit(clientIP);
 

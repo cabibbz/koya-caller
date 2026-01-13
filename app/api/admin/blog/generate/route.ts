@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { detectSchemaType, generateTableOfContents, extractFAQFromContent } from "@/lib/schema-markup";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,12 @@ export async function POST(request: NextRequest) {
     const isAdmin = user.app_metadata?.is_admin === true;
     if (!isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Rate limit to prevent API abuse (60 requests per minute per user)
+    const rateLimit = await checkRateLimit("dashboard", user.id);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
     }
 
     if (!ANTHROPIC_API_KEY) {

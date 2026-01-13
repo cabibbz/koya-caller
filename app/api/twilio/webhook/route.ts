@@ -113,8 +113,11 @@ export async function POST(request: NextRequest) {
     const clonedRequest = request.clone();
     const params = await parseTwilioParams(request);
 
-    // Verify Twilio signature in production
-    if (process.env.NODE_ENV === "production" && TWILIO_AUTH_TOKEN) {
+    // Verify Twilio signature - required unless explicitly bypassed for local testing
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (TWILIO_AUTH_TOKEN && !allowBypass) {
       const signature = clonedRequest.headers.get("x-twilio-signature");
       const url = `${appUrl}/api/twilio/webhook`;
 

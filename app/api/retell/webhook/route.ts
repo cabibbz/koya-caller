@@ -49,14 +49,13 @@ export async function POST(request: NextRequest) {
     const payload = await request.text();
     const signature = request.headers.get("x-retell-signature");
 
-    // Verify signature - required in production
+    // Verify signature - required unless explicitly bypassed for local testing
     const verified = verifyWebhookSignature(payload, signature);
-    if (!verified) {
-      // In production, reject unverified requests
-      if (process.env.NODE_ENV === "production") {
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
-      // In development, proceed without verification
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (!verified && !allowBypass) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     // Parse the event

@@ -218,8 +218,12 @@ export function withWebhook(
       }
     }
 
-    // If signature verification failed in production, reject
-    if (!verified && process.env.NODE_ENV === "production") {
+    // Require valid signature unless explicitly bypassed for local development
+    // WEBHOOK_SIGNATURE_BYPASS should ONLY be set in local development
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (!verified && !allowBypass) {
       return new Response("Invalid signature", { status: 401 });
     }
 
