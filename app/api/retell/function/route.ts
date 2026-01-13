@@ -59,7 +59,8 @@ interface FunctionResult {
  */
 function parseRetellRequest(retellBody: RetellFunctionRequest): FunctionCallRequest {
   return {
-    call_id: retellBody.call?.call_id || "",
+    // Use our internal koya_call_id (UUID), not Retell's call_id (string)
+    call_id: retellBody.call?.metadata?.koya_call_id || "",
     business_id: retellBody.call?.metadata?.business_id || "",
     function_name: retellBody.name || "",
     arguments: retellBody.args || {},
@@ -721,12 +722,15 @@ async function handleBookAppointment(
       scheduled_at: scheduledAt.toISOString(),
     });
 
+    // Only include call_id if it's a valid UUID (not empty or Retell's format)
+    const callId = body.call_id && body.call_id.length === 36 ? body.call_id : null;
+
     const { data: appointment, error: aptError } = await supabase
       .from("appointments")
       // @ts-ignore - Supabase generated types issue
       .insert({
         business_id: body.business_id,
-        call_id: body.call_id || null,
+        call_id: callId,
         customer_name,
         customer_phone,
         customer_email: customer_email || null,
