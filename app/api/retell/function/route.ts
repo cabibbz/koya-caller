@@ -548,6 +548,9 @@ async function handleBookAppointment(
     notes?: string;
   };
 
+  // Log what we received from the AI
+  console.log("[Book Appointment] Received args:", { date, time, customer_name, customer_phone, service });
+
   if (!date || !time || !customer_name || !customer_phone || !service) {
     return {
       success: false,
@@ -595,12 +598,25 @@ async function handleBookAppointment(
 
     // Parse in business timezone, then convert to JS Date (UTC internally)
     const dt = DateTime.fromISO(`${date}T${normalizedTime}`, { zone: timezone });
+    console.log("[Book Appointment] Parsed date:", {
+      input: `${date}T${normalizedTime}`,
+      parsed: dt.toISO(),
+      valid: dt.isValid,
+      timezone,
+    });
+
     if (!dt.isValid) {
       throw new Error(`Invalid date/time: ${date} ${time}`);
     }
 
     // Validation: Can't book in the past
     const now = DateTime.now().setZone(timezone);
+    console.log("[Book Appointment] Date comparison:", {
+      requested: dt.toISO(),
+      now: now.toISO(),
+      isPast: dt < now,
+    });
+
     if (dt < now) {
       return {
         success: false,
