@@ -696,6 +696,14 @@ async function handleBookAppointment(
     }
 
     // Create appointment
+    console.log("[Book Appointment] Creating appointment:", {
+      business_id: body.business_id,
+      customer_name,
+      customer_phone,
+      service: serviceInfo?.name || service,
+      scheduled_at: scheduledAt.toISOString(),
+    });
+
     const { data: appointment, error: aptError } = await supabase
       .from("appointments")
       // @ts-ignore - Supabase generated types issue
@@ -715,10 +723,18 @@ async function handleBookAppointment(
       .select()
       .single();
 
-    const aptData = appointment as { id: string; service_name: string } | null;
-    if (aptError || !aptData) {
-      throw new Error("Failed to create appointment");
+    if (aptError) {
+      console.error("[Book Appointment] Database error:", aptError);
+      throw new Error(`Failed to create appointment: ${aptError.message}`);
     }
+
+    const aptData = appointment as { id: string; service_name: string } | null;
+    if (!aptData) {
+      console.error("[Book Appointment] No data returned from insert");
+      throw new Error("Failed to create appointment: no data returned");
+    }
+
+    console.log("[Book Appointment] Success! Appointment ID:", aptData.id);
 
     // Sync to external calendar (Google/Outlook)
     try {
