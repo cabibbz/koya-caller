@@ -17,10 +17,31 @@
  */
 export const RETELL_FUNCTIONS = [
   {
+    name: "find_next_available",
+    description:
+      "Find the next available appointment slot. Use this when a caller asks 'When is your next opening?' " +
+      "or 'What's your earliest availability?' without specifying a date. This searches the next 14 days.",
+    parameters: {
+      type: "object",
+      properties: {
+        service: {
+          type: "string",
+          description: "Optional: The specific service being requested. Affects slot duration.",
+        },
+        preferred_time: {
+          type: "string",
+          enum: ["morning", "afternoon", "evening", "any"],
+          description: "Optional: Preferred time of day. morning=before noon, afternoon=12-5pm, evening=after 5pm.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: "check_availability",
     description:
       "Check available appointment times for a specific date and optionally a specific service. " +
-      "Use this when a caller wants to know when they can book an appointment.",
+      "Use this when a caller wants to know when they can book an appointment ON A SPECIFIC DATE.",
     parameters: {
       type: "object",
       properties: {
