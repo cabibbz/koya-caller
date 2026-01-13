@@ -182,12 +182,12 @@ function cleanupExpiredEntries(): void {
   if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
 
   lastCleanup = now;
-  for (const [key, record] of inMemoryStore.entries()) {
+  Array.from(inMemoryStore.entries()).forEach(([key, record]) => {
     // Remove entries that are well past their window (2x to be safe)
     if (now > record.resetAt + 60000) {
       inMemoryStore.delete(key);
     }
-  }
+  });
 }
 
 function inMemoryRateLimit(

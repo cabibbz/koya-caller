@@ -23,13 +23,13 @@ export const SECURITY_HEADERS = {
   // Referrer policy
   "Referrer-Policy": "strict-origin-when-cross-origin",
 
-  // Permissions policy (restrict sensitive APIs)
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+  // Permissions policy (restrict sensitive APIs - allow microphone for demo calls)
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
 
-  // Content Security Policy
+  // Content Security Policy (production - no unsafe-eval)
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+    "script-src 'self' 'unsafe-inline' https://js.stripe.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",

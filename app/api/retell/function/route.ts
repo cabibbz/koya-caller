@@ -17,6 +17,7 @@ import {
 } from "@/lib/claude/error-templates";
 import { createCalendarClient, createAppointmentEvent } from "@/lib/calendar";
 import { DateTime } from "luxon";
+import { maskSensitiveData, maskPhone } from "@/lib/security";
 
 // =============================================================================
 // Types
@@ -117,8 +118,8 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json() as RetellFunctionRequest;
     const body = parseRetellRequest(rawBody);
 
-    // Debug logging
-    console.log("[Retell Function] Received:", rawBody.name, "business_id:", body.business_id);
+    // Debug logging (mask sensitive data)
+    console.log("[Retell Function] Received:", rawBody.name, "business_id:", maskSensitiveData(body.business_id));
 
     // Validate business_id
     if (!body.business_id) {
@@ -549,8 +550,14 @@ async function handleBookAppointment(
     notes?: string;
   };
 
-  // Log what we received from the AI
-  console.log("[Book Appointment] Received args:", { date, time, customer_name, customer_phone, service });
+  // Log what we received from the AI (mask sensitive data)
+  console.log("[Book Appointment] Received args:", {
+    date,
+    time,
+    customer_name: maskSensitiveData(customer_name || ""),
+    customer_phone: maskPhone(customer_phone || ""),
+    service
+  });
 
   if (!date || !time || !customer_name || !customer_phone || !service) {
     return {
@@ -713,11 +720,11 @@ async function handleBookAppointment(
       // Calendar check failed - proceed with booking
     }
 
-    // Create appointment
+    // Create appointment (mask sensitive data in logs)
     console.log("[Book Appointment] Creating appointment:", {
-      business_id: body.business_id,
-      customer_name,
-      customer_phone,
+      business_id: maskSensitiveData(body.business_id),
+      customer_name: maskSensitiveData(customer_name),
+      customer_phone: maskPhone(customer_phone),
       service: serviceInfo?.name || service,
       scheduled_at: scheduledAt.toISOString(),
     });

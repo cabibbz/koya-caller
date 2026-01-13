@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
+      return NextResponse.json({ error: "Image generation service unavailable" }, { status: 503 });
     }
 
     const body = await request.json();
