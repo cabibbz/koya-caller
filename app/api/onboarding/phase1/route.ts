@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (tenantId) {
       // Update existing business
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { error } = await (supabase as any)
         .from("businesses")
         .update({
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error;
     } else {
       // Create new business
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: newBusiness, error: createError } = await (supabase as any)
         .from("businesses")
         .insert({
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Onboarding Phase1 POST", error);
     return NextResponse.json(
       { error: "Failed to save" },
       { status: 500 }

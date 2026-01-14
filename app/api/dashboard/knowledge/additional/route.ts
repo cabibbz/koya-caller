@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
 
 export async function PUT(request: NextRequest) {
   try {
@@ -52,6 +53,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Upsert knowledge (create or update)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { error: upsertError } = await (supabase as any)
       .from("knowledge")
       .upsert(
@@ -78,6 +80,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Knowledge Additional PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

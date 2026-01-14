@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Create call record in database
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: callRecord, error: callError } = await (supabase as any)
       .from("calls")
       .insert({
@@ -236,6 +237,7 @@ export async function POST(request: NextRequest) {
       
       // Update call record with Retell call ID
       if (callRecord?.id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         await (supabase as any)
           .from("calls")
           .update({ retell_call_id: retellCall.call_id })
@@ -266,6 +268,7 @@ export async function POST(request: NextRequest) {
 
       // Update call record to indicate failure
       if (callRecord?.id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         await (supabase as any)
           .from("calls")
           .update({

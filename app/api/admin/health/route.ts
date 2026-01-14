@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all businesses
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error: bizError } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -43,6 +45,7 @@ export async function GET(request: NextRequest) {
       .in("subscription_status", ["active", "paused", "cancelled"]);
 
     if (bizError) {
+      logError("Admin Health GET - businesses", bizError);
       return NextResponse.json(
         { error: "Failed to fetch business data" },
         { status: 500 }
@@ -50,8 +53,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all calls for health metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const businessIds = (businesses || []).map((b: any) => b.id);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calls, error: callsError } = await (supabase as any)
       .from("calls")
       .select("business_id, status, created_at")
@@ -72,6 +77,7 @@ export async function GET(request: NextRequest) {
 
     let failedCallsToday = 0;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (calls || []).forEach((call: any) => {
       if (!callMetrics[call.business_id]) {
         callMetrics[call.business_id] = { total: 0, failed: 0, lastCall: null };
@@ -100,6 +106,7 @@ export async function GET(request: NextRequest) {
     let mediumRiskCount = 0;
     let upsellOpportunities = 0;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const healthMetrics = (businesses || []).map((b: any) => {
       const metrics = callMetrics[b.id] || { total: 0, failed: 0, lastCall: null };
       const lastActivity = metrics.lastCall || new Date(b.updated_at);
@@ -171,6 +178,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    logError("Admin Health GET", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

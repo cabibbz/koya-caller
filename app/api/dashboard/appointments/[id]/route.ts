@@ -156,6 +156,7 @@ export async function PATCH(
     }
 
     // Update appointment
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: appointment, error } = await (supabase as any)
       .from("appointments")
       .update(finalUpdates)

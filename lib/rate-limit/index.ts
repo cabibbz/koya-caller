@@ -161,6 +161,10 @@ interface InMemoryRecord {
 
 const inMemoryStore = new Map<string, InMemoryRecord>();
 
+// Cleanup tracking for memory leak prevention
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 60 * 1000; // Clean up every minute
+
 const LIMITS: Record<RateLimiterType, { max: number; windowMs: number }> = {
   auth: { max: 5, windowMs: 15 * 1000 },
   passwordReset: { max: 3, windowMs: 60 * 60 * 1000 },
@@ -170,10 +174,29 @@ const LIMITS: Record<RateLimiterType, { max: number; windowMs: number }> = {
   demo: { max: 3, windowMs: 60 * 60 * 1000 },
 };
 
+/**
+ * Clean up expired entries from in-memory store to prevent memory leaks
+ */
+function cleanupExpiredEntries(): void {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+
+  lastCleanup = now;
+  Array.from(inMemoryStore.entries()).forEach(([key, record]) => {
+    // Remove entries that are well past their window (2x to be safe)
+    if (now > record.resetAt + 60000) {
+      inMemoryStore.delete(key);
+    }
+  });
+}
+
 function inMemoryRateLimit(
   type: RateLimiterType,
   identifier: string
 ): RateLimitResult {
+  // Clean up expired entries periodically
+  cleanupExpiredEntries();
+
   const { max, windowMs } = LIMITS[type];
   const key = `${type}:${identifier}`;
   const now = Date.now();
@@ -285,13 +308,9 @@ export async function checkRateLimit(
       retryAfter: result.success ? undefined : Math.ceil((result.reset - Date.now()) / 1000),
     };
   } catch {
-    // If Redis fails, allow the request (fail open)
-    return {
-      success: true,
-      limit: LIMITS[type].max,
-      remaining: LIMITS[type].max - 1,
-      reset: Math.floor((Date.now() + LIMITS[type].windowMs) / 1000),
-    };
+    // If Redis fails, fall back to in-memory rate limiting (fail safe)
+    // This prevents bypassing rate limits when Redis is down
+    return inMemoryRateLimit(type, identifier);
   }
 }
 

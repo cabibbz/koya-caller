@@ -165,32 +165,46 @@ export async function updateOnboardingStep(
 /**
  * Update usage minutes for a business
  * Spec Lines 895-900: Usage tracking
+ *
+ * Uses atomic database increment to prevent race conditions where
+ * concurrent calls could lose increments.
  */
 export async function incrementUsageMinutes(
   businessId: string,
   minutes: number
 ): Promise<Business> {
+  // Validate minutes parameter at application level (DB also validates)
+  if (!Number.isInteger(minutes) || minutes <= 0) {
+    throw new Error("Minutes must be a positive integer");
+  }
+  if (minutes > 1440) {
+    throw new Error("Minutes increment exceeds maximum allowed value (1440)");
+  }
+
   const supabase = await createClient();
 
-  // First get current usage
+  // Use atomic increment via RPC to prevent race conditions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("increment_usage_minutes", {
+    p_business_id: businessId,
+    p_minutes: minutes,
+  });
+
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Business not found");
+
+  // Fetch full business record for return type compatibility
+  // (RPC returns partial data, we need full Business object)
   const { data: business, error: fetchError } = await supabase
     .from("businesses")
-    .select("minutes_used_this_cycle")
+    .select("*")
     .eq("id", businessId)
     .single();
 
   if (fetchError) throw fetchError;
-  if (!business) throw new Error("Business not found");
+  if (!business) throw new Error("Business not found after update");
 
-  // Update with new total - cast needed due to Supabase RLS type limitations on partial selects
-  const currentMinutes = (business as { minutes_used_this_cycle: number }).minutes_used_this_cycle ?? 0;
-  const newTotal = currentMinutes + minutes;
-  const updateData: TableUpdate<"businesses"> = { minutes_used_this_cycle: newTotal };
-  const { data, error } = await typedUpdate(supabase, "businesses", updateData, { column: "id", value: businessId });
-
-  if (error) throw error;
-  if (!data) throw new Error("Failed to update usage minutes");
-  return data as Business;
+  return business as Business;
 }
 
 /**

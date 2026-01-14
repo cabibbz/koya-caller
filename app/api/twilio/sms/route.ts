@@ -82,6 +82,7 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   }
   
   // Store the incoming message
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
   await (supabase as any)
     .from("sms_messages")
     .insert({
@@ -100,6 +101,7 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   
   if (normalizedBody === "CANCEL" || normalizedBody === "CANCELAR") {
     // Look for recent appointments from this phone number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: appointments } = await (supabase as any)
       .from("appointments")
       .select("id, service_name, scheduled_at")
@@ -114,6 +116,7 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
       const appt = appointments[0];
       
       // Cancel the appointment
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       await (supabase as any)
         .from("appointments")
         .update({ status: "cancelled" })
@@ -143,6 +146,7 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
   // Check for HELP keyword (required for A2P compliance)
   if (normalizedBody === "HELP" || normalizedBody === "AYUDA") {
     // Get business name
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: business } = await (supabase as any)
       .from("businesses")
       .select("name")
@@ -182,6 +186,7 @@ async function handleStatusCallback(params: Record<string, string>): Promise<Res
     dbStatus = "failed";
   }
   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
   const { error } = await (supabase as any)
     .from("sms_messages")
     .update({ status: dbStatus })

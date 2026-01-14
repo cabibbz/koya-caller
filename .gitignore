@@ -38,3 +38,8 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 .next
+
+# Temp files
+tmpclaude-*-cwd
+koya-caller@*
+next

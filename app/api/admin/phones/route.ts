@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +19,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Get businesses with phone numbers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error } = await (supabase as any)
       .from("businesses")
       .select("id, name, phone_number, created_at")
       .not("phone_number", "is", null);
 
     if (error) {
+      logError("Admin Phones GET", error);
       return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 
     // Get call counts per phone
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: callCounts } = await (supabase as any)
       .from("calls")
       .select("business_id, created_at");
@@ -36,6 +40,7 @@ export async function GET(request: NextRequest) {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const callStats: Record<string, { total: number; today: number; lastCall: string | null }> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (callCounts || []).forEach((call: any) => {
       if (!callStats[call.business_id]) {
         callStats[call.business_id] = { total: 0, today: 0, lastCall: null };
@@ -50,6 +55,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const phones = (businesses || []).map((b: any) => ({
       id: b.id,
       phone_number: b.phone_number,
@@ -64,6 +70,7 @@ export async function GET(request: NextRequest) {
     }));
 
     const assignedCount = phones.length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Stats accumulator
     const totalCallsToday = Object.values(callStats).reduce((sum: number, s: any) => sum + s.today, 0);
 
     return NextResponse.json({
@@ -76,6 +83,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    logError("Admin Phones GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

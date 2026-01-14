@@ -21,6 +21,7 @@ import {
   redirect,
   simpleSay,
 } from "@/lib/twilio/twiml";
+import { logError } from "@/lib/logging";
 import twilio from "twilio";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://koyacaller.com";
@@ -112,8 +113,11 @@ export async function POST(request: NextRequest) {
     const clonedRequest = request.clone();
     const params = await parseTwilioParams(request);
 
-    // Verify Twilio signature in production
-    if (process.env.NODE_ENV === "production" && TWILIO_AUTH_TOKEN) {
+    // Verify Twilio signature - required unless explicitly bypassed for local testing
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (TWILIO_AUTH_TOKEN && !allowBypass) {
       const signature = clonedRequest.headers.get("x-twilio-signature");
       const url = `${appUrl}/api/twilio/webhook`;
 
@@ -139,6 +143,7 @@ export async function POST(request: NextRequest) {
     // Look up business from phone number
     const supabase = createAdminClient();
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: phoneRecord } = await (supabase as any)
       .from("phone_numbers")
       .select("business_id")
@@ -153,6 +158,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Get business details
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: business } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -171,6 +177,7 @@ export async function POST(request: NextRequest) {
     // Get plan to check minutes limit
     let includedMinutes = 200; // Default to starter
     if (business.plan_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: plan } = await (supabase as any)
         .from("plans")
         .select("included_minutes")
@@ -190,6 +197,7 @@ export async function POST(request: NextRequest) {
     if (minutesUsed >= maxMinutes && business.subscription_status === "active") {
       
       // Get call settings for backup number
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: callSettings } = await (supabase as any)
         .from("call_settings")
         .select("transfer_number, backup_transfer_number")
@@ -205,6 +213,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Check business hours
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: businessHours } = await (supabase as any)
       .from("business_hours")
       .select("day_of_week, is_closed, open_time, close_time")
@@ -214,6 +223,7 @@ export async function POST(request: NextRequest) {
       isWithinBusinessHours(businessHours, business.timezone);
     
     // Get AI config to check if after-hours handling is enabled
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: aiConfig } = await (supabase as any)
       .from("ai_config")
       .select("retell_agent_id, after_hours_greeting")
@@ -221,6 +231,7 @@ export async function POST(request: NextRequest) {
       .single() as { data: { retell_agent_id: string | null; after_hours_greeting: string | null } | null };
 
     // Get call settings for after-hours behavior
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: callSettings } = await (supabase as any)
       .from("call_settings")
       .select("after_hours_enabled, after_hours_can_book, after_hours_action, transfer_number, backup_transfer_number")
@@ -281,6 +292,7 @@ export async function POST(request: NextRequest) {
     }));
     
   } catch (error) {
+    logError("Twilio Webhook", error);
     return twimlResponse(simpleSay(
       "We apologize, but we are experiencing technical difficulties. Please try your call again later."
     ));

@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import twilio from "twilio";
 import {
   generateFallbackGreeting,
   generateFallbackMenuResponse,
@@ -23,6 +24,17 @@ import {
 } from "@/lib/twilio/twiml";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://koyacaller.com";
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+
+// Verify Twilio webhook signature
+function verifyTwilioSignature(
+  url: string,
+  params: Record<string, string>,
+  signature: string | null
+): boolean {
+  if (!TWILIO_AUTH_TOKEN || !signature) return false;
+  return twilio.validateRequest(TWILIO_AUTH_TOKEN, signature, url, params);
+}
 
 // Helper to parse Twilio form data
 async function parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
@@ -91,7 +103,29 @@ async function getBusinessFromNumber(toNumber: string) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const params = await parseTwilioParams(request);
+    // Clone request to read body twice (once for verification, once for parsing)
+    const clonedRequest = request.clone();
+    const rawBody = await clonedRequest.text();
+    const formData = new URLSearchParams(rawBody);
+    const params: Record<string, string> = {};
+    formData.forEach((value, key) => {
+      params[key] = value;
+    });
+
+    // Verify Twilio signature - required unless explicitly bypassed for local testing
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (TWILIO_AUTH_TOKEN && !allowBypass) {
+      const signature = request.headers.get("x-twilio-signature");
+      const webhookUrl = `${appUrl}/api/twilio/fallback`;
+
+      if (!verifyTwilioSignature(webhookUrl, params, signature)) {
+        console.error("[Twilio Fallback] Invalid signature");
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
     const toNumber = params.To || "";
     const callSid = params.CallSid || "";
     const reason = params.ErrorCode ? `error:${params.ErrorCode}` : "fallback";

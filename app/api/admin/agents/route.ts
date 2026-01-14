@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all businesses with their agent configurations
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -39,15 +41,17 @@ export async function GET(request: NextRequest) {
       .not("retell_agent_id", "is", null);
 
     if (error) {
-      // Error handled silently
+      logError("Admin Agents GET - businesses", error);
     }
 
     // Get call counts per business
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: callCounts } = await (supabase as any)
       .from("calls")
       .select("business_id, created_at");
 
     const callStats: Record<string, { total: number; lastCall: string | null }> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
     (callCounts || []).forEach((call: any) => {
       if (!callStats[call.business_id]) {
         callStats[call.business_id] = { total: 0, lastCall: null };
@@ -59,6 +63,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const agents = (businesses || []).map((b: any) => {
       const prompt = b.ai_prompts?.[0];
       return {
@@ -78,8 +83,11 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Filtering mapped response
     const activeCount = agents.filter((a: any) => a.status === "active").length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Filtering mapped response
     const inactiveCount = agents.filter((a: any) => a.status === "inactive").length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Filtering mapped response
     const errorCount = agents.filter((a: any) => a.status === "error").length;
 
     return NextResponse.json({
@@ -92,6 +100,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    logError("Admin Agents GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

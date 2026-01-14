@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/logging";
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ appointments: appointments || [] });
   } catch (error) {
+    logError("Dashboard Appointments GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
     const scheduledStart = new Date(body.scheduled_at);
     const scheduledEnd = new Date(scheduledStart.getTime() + (body.duration_minutes * 60 * 1000));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: existingAppointments, error: checkError } = await (supabase as any)
       .from("appointments")
       .select("id, scheduled_at, duration_minutes, customer_name")
@@ -173,6 +176,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: appointment, error } = await (supabase as any)
       .from("appointments")
       .insert({
@@ -196,6 +200,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ appointment });
   } catch (error) {
+    logError("Dashboard Appointments POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

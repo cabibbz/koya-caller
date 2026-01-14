@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import OpenAI from "openai";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Rate limit to prevent API abuse (60 requests per minute per user)
+    const rateLimit = await checkRateLimit("dashboard", user.id);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
+    }
+
     if (!OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
+      return NextResponse.json({ error: "Image generation service unavailable" }, { status: 503 });
     }
 
     const body = await request.json();

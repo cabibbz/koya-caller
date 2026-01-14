@@ -41,6 +41,7 @@ export const GET = withRateLimit(
       }
 
       // Get business with Stripe customer ID
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: business, error: businessError } = await (supabase as any)
         .from("businesses")
         .select("id, stripe_customer_id")

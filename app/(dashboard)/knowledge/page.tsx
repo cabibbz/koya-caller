@@ -84,6 +84,9 @@ export default async function KnowledgePage() {
     .eq("business_id", business.id)
     .single();
 
+  // Type assertions needed for Supabase RLS type inference limitations
+  // The client component expects specific prop shapes that don't match inferred DB types
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   return (
     <KnowledgeClient
       businessId={business.id}
@@ -102,4 +105,5 @@ export default async function KnowledgePage() {
       lastPromptGenerated={((aiConfig as any)?.system_prompt_generated_at as string) || null}
     />
   );
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }

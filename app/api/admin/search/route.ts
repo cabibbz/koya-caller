@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -52,16 +53,19 @@ export async function GET(request: NextRequest) {
     // Sanitize the query for safe use in ILIKE patterns
     const query = sanitizeSearchQuery(rawQuery);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dynamic search result structure
     const results: any[] = [];
 
     // Search businesses
     if (!type || type === "business") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: businesses } = await (supabase as any)
         .from("businesses")
         .select("id, name, subscription_status, users(email)")
         .ilike("name", `%${query}%`)
         .limit(10);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
       (businesses || []).forEach((b: any) => {
         results.push({
           id: b.id,
@@ -73,12 +77,14 @@ export async function GET(request: NextRequest) {
       });
 
       // Also search by email
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: byEmail } = await (supabase as any)
         .from("users")
         .select("id, email, businesses(id, name, subscription_status)")
         .ilike("email", `%${query}%`)
         .limit(10);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
       (byEmail || []).forEach((u: any) => {
         if (u.businesses) {
           const existing = results.find((r) => r.id === u.businesses.id);
@@ -98,6 +104,7 @@ export async function GET(request: NextRequest) {
     // Search calls
     if (!type || type === "call") {
       // Build query for calls - only use id.eq if it's a valid UUID
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       let callsQuery = (supabase as any)
         .from("calls")
         .select("id, caller_phone, status, created_at, businesses(name)")
@@ -114,6 +121,7 @@ export async function GET(request: NextRequest) {
 
       const { data: calls } = await callsQuery;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
       (calls || []).forEach((c: any) => {
         results.push({
           id: c.id,
@@ -130,6 +138,7 @@ export async function GET(request: NextRequest) {
 
     // Search appointments
     if (!type || type === "appointment") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { data: appointments } = await (supabase as any)
         .from("appointments")
         .select("id, customer_name, customer_phone, customer_email, scheduled_at, businesses(name)")
@@ -137,6 +146,7 @@ export async function GET(request: NextRequest) {
         .order("scheduled_at", { ascending: false })
         .limit(10);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response iteration
       (appointments || []).forEach((a: any) => {
         results.push({
           id: a.id,
@@ -153,6 +163,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ results: results.slice(0, 30) });
   } catch (error) {
+    logError("Admin Search GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

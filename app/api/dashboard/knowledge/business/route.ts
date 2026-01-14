@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
 
 export async function PUT(request: NextRequest) {
   try {
@@ -49,6 +50,7 @@ export async function PUT(request: NextRequest) {
 
     // Update business info
     if (businessUpdate) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
       const { error: updateError } = await (supabase as any)
         .from("businesses")
         .update({
@@ -79,6 +81,7 @@ export async function PUT(request: NextRequest) {
 
       // Insert new hours
       if (businessHours.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type from client
         const hoursToInsert = businessHours.map((h: any) => ({
           business_id: businessId,
           day_of_week: h.day_of_week,
@@ -87,6 +90,7 @@ export async function PUT(request: NextRequest) {
           close_time: h.close_time || null,
         }));
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { error: insertError } = await (supabase as any)
           .from("business_hours")
           .insert(hoursToInsert);
@@ -108,6 +112,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Knowledge Business PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

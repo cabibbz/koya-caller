@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe/client";
+import { logError } from "@/lib/logging";
 import type Stripe from "stripe";
 
 /**
@@ -44,6 +45,7 @@ interface PlanRecord {
  * Get plan details from Stripe Price ID
  */
 async function getPlanFromPriceId(supabase: ReturnType<typeof createAdminClient>, priceId: string): Promise<PlanRecord | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: plan } = await (supabase as any)
     .from("plans")
     .select("*")
@@ -81,6 +83,7 @@ async function handleCheckoutCompleted(
   }
   
   // Update business with Stripe IDs and subscription status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -118,6 +121,7 @@ async function handleSubscriptionCreated(
   // Try to find business by customer ID if not in metadata
   let targetBusinessId: string | null | undefined = businessId;
   if (!targetBusinessId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: business } = await (supabase as any)
       .from("businesses")
       .select("id")
@@ -144,6 +148,7 @@ async function handleSubscriptionCreated(
     .split("T")[0];
   
   // Update business
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -174,6 +179,7 @@ async function handleSubscriptionUpdated(
   const customerId = subscription.customer as string;
   
   // Find business by subscription ID or customer ID
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
     .select("id")
@@ -208,6 +214,7 @@ async function handleSubscriptionUpdated(
   }
   
   // Update business
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -239,19 +246,21 @@ async function handleSubscriptionDeleted(
 ) {
   
   // Find business by subscription ID
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
     .select("id")
     .eq("stripe_subscription_id", subscription.id)
     .single();
-  
+
   const biz = business as { id: string } | null;
-  
+
   if (!biz) {
     return;
   }
 
   // Update business status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -280,22 +289,24 @@ async function handleInvoicePaymentSucceeded(
   }
   
   // Find business
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
     .select("id")
     .eq("stripe_subscription_id", subscriptionId)
     .single();
-  
+
   const biz = business as { id: string } | null;
-  
+
   if (!biz) {
     return;
   }
 
   // Get subscription for new billing cycle dates
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  
+
   // Reset minutes for new billing cycle
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -330,19 +341,21 @@ async function handleInvoicePaymentFailed(
   if (!subscriptionId) return;
   
   // Find business
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
     .select("id")
     .eq("stripe_subscription_id", subscriptionId)
     .single();
-  
+
   const biz = business as { id: string } | null;
-  
+
   if (!biz) {
     return;
   }
 
   // Update status to paused
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("businesses")
     .update({
@@ -385,7 +398,7 @@ export async function POST(request: NextRequest) {
       process.env.STRIPE_WEBHOOK_SECRET!
     );
   } catch (err) {
-    console.error("[Stripe Webhook] Signature verification failed:", err);
+    logError("Stripe Webhook - signature verification", err);
     return NextResponse.json(
       { error: "Invalid signature" },
       { status: 401 }
@@ -444,7 +457,7 @@ export async function POST(request: NextRequest) {
         // Unhandled event type - ignored
     }
   } catch (error) {
-    console.error("[Stripe Webhook] Handler error:", error);
+    logError("Stripe Webhook - handler", error);
     // Return 500 so Stripe retries
     return NextResponse.json(
       { error: "Webhook handler failed" },

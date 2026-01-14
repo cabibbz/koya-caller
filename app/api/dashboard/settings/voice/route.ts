@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,7 @@ async function handler(request: NextRequest) {
     if (afterHoursGreetingSpanish !== undefined) updateData.after_hours_greeting_spanish = afterHoursGreetingSpanish;
 
     // Upsert AI config
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: aiConfig, error: updateError } = await (supabase as any)
       .from("ai_config")
       .upsert(updateData, { onConflict: "business_id" })
@@ -93,6 +95,7 @@ async function handler(request: NextRequest) {
       data: aiConfig,
     });
   } catch (error) {
+    logError("Settings Voice PUT", error);
     return NextResponse.json(
       { error: "Failed to update voice settings" },
       { status: 500 }

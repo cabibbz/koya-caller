@@ -18,6 +18,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { z } from "zod";
+
+// Input validation schema
+const demoCallSchema = z.object({
+  email: z.string().email().max(255).optional(),
+  businessId: z.string().uuid().optional(),
+  language: z.enum(["en", "es"]).optional().default("en"),
+  leadId: z.string().uuid().optional(),
+}).refine(data => data.email || data.businessId, {
+  message: "Either email or businessId is required"
+});
 
 // Check if Retell is configured
 const RETELL_API_KEY = process.env.RETELL_API_KEY;
@@ -116,7 +128,27 @@ function getClientIP(request: NextRequest): string {
 // Check rate limit using in-memory store (for edge runtime compatibility)
 const rateLimitStore = new Map<string, { count: number; windowStart: number }>();
 
+// Cleanup tracking for memory leak prevention
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+
+function cleanupExpiredEntries(): void {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+
+  lastCleanup = now;
+  const windowMs = RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
+  Array.from(rateLimitStore.entries()).forEach(([key, record]) => {
+    if (now - record.windowStart > windowMs + 60000) {
+      rateLimitStore.delete(key);
+    }
+  });
+}
+
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  // Clean up expired entries periodically
+  cleanupExpiredEntries();
+
   const now = Date.now();
   const windowMs = RATE_LIMIT_WINDOW_MINUTES * 60 * 1000;
 
@@ -145,20 +177,49 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
  */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const body = (await request.json()) as DemoCallRequest;
-    const { email, businessId, language = "en" } = body;
+    const rawBody = await request.json();
 
-    // Need either email (demo) or businessId (test call)
-    if (!email && !businessId) {
+    // Validate input
+    const parseResult = demoCallSchema.safeParse(rawBody);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { success: false, error: "Email or businessId is required" },
+        { success: false, error: parseResult.error.errors[0]?.message || "Invalid request" },
         { status: 400 }
       );
     }
 
+    const { email, businessId, language } = parseResult.data;
+
     const clientIP = getClientIP(request);
 
-    // Rate limiting for demo calls (not test calls from onboarding)
+    // Test calls (businessId) require authentication and ownership verification
+    if (businessId) {
+      const supabase = await createServerClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        return NextResponse.json(
+          { success: false, error: "Authentication required for test calls" },
+          { status: 401 }
+        );
+      }
+
+      // Verify user owns the business
+      const { data: business, error: bizError } = await (supabase as any)
+        .from("businesses")
+        .select("id, user_id")
+        .eq("id", businessId)
+        .single() as { data: { id: string; user_id: string } | null; error: any };
+
+      if (bizError || !business || business.user_id !== user.id) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Rate limit demo calls (unauthenticated calls with email)
     if (email && !businessId) {
       const rateCheck = checkRateLimit(clientIP);
 
@@ -201,7 +262,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         success: false,
         mock: true,
         leadId,
-        error: "Demo calls require RETELL_API_KEY. Add it to .env.local to enable browser calls.",
+        error: "Demo calls are temporarily unavailable. Please try again later.",
       });
     }
 

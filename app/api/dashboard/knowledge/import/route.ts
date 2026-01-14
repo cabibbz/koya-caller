@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
+import { logError } from "@/lib/logging";
 
 interface ImportResponse {
   success: boolean;
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
         const priceType = validatePriceType(row[4]?.trim());
         const isBookable = row[5]?.toLowerCase() !== "no";
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { error: insertError } = await (supabase as any).from("services").insert({
           business_id: businessId,
           name,
@@ -185,6 +187,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
         const question = row[0].trim();
         const answer = row[1].trim();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { error: insertError } = await (supabase as any).from("faqs").insert({
           business_id: businessId,
           question,
@@ -217,7 +220,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ImportRes
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    console.error("[Knowledge Import] Error:", error);
+    logError("Knowledge Import", error);
     return NextResponse.json(
       { success: false, error: "Import failed" },
       { status: 500 }

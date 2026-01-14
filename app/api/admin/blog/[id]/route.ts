@@ -44,6 +44,22 @@ export async function GET(
   }
 }
 
+// Whitelist of allowed fields for blog post updates
+const ALLOWED_BLOG_UPDATE_FIELDS = [
+  "title",
+  "slug",
+  "content",
+  "excerpt",
+  "meta_description",
+  "category",
+  "target_keyword",
+  "featured_image",
+  "status",
+  "tags",
+  "author",
+  "published_at",
+] as const;
+
 // PATCH - Update post
 export async function PATCH(
   request: NextRequest,
@@ -63,14 +79,23 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    // Only allow whitelisted fields to prevent mass assignment
+    const sanitizedUpdate: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    for (const field of ALLOWED_BLOG_UPDATE_FIELDS) {
+      if (field in body && body[field] !== undefined) {
+        sanitizedUpdate[field] = body[field];
+      }
+    }
+
     const adminClient = createAdminClient() as any;
 
     const { data: post, error } = await adminClient
       .from("blog_posts")
-      .update({
-        ...body,
-        updated_at: new Date().toISOString(),
-      })
+      .update(sanitizedUpdate)
       .eq("id", params.id)
       .select()
       .single();

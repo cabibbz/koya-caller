@@ -12,26 +12,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_BILLING_PERIODS = ["monthly", "quarterly", "annual"];
-
-// Field length limits
-const MAX_NAME_LENGTH = 100;
-const MAX_DESCRIPTION_LENGTH = 500;
-const MAX_BENEFITS_LENGTH = 1000;
-const MAX_PITCH_LENGTH = 300;
-const MAX_MEMBERSHIPS_PER_BUSINESS = 5;
-const MAX_PRICE_CENTS = 10000000; // $100,000
-const MAX_PITCH_AMOUNT_CENTS = 10000000; // $100,000
-const MAX_PITCH_VISIT_COUNT = 100;
-
-function validateStringLength(value: string | undefined, maxLength: number, fieldName: string): string | null {
-  if (value && value.trim().length > maxLength) {
-    return `${fieldName} must be ${maxLength} characters or less`;
-  }
-  return null;
-}
+import {
+  isValidUUID,
+  validateStringLength,
+  validateBoolean,
+  validatePriceCents,
+  BILLING_PERIODS,
+  LIMITS,
+} from "@/lib/validation";
+import { logError } from "@/lib/logging";
 
 // GET - List all memberships for the business
 export async function GET(request: NextRequest) {
@@ -88,13 +77,13 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Memberships GET] Error:", error);
+      logError("Memberships GET", error);
       return NextResponse.json({ error: "Failed to fetch memberships" }, { status: 500 });
     }
 
     return NextResponse.json({ memberships: memberships || [] });
   } catch (error) {
-    console.error("[Memberships GET] Error:", error);
+    logError("Memberships GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -155,27 +144,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate field lengths
-    const nameLengthError = validateStringLength(name, MAX_NAME_LENGTH, "Membership name");
+    const nameLengthError = validateStringLength(name, LIMITS.MAX_NAME_LENGTH, "Membership name");
     if (nameLengthError) {
       return NextResponse.json({ error: nameLengthError }, { status: 400 });
     }
 
-    const descLengthError = validateStringLength(description, MAX_DESCRIPTION_LENGTH, "Description");
+    const descLengthError = validateStringLength(description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
     if (descLengthError) {
       return NextResponse.json({ error: descLengthError }, { status: 400 });
     }
 
-    const benefitsLengthError = validateStringLength(benefits, MAX_BENEFITS_LENGTH, "Benefits");
+    const benefitsLengthError = validateStringLength(benefits, LIMITS.MAX_BENEFITS_LENGTH, "Benefits");
     if (benefitsLengthError) {
       return NextResponse.json({ error: benefitsLengthError }, { status: 400 });
     }
 
-    const pitchLengthError = validateStringLength(pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+    const pitchLengthError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
     if (pitchLengthError) {
       return NextResponse.json({ error: pitchLengthError }, { status: 400 });
     }
 
-    if (!price_cents || !Number.isInteger(price_cents) || price_cents < 1 || price_cents > MAX_PRICE_CENTS) {
+    if (!price_cents || !Number.isInteger(price_cents) || price_cents < 1 || price_cents > LIMITS.MAX_PRICE_CENTS) {
       return NextResponse.json(
         { error: "Price must be a whole number between $0.01 and $100,000" },
         { status: 400 }
@@ -189,7 +178,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!VALID_BILLING_PERIODS.includes(billing_period)) {
+    if (!BILLING_PERIODS.includes(billing_period)) {
       return NextResponse.json(
         { error: "Invalid billing period. Must be monthly, quarterly, or annual" },
         { status: 400 }
@@ -198,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     // Validate pitch trigger fields if provided
     if (pitch_after_booking_amount_cents !== undefined && pitch_after_booking_amount_cents !== null) {
-      if (!Number.isInteger(pitch_after_booking_amount_cents) || pitch_after_booking_amount_cents < 0 || pitch_after_booking_amount_cents > MAX_PITCH_AMOUNT_CENTS) {
+      if (!Number.isInteger(pitch_after_booking_amount_cents) || pitch_after_booking_amount_cents < 0 || pitch_after_booking_amount_cents > LIMITS.MAX_PRICE_CENTS) {
         return NextResponse.json(
           { error: "Pitch booking amount must be between $0 and $100,000" },
           { status: 400 }
@@ -207,9 +196,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (pitch_after_visit_count !== undefined && pitch_after_visit_count !== null) {
-      if (!Number.isInteger(pitch_after_visit_count) || pitch_after_visit_count < 0 || pitch_after_visit_count > MAX_PITCH_VISIT_COUNT) {
+      if (!Number.isInteger(pitch_after_visit_count) || pitch_after_visit_count < 0 || pitch_after_visit_count > LIMITS.MAX_PITCH_VISIT_COUNT) {
         return NextResponse.json(
-          { error: `Pitch visit count must be between 0 and ${MAX_PITCH_VISIT_COUNT}` },
+          { error: `Pitch visit count must be between 0 and ${LIMITS.MAX_PITCH_VISIT_COUNT}` },
           { status: 400 }
         );
       }
@@ -221,9 +210,9 @@ export async function POST(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
 
-    if ((membershipCount || 0) >= MAX_MEMBERSHIPS_PER_BUSINESS) {
+    if ((membershipCount || 0) >= LIMITS.MAX_MEMBERSHIPS_PER_BUSINESS) {
       return NextResponse.json(
-        { error: `Maximum of ${MAX_MEMBERSHIPS_PER_BUSINESS} memberships allowed. Delete some before creating new ones.` },
+        { error: `Maximum of ${LIMITS.MAX_MEMBERSHIPS_PER_BUSINESS} memberships allowed. Delete some before creating new ones.` },
         { status: 400 }
       );
     }
@@ -247,7 +236,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Memberships POST] Error:", error);
+      logError("Memberships POST", error);
       return NextResponse.json({ error: "Failed to create membership" }, { status: 500 });
     }
 
@@ -263,12 +252,12 @@ export async function POST(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Memberships POST] Inngest error:", inngestError);
+      logError("Memberships POST Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, membership, regenerationQueued });
   } catch (error) {
-    console.error("[Memberships POST] Error:", error);
+    logError("Memberships POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -313,7 +302,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Membership ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(membership.id)) {
+    if (!isValidUUID(membership.id)) {
       return NextResponse.json({ error: "Invalid membership ID format" }, { status: 400 });
     }
 
@@ -339,35 +328,35 @@ export async function PUT(request: NextRequest) {
 
     // Validate field lengths
     if (membership.name) {
-      const nameLengthError = validateStringLength(membership.name, MAX_NAME_LENGTH, "Membership name");
+      const nameLengthError = validateStringLength(membership.name, LIMITS.MAX_NAME_LENGTH, "Membership name");
       if (nameLengthError) {
         return NextResponse.json({ error: nameLengthError }, { status: 400 });
       }
     }
 
     if (membership.description) {
-      const descLengthError = validateStringLength(membership.description, MAX_DESCRIPTION_LENGTH, "Description");
+      const descLengthError = validateStringLength(membership.description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
       if (descLengthError) {
         return NextResponse.json({ error: descLengthError }, { status: 400 });
       }
     }
 
     if (membership.benefits) {
-      const benefitsLengthError = validateStringLength(membership.benefits, MAX_BENEFITS_LENGTH, "Benefits");
+      const benefitsLengthError = validateStringLength(membership.benefits, LIMITS.MAX_BENEFITS_LENGTH, "Benefits");
       if (benefitsLengthError) {
         return NextResponse.json({ error: benefitsLengthError }, { status: 400 });
       }
     }
 
     if (membership.pitch_message) {
-      const pitchLengthError = validateStringLength(membership.pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+      const pitchLengthError = validateStringLength(membership.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
       if (pitchLengthError) {
         return NextResponse.json({ error: pitchLengthError }, { status: 400 });
       }
     }
 
     if (membership.price_cents !== undefined) {
-      if (!Number.isInteger(membership.price_cents) || membership.price_cents < 1 || membership.price_cents > MAX_PRICE_CENTS) {
+      if (!Number.isInteger(membership.price_cents) || membership.price_cents < 1 || membership.price_cents > LIMITS.MAX_PRICE_CENTS) {
         return NextResponse.json(
           { error: "Price must be a whole number between $0.01 and $100,000" },
           { status: 400 }
@@ -382,7 +371,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    if (membership.billing_period && !VALID_BILLING_PERIODS.includes(membership.billing_period)) {
+    if (membership.billing_period && !BILLING_PERIODS.includes(membership.billing_period)) {
       return NextResponse.json(
         { error: "Invalid billing period. Must be monthly, quarterly, or annual" },
         { status: 400 }
@@ -391,7 +380,7 @@ export async function PUT(request: NextRequest) {
 
     // Validate pitch trigger fields if provided
     if (membership.pitch_after_booking_amount_cents !== undefined && membership.pitch_after_booking_amount_cents !== null) {
-      if (!Number.isInteger(membership.pitch_after_booking_amount_cents) || membership.pitch_after_booking_amount_cents < 0 || membership.pitch_after_booking_amount_cents > MAX_PITCH_AMOUNT_CENTS) {
+      if (!Number.isInteger(membership.pitch_after_booking_amount_cents) || membership.pitch_after_booking_amount_cents < 0 || membership.pitch_after_booking_amount_cents > LIMITS.MAX_PRICE_CENTS) {
         return NextResponse.json(
           { error: "Pitch booking amount must be between $0 and $100,000" },
           { status: 400 }
@@ -400,12 +389,20 @@ export async function PUT(request: NextRequest) {
     }
 
     if (membership.pitch_after_visit_count !== undefined && membership.pitch_after_visit_count !== null) {
-      if (!Number.isInteger(membership.pitch_after_visit_count) || membership.pitch_after_visit_count < 0 || membership.pitch_after_visit_count > MAX_PITCH_VISIT_COUNT) {
+      if (!Number.isInteger(membership.pitch_after_visit_count) || membership.pitch_after_visit_count < 0 || membership.pitch_after_visit_count > LIMITS.MAX_PITCH_VISIT_COUNT) {
         return NextResponse.json(
-          { error: `Pitch visit count must be between 0 and ${MAX_PITCH_VISIT_COUNT}` },
+          { error: `Pitch visit count must be between 0 and ${LIMITS.MAX_PITCH_VISIT_COUNT}` },
           { status: 400 }
         );
       }
+    }
+
+    // Validate is_active is boolean
+    if (membership.is_active !== undefined && typeof membership.is_active !== "boolean") {
+      return NextResponse.json(
+        { error: "is_active must be a boolean value" },
+        { status: 400 }
+      );
     }
 
     // Build update object with only provided fields
@@ -428,7 +425,7 @@ export async function PUT(request: NextRequest) {
       .eq("business_id", businessId);
 
     if (error) {
-      console.error("[Memberships PUT] Error:", error);
+      logError("Memberships PUT", error);
       return NextResponse.json({ error: "Failed to update membership" }, { status: 500 });
     }
 
@@ -444,12 +441,12 @@ export async function PUT(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Memberships PUT] Inngest error:", inngestError);
+      logError("Memberships PUT Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Memberships PUT] Error:", error);
+    logError("Memberships PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -495,7 +492,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Membership ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(membershipId)) {
+    if (!isValidUUID(membershipId)) {
       return NextResponse.json({ error: "Invalid membership ID format" }, { status: 400 });
     }
 
@@ -508,7 +505,7 @@ export async function DELETE(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error("[Memberships DELETE] Error:", error);
+      logError("Memberships DELETE", error);
       return NextResponse.json({ error: "Failed to delete membership" }, { status: 500 });
     }
 
@@ -528,12 +525,12 @@ export async function DELETE(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Memberships DELETE] Inngest error:", inngestError);
+      logError("Memberships DELETE Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Memberships DELETE] Error:", error);
+    logError("Memberships DELETE", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

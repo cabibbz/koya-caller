@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         const businessId = phoneRecord.business_id;
         
         // Create a call record with the voicemail
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
         const { data: callRecord, error: callError } = await (supabase as any)
           .from("calls")
           .insert({
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
               });
               
               // Record the SMS in database
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
               await (supabase as any)
                 .from("sms_messages")
                 .insert({

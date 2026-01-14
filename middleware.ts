@@ -29,13 +29,15 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-XSS-Protection": "1; mode=block",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+  "Permissions-Policy": "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
 };
 
-// CSP is more permissive in development
+// CSP directives - stricter in production
+const isProduction = process.env.NODE_ENV === "production";
 const CSP_DIRECTIVES = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+  // unsafe-eval only needed for Next.js development hot reload
+  `script-src 'self' ${isProduction ? "" : "'unsafe-eval'"} 'unsafe-inline' https://js.stripe.com`.trim(),
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https: blob:",
   "font-src 'self' data:",

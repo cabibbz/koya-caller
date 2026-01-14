@@ -5,11 +5,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, getClientIP, rateLimitExceededResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit public API (30 requests per minute per IP)
+    const clientIP = getClientIP(request.headers);
+    const rateLimit = await checkRateLimit("public", clientIP);
+    if (!rateLimit.success) {
+      return rateLimitExceededResponse(rateLimit);
+    }
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
 

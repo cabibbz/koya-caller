@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,7 @@ async function handler(request: NextRequest) {
     }
 
     // Upsert notification settings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: notificationSettings, error: updateError } = await (supabase as any)
       .from("notification_settings")
       .upsert(updateData, { onConflict: "business_id" })
@@ -102,6 +104,7 @@ async function handler(request: NextRequest) {
       data: notificationSettings,
     });
   } catch (error) {
+    logError("Settings Notifications PUT", error);
     return NextResponse.json(
       { error: "Failed to update notification settings" },
       { status: 500 }

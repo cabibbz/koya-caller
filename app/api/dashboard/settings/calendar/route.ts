@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ async function handleGET(request: NextRequest) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calendarIntegration } = await (supabase as any)
       .from("calendar_integrations")
       .select("*")
@@ -66,6 +68,7 @@ async function handleGET(request: NextRequest) {
       tokenExpired: isConnected && tokenExpired,
     });
   } catch (error) {
+    logError("Settings Calendar GET", error);
     return NextResponse.json(
       { error: "Failed to fetch calendar settings" },
       { status: 500 }
@@ -99,6 +102,7 @@ async function handlePUT(request: NextRequest) {
     } = body;
 
     // Update calendar settings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calendarIntegration, error: updateError } = await (supabase as any)
       .from("calendar_integrations")
       .upsert(
@@ -128,6 +132,7 @@ async function handlePUT(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
+    logError("Settings Calendar PUT", error);
     return NextResponse.json(
       { error: "Failed to update calendar settings" },
       { status: 500 }
@@ -203,6 +208,7 @@ async function handlePOST(request: NextRequest) {
     }
 
     // Switch to built-in calendar
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calendarIntegration, error: updateError } = await (supabase as any)
       .from("calendar_integrations")
       .upsert(
@@ -232,6 +238,7 @@ async function handlePOST(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
+    logError("Settings Calendar POST", error);
     return NextResponse.json(
       { error: "Failed to initiate calendar connection" },
       { status: 500 }
@@ -257,6 +264,7 @@ async function handleDELETE(request: NextRequest) {
     }
 
     // Reset to built-in calendar
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calendarIntegration, error: updateError } = await (supabase as any)
       .from("calendar_integrations")
       .upsert(
@@ -287,6 +295,7 @@ async function handleDELETE(request: NextRequest) {
       data: calendarIntegration,
     });
   } catch (error) {
+    logError("Settings Calendar DELETE", error);
     return NextResponse.json(
       { error: "Failed to disconnect calendar" },
       { status: 500 }

@@ -23,6 +23,14 @@ interface ConfigureRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Authenticate user
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body: ConfigureRequest = await request.json();
     const { businessId } = body;
 
@@ -33,10 +41,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify user owns this business
+    const { data: business, error: bizError } = await (supabase as any)
+      .from("businesses")
+      .select("id, user_id")
+      .eq("id", businessId)
+      .single() as { data: { id: string; user_id: string } | null; error: any };
+
+    if (bizError || !business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    if (business.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Check if we have an existing number configured
     if (!TWILIO_PHONE_NUMBER) {
       return NextResponse.json(
-        { 
+        {
           error: "No existing Twilio number configured",
           message: "Set TWILIO_PHONE_NUMBER in your .env.local file"
         },
@@ -47,7 +70,7 @@ export async function POST(request: NextRequest) {
     // Validate E.164 format
     if (!TWILIO_PHONE_NUMBER.startsWith("+")) {
       return NextResponse.json(
-        { 
+        {
           error: "Invalid phone number format",
           message: "TWILIO_PHONE_NUMBER must be in E.164 format (e.g., +14074568607)"
         },
@@ -57,9 +80,6 @@ export async function POST(request: NextRequest) {
 
     // If Twilio credentials aren't set, use mock mode
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-      // Save to database
-      const supabase = await createClient();
-      
       const { error: dbError } = await supabase
         .from("businesses")
         // @ts-ignore - Supabase generated types issue
@@ -123,9 +143,7 @@ export async function POST(request: NextRequest) {
       smsMethod: "POST",
     });
 
-    // Save to database
-    const supabase = await createClient();
-    
+    // Save to database (reuse existing client)
     const { error: dbError } = await supabase
       .from("businesses")
       // @ts-ignore - Supabase generated types issue

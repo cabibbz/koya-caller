@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: businesses, error } = await (supabase as any)
       .from("businesses")
       .select(`
@@ -36,9 +38,11 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
+      logError("Admin Subscriptions GET", error);
       return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB response mapping
     const subscriptions = (businesses || []).map((b: any) => ({
       business_id: b.id,
       business_name: b.name,
@@ -56,6 +60,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ subscriptions });
   } catch (error) {
+    logError("Admin Subscriptions GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

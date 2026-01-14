@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyWebhookSignature } from "@/lib/retell";
 import { inngest } from "@/lib/inngest";
 import { createAppointmentEvent } from "@/lib/calendar";
+import { logError } from "@/lib/logging";
 
 // Retell webhook event types
 interface RetellCallEvent {
@@ -53,14 +54,13 @@ export async function POST(request: NextRequest) {
     const payload = await request.text();
     const signature = request.headers.get("x-retell-signature");
 
-    // Verify signature - required in production
+    // Verify signature - required unless explicitly bypassed for local testing
     const verified = verifyWebhookSignature(payload, signature);
-    if (!verified) {
-      // In production, reject unverified requests
-      if (process.env.NODE_ENV === "production") {
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
-      // In development, proceed without verification
+    const allowBypass = process.env.WEBHOOK_SIGNATURE_BYPASS === "true" &&
+                        process.env.NODE_ENV !== "production";
+
+    if (!verified && !allowBypass) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     // Parse the event
@@ -335,7 +335,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   } catch (error) {
     // Log the error for debugging
-    console.error("[Retell Webhook] Processing error:", error);
+    logError("Retell Webhook", error);
 
     // Return 500 to trigger Retell retry for transient failures
     // Retell will retry up to 3 times with exponential backoff

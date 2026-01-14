@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isValidUUID, validateStringLength, LIMITS } from "@/lib/validation";
+import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,13 @@ export async function GET(
     const adminClient = createAdminClient();
     const businessId = params.id;
 
+    // Validate business ID format
+    if (!isValidUUID(businessId)) {
+      return NextResponse.json({ error: "Invalid business ID format" }, { status: 400 });
+    }
+
     // Fetch business with related data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: business, error: businessError } = await (adminClient as any)
       .from("businesses")
       .select(`
@@ -42,10 +50,12 @@ export async function GET(
       .single();
 
     if (businessError) {
+      logError("Admin Customer GET - business fetch", businessError);
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
     // Fetch AI config
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: aiConfig } = await (adminClient as any)
       .from("ai_config")
       .select("*")
@@ -53,6 +63,7 @@ export async function GET(
       .single();
 
     // Fetch call settings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: callSettings } = await (adminClient as any)
       .from("call_settings")
       .select("*")
@@ -60,6 +71,7 @@ export async function GET(
       .single();
 
     // Fetch business hours
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: businessHours } = await (adminClient as any)
       .from("business_hours")
       .select("*")
@@ -67,6 +79,7 @@ export async function GET(
       .order("day_of_week");
 
     // Fetch services
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: services } = await (adminClient as any)
       .from("services")
       .select("*")
@@ -74,6 +87,7 @@ export async function GET(
       .order("name");
 
     // Fetch FAQs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: faqs } = await (adminClient as any)
       .from("faqs")
       .select("*")
@@ -81,6 +95,7 @@ export async function GET(
       .order("created_at");
 
     // Fetch recent calls
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: recentCalls } = await (adminClient as any)
       .from("calls")
       .select("id, started_at, duration_seconds, outcome, caller_number")
@@ -89,6 +104,7 @@ export async function GET(
       .limit(10);
 
     // Fetch phone numbers with location info
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: phoneNumbers } = await (adminClient as any)
       .from("phone_numbers")
       .select("id, number, location_name, location_address, is_active")
@@ -110,6 +126,7 @@ export async function GET(
       },
     });
   } catch (error) {
+    logError("Admin Customer GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -133,10 +150,25 @@ export async function PATCH(
 
     const adminClient = createAdminClient();
     const businessId = params.id;
+
+    // Validate business ID format
+    if (!isValidUUID(businessId)) {
+      return NextResponse.json({ error: "Invalid business ID format" }, { status: 400 });
+    }
+
     const body = await request.json();
+
+    // Validate input if business name provided
+    if (body.business?.name !== undefined) {
+      const nameError = validateStringLength(body.business.name, LIMITS.MAX_NAME_LENGTH, "Business name");
+      if (nameError) {
+        return NextResponse.json({ error: nameError }, { status: 400 });
+      }
+    }
 
     // Update business info
     if (body.business) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (adminClient as any)
         .from("businesses")
         .update({
@@ -151,12 +183,14 @@ export async function PATCH(
         .eq("id", businessId);
 
       if (error) {
+        logError("Admin Customer PATCH - business update", error);
         return NextResponse.json({ error: "Failed to update business" }, { status: 500 });
       }
     }
 
     // Update AI config
     if (body.ai_config) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (adminClient as any)
         .from("ai_config")
         .upsert({
@@ -171,12 +205,14 @@ export async function PATCH(
         }, { onConflict: "business_id" });
 
       if (error) {
+        logError("Admin Customer PATCH - AI config update", error);
         return NextResponse.json({ error: "Failed to update AI config" }, { status: 500 });
       }
     }
 
     // Update call settings
     if (body.call_settings) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (adminClient as any)
         .from("call_settings")
         .upsert({
@@ -189,12 +225,14 @@ export async function PATCH(
         }, { onConflict: "business_id" });
 
       if (error) {
+        logError("Admin Customer PATCH - call settings update", error);
         return NextResponse.json({ error: "Failed to update call settings" }, { status: 500 });
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    logError("Admin Customer PATCH", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

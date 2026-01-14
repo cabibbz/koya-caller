@@ -12,20 +12,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 import { inngest } from "@/lib/inngest/client";
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// Field length limits
-const MAX_NAME_LENGTH = 100;
-const MAX_DESCRIPTION_LENGTH = 500;
-const MAX_PITCH_LENGTH = 300;
-const MAX_BUNDLES_PER_BUSINESS = 10;
-const MIN_SERVICES_PER_BUNDLE = 2;
+import {
+  isValidUUID,
+  validateStringLength,
+  validateBoolean,
+  LIMITS,
+} from "@/lib/validation";
+import { logError } from "@/lib/logging";
 
 // Validation helpers
 function validateUuidArray(arr: unknown[]): { valid: boolean; error?: string } {
   for (const item of arr) {
-    if (typeof item !== "string" || !UUID_REGEX.test(item)) {
+    if (!isValidUUID(item)) {
       return { valid: false, error: "Invalid service ID format" };
     }
   }
@@ -35,13 +33,6 @@ function validateUuidArray(arr: unknown[]): { valid: boolean; error?: string } {
     return { valid: false, error: "Duplicate service IDs are not allowed" };
   }
   return { valid: true };
-}
-
-function validateStringLength(value: string | undefined, maxLength: number, fieldName: string): string | null {
-  if (value && value.trim().length > maxLength) {
-    return `${fieldName} must be ${maxLength} characters or less`;
-  }
-  return null;
 }
 
 // GET - List all bundles for the business
@@ -101,7 +92,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[Bundles GET] Error:", error);
+      logError("Bundles GET", error);
       return NextResponse.json({ error: "Failed to fetch bundles" }, { status: 500 });
     }
 
@@ -135,7 +126,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ bundles: transformedBundles });
   } catch (error) {
-    console.error("[Bundles GET] Error:", error);
+    logError("Bundles GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -193,24 +184,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate field lengths
-    const nameLengthError = validateStringLength(name, MAX_NAME_LENGTH, "Bundle name");
+    const nameLengthError = validateStringLength(name, LIMITS.MAX_NAME_LENGTH, "Bundle name");
     if (nameLengthError) {
       return NextResponse.json({ error: nameLengthError }, { status: 400 });
     }
 
-    const descLengthError = validateStringLength(description, MAX_DESCRIPTION_LENGTH, "Description");
+    const descLengthError = validateStringLength(description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
     if (descLengthError) {
       return NextResponse.json({ error: descLengthError }, { status: 400 });
     }
 
-    const pitchLengthError = validateStringLength(pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+    const pitchLengthError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
     if (pitchLengthError) {
       return NextResponse.json({ error: pitchLengthError }, { status: 400 });
     }
 
-    if (!Array.isArray(service_ids) || service_ids.length < MIN_SERVICES_PER_BUNDLE) {
+    if (!Array.isArray(service_ids) || service_ids.length < LIMITS.MIN_SERVICES_PER_BUNDLE) {
       return NextResponse.json(
-        { error: `Bundle must include at least ${MIN_SERVICES_PER_BUNDLE} services` },
+        { error: `Bundle must include at least ${LIMITS.MIN_SERVICES_PER_BUNDLE} services` },
         { status: 400 }
       );
     }
@@ -235,9 +226,9 @@ export async function POST(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("business_id", businessId);
 
-    if ((bundleCount || 0) >= MAX_BUNDLES_PER_BUSINESS) {
+    if ((bundleCount || 0) >= LIMITS.MAX_BUNDLES_PER_BUSINESS) {
       return NextResponse.json(
-        { error: `Maximum of ${MAX_BUNDLES_PER_BUSINESS} bundles allowed. Delete some before creating new ones.` },
+        { error: `Maximum of ${LIMITS.MAX_BUNDLES_PER_BUSINESS} bundles allowed. Delete some before creating new ones.` },
         { status: 400 }
       );
     }
@@ -271,7 +262,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (bundleError) {
-      console.error("[Bundles POST] Error:", bundleError);
+      logError("Bundles POST", bundleError);
       return NextResponse.json({ error: "Failed to create bundle" }, { status: 500 });
     }
 
@@ -287,7 +278,7 @@ export async function POST(request: NextRequest) {
       .insert(bundleServicesData);
 
     if (servicesError) {
-      console.error("[Bundles POST] Services error:", servicesError);
+      logError("Bundles POST Services", servicesError);
       // Clean up the bundle if services failed
       const { error: cleanupError } = await (supabase as ReturnType<typeof supabase.from>)
         .from("bundles")
@@ -295,7 +286,7 @@ export async function POST(request: NextRequest) {
         .eq("id", bundle.id);
 
       if (cleanupError) {
-        console.error("[Bundles POST] Cleanup failed - orphaned bundle:", bundle.id, cleanupError);
+        logError(`Bundles POST Cleanup orphaned bundle ${bundle.id}`, cleanupError);
       }
       return NextResponse.json({ error: "Failed to create bundle services. Please try again." }, { status: 500 });
     }
@@ -312,7 +303,7 @@ export async function POST(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Bundles POST] Inngest error:", inngestError);
+      logError("Bundles POST Inngest", inngestError);
     }
 
     return NextResponse.json({
@@ -321,7 +312,7 @@ export async function POST(request: NextRequest) {
       regenerationQueued,
     });
   } catch (error) {
-    console.error("[Bundles POST] Error:", error);
+    logError("Bundles POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -366,7 +357,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Bundle ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(bundle.id)) {
+    if (!isValidUUID(bundle.id)) {
       return NextResponse.json({ error: "Invalid bundle ID format" }, { status: 400 });
     }
 
@@ -392,21 +383,21 @@ export async function PUT(request: NextRequest) {
 
     // Validate field lengths
     if (bundle.name) {
-      const nameLengthError = validateStringLength(bundle.name, MAX_NAME_LENGTH, "Bundle name");
+      const nameLengthError = validateStringLength(bundle.name, LIMITS.MAX_NAME_LENGTH, "Bundle name");
       if (nameLengthError) {
         return NextResponse.json({ error: nameLengthError }, { status: 400 });
       }
     }
 
     if (bundle.description) {
-      const descLengthError = validateStringLength(bundle.description, MAX_DESCRIPTION_LENGTH, "Description");
+      const descLengthError = validateStringLength(bundle.description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
       if (descLengthError) {
         return NextResponse.json({ error: descLengthError }, { status: 400 });
       }
     }
 
     if (bundle.pitch_message) {
-      const pitchLengthError = validateStringLength(bundle.pitch_message, MAX_PITCH_LENGTH, "Pitch message");
+      const pitchLengthError = validateStringLength(bundle.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
       if (pitchLengthError) {
         return NextResponse.json({ error: pitchLengthError }, { status: 400 });
       }
@@ -414,9 +405,9 @@ export async function PUT(request: NextRequest) {
 
     // If service_ids provided, validate and update them
     if (bundle.service_ids) {
-      if (!Array.isArray(bundle.service_ids) || bundle.service_ids.length < MIN_SERVICES_PER_BUNDLE) {
+      if (!Array.isArray(bundle.service_ids) || bundle.service_ids.length < LIMITS.MIN_SERVICES_PER_BUNDLE) {
         return NextResponse.json(
-          { error: `Bundle must include at least ${MIN_SERVICES_PER_BUNDLE} services` },
+          { error: `Bundle must include at least ${LIMITS.MIN_SERVICES_PER_BUNDLE} services` },
           { status: 400 }
         );
       }
@@ -453,7 +444,7 @@ export async function PUT(request: NextRequest) {
         .eq("bundle_id", bundle.id);
 
       if (deleteError) {
-        console.error("[Bundles PUT] Delete services error:", deleteError);
+        logError("Bundles PUT Delete services", deleteError);
         return NextResponse.json({ error: "Failed to update bundle services" }, { status: 500 });
       }
 
@@ -469,7 +460,7 @@ export async function PUT(request: NextRequest) {
         .insert(bundleServicesData);
 
       if (servicesError) {
-        console.error("[Bundles PUT] Insert services error:", servicesError);
+        logError("Bundles PUT Insert services", servicesError);
         // RESTORE: Try to restore the original services
         if (existingServices && existingServices.length > 0) {
           const restoreData = existingServices.map((s: { service_id: string; sort_order: number }) => ({
@@ -481,13 +472,13 @@ export async function PUT(request: NextRequest) {
             .from("bundle_services")
             .insert(restoreData);
           if (restoreError) {
-            console.error("[Bundles PUT] Failed to restore services:", restoreError);
+            logError("Bundles PUT Restore services", restoreError);
             // If restore fails, deactivate the bundle to prevent inconsistent state
             await (supabase as ReturnType<typeof supabase.from>)
               .from("bundles")
               .update({ is_active: false })
               .eq("id", bundle.id);
-            console.error("[Bundles PUT] Bundle deactivated due to restore failure:", bundle.id);
+            logError(`Bundles PUT Deactivated bundle ${bundle.id}`, new Error("Bundle deactivated due to restore failure"));
             return NextResponse.json({ error: "Failed to update bundle services. Bundle has been deactivated for safety. Please re-add services manually." }, { status: 500 });
           }
         }
@@ -503,6 +494,14 @@ export async function PUT(request: NextRequest) {
           { status: 400 }
         );
       }
+    }
+
+    // Validate is_active is boolean
+    if (bundle.is_active !== undefined && typeof bundle.is_active !== "boolean") {
+      return NextResponse.json(
+        { error: "is_active must be a boolean value" },
+        { status: 400 }
+      );
     }
 
     // Build update object with only provided fields
@@ -522,7 +521,7 @@ export async function PUT(request: NextRequest) {
         .eq("business_id", businessId);
 
       if (error) {
-        console.error("[Bundles PUT] Error:", error);
+        logError("Bundles PUT", error);
         return NextResponse.json({ error: "Failed to update bundle" }, { status: 500 });
       }
     }
@@ -539,12 +538,12 @@ export async function PUT(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Bundles PUT] Inngest error:", inngestError);
+      logError("Bundles PUT Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Bundles PUT] Error:", error);
+    logError("Bundles PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -590,7 +589,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Bundle ID required" }, { status: 400 });
     }
 
-    if (!UUID_REGEX.test(bundleId)) {
+    if (!isValidUUID(bundleId)) {
       return NextResponse.json({ error: "Invalid bundle ID format" }, { status: 400 });
     }
 
@@ -603,7 +602,7 @@ export async function DELETE(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error("[Bundles DELETE] Error:", error);
+      logError("Bundles DELETE", error);
       return NextResponse.json({ error: "Failed to delete bundle" }, { status: 500 });
     }
 
@@ -623,12 +622,12 @@ export async function DELETE(request: NextRequest) {
       });
       regenerationQueued = true;
     } catch (inngestError) {
-      console.error("[Bundles DELETE] Inngest error:", inngestError);
+      logError("Bundles DELETE Inngest", inngestError);
     }
 
     return NextResponse.json({ success: true, regenerationQueued });
   } catch (error) {
-    console.error("[Bundles DELETE] Error:", error);
+    logError("Bundles DELETE", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
