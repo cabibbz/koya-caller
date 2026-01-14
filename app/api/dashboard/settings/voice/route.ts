@@ -8,9 +8,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
+import { updateAgentAdvancedSettings } from "@/lib/retell";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 import { logError } from "@/lib/logging";
 
@@ -47,6 +48,7 @@ async function handler(request: NextRequest) {
       greetingSpanish,
       afterHoursGreeting,
       afterHoursGreetingSpanish,
+      fallbackVoiceIds,
     } = body;
 
     // Validate personality
@@ -71,10 +73,14 @@ async function handler(request: NextRequest) {
     if (greetingSpanish !== undefined) updateData.greeting_spanish = greetingSpanish;
     if (afterHoursGreeting !== undefined) updateData.after_hours_greeting = afterHoursGreeting;
     if (afterHoursGreetingSpanish !== undefined) updateData.after_hours_greeting_spanish = afterHoursGreetingSpanish;
+    if (fallbackVoiceIds !== undefined) updateData.fallback_voice_ids = fallbackVoiceIds || [];
+
+    // Use admin client for updates
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminSupabase = createAdminClient() as any;
 
     // Upsert AI config
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: aiConfig, error: updateError } = await (supabase as any)
+    const { data: aiConfig, error: updateError } = await adminSupabase
       .from("ai_config")
       .upsert(updateData, { onConflict: "business_id" })
       .select()
@@ -85,6 +91,18 @@ async function handler(request: NextRequest) {
         { error: "Failed to update voice settings" },
         { status: 500 }
       );
+    }
+
+    // Update Retell agent with fallback voices if changed
+    if (fallbackVoiceIds !== undefined && aiConfig?.retell_agent_id) {
+      try {
+        await updateAgentAdvancedSettings(aiConfig.retell_agent_id, {
+          fallbackVoices: fallbackVoiceIds || [],
+        });
+      } catch (error) {
+        // Log but don't fail - settings are saved to DB
+        logError("Voice Update Retell Agent Fallback", error);
+      }
     }
 
     // Queue prompt regeneration

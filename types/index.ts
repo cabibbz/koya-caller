@@ -132,6 +132,7 @@ export interface Knowledge {
 
 export type Personality = "professional" | "friendly" | "casual";
 export type LanguageMode = "auto" | "ask" | "spanish_default";
+export type AnalysisModel = "gpt-4.1-mini" | "claude-4.5-sonnet" | "gemini-2.5-flash";
 
 // Prompt configuration for enhanced AI features
 export interface PromptConfig {
@@ -173,6 +174,11 @@ export interface AIConfig {
   bundles_enabled: boolean;
   packages_enabled: boolean;
   memberships_enabled: boolean;
+  // Retell advanced features (migration 20250114000001)
+  boosted_keywords: string[];
+  analysis_summary_prompt: string | null;
+  analysis_model: AnalysisModel;
+  fallback_voice_ids: string[];
   created_at: string;
   updated_at: string;
 }
@@ -183,6 +189,9 @@ export interface AIConfig {
 
 export type TransferHoursType = "always" | "business_hours" | "custom";
 export type AfterHoursAction = "voicemail" | "ai" | "transfer";
+export type DenoisingMode = "noise-cancellation" | "noise-and-background-speech-cancellation";
+export type DTMFTerminationKey = "#" | "*" | "none";
+export type PIICategory = "ssn" | "credit_card" | "phone_number" | "email" | "date_of_birth" | "address";
 
 export interface CallSettings {
   id: string;
@@ -203,6 +212,20 @@ export interface CallSettings {
   after_hours_action: AfterHoursAction;
   max_call_duration_seconds: number;
   recording_enabled: boolean;
+  // Retell advanced features (migration 20250114000001)
+  voicemail_detection_enabled: boolean;
+  voicemail_message: string | null;
+  voicemail_detection_timeout_ms: number;
+  reminder_trigger_ms: number;
+  reminder_max_count: number;
+  end_call_after_silence_ms: number;
+  dtmf_enabled: boolean;
+  dtmf_digit_limit: number;
+  dtmf_termination_key: DTMFTerminationKey;
+  dtmf_timeout_ms: number;
+  denoising_mode: DenoisingMode;
+  pii_redaction_enabled: boolean;
+  pii_categories: PIICategory[];
   created_at: string;
   updated_at: string;
 }

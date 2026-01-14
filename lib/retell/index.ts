@@ -493,6 +493,258 @@ export function extractCallInfo(callData: {
 }
 
 // =============================================================================
+// Advanced Agent Settings
+// =============================================================================
+
+/**
+ * Settings for advanced Retell agent features
+ */
+export interface AdvancedAgentSettings {
+  // Voicemail Detection
+  voicemailDetection?: {
+    enabled: boolean;
+    message?: string;
+    timeoutMs?: number;
+  };
+  // Max Call Duration
+  maxCallDurationMs?: number;
+  // Silence Handling
+  silenceHandling?: {
+    reminderTriggerMs: number;
+    reminderMaxCount: number;
+    endCallAfterSilenceMs: number;
+  };
+  // Boosted Keywords
+  boostedKeywords?: string[];
+  // DTMF Input
+  dtmf?: {
+    enabled: boolean;
+    digitLimit?: number;
+    terminationKey?: string;
+    timeoutMs?: number;
+  };
+  // Denoising
+  denoisingMode?: string;
+  // Custom Summary
+  summaryConfig?: {
+    prompt?: string;
+    model?: string;
+  };
+  // PII Redaction
+  piiConfig?: {
+    enabled: boolean;
+    categories?: string[];
+  };
+  // Fallback Voices
+  fallbackVoices?: string[];
+}
+
+/**
+ * Update an existing Retell agent with advanced settings
+ * Used when settings are changed via the dashboard
+ */
+export async function updateAgentAdvancedSettings(
+  agentId: string,
+  settings: AdvancedAgentSettings
+): Promise<boolean> {
+  const client = getRetellClient();
+
+  if (!client) {
+    // Mock mode
+    return true;
+  }
+
+  try {
+    // Build the update payload
+    const updatePayload: Record<string, unknown> = {};
+
+    // Voicemail Detection
+    if (settings.voicemailDetection !== undefined) {
+      updatePayload.enable_voicemail_detection = settings.voicemailDetection.enabled;
+      if (settings.voicemailDetection.message) {
+        updatePayload.voicemail_message = settings.voicemailDetection.message;
+      }
+      if (settings.voicemailDetection.timeoutMs) {
+        updatePayload.voicemail_detection_timeout_ms = settings.voicemailDetection.timeoutMs;
+      }
+    }
+
+    // Max Call Duration
+    if (settings.maxCallDurationMs !== undefined) {
+      updatePayload.max_call_duration_ms = settings.maxCallDurationMs;
+    }
+
+    // Silence Handling
+    if (settings.silenceHandling) {
+      updatePayload.reminder_trigger_ms = settings.silenceHandling.reminderTriggerMs;
+      updatePayload.reminder_max_count = settings.silenceHandling.reminderMaxCount;
+      updatePayload.end_call_after_silence_ms = settings.silenceHandling.endCallAfterSilenceMs;
+    }
+
+    // Boosted Keywords
+    if (settings.boostedKeywords !== undefined) {
+      updatePayload.boosted_keywords = settings.boostedKeywords;
+    }
+
+    // DTMF Input
+    if (settings.dtmf !== undefined) {
+      updatePayload.allow_user_dtmf = settings.dtmf.enabled;
+      if (settings.dtmf.enabled) {
+        updatePayload.user_dtmf_options = {
+          digit_limit: settings.dtmf.digitLimit || 10,
+          termination_key: settings.dtmf.terminationKey || "#",
+          timeout_ms: settings.dtmf.timeoutMs || 5000,
+        };
+      }
+    }
+
+    // Denoising
+    if (settings.denoisingMode !== undefined) {
+      updatePayload.denoising_mode = settings.denoisingMode;
+    }
+
+    // Custom Summary
+    if (settings.summaryConfig) {
+      if (settings.summaryConfig.prompt) {
+        updatePayload.analysis_summary_prompt = settings.summaryConfig.prompt;
+      }
+      if (settings.summaryConfig.model) {
+        updatePayload.post_call_analysis_model = settings.summaryConfig.model;
+      }
+    }
+
+    // PII Redaction
+    if (settings.piiConfig !== undefined) {
+      if (settings.piiConfig.enabled && settings.piiConfig.categories?.length) {
+        updatePayload.pii_config = {
+          mode: "post_call",
+          categories: settings.piiConfig.categories,
+        };
+      } else {
+        // Disable PII redaction by not including it
+        updatePayload.pii_config = null;
+      }
+    }
+
+    // Fallback Voices
+    if (settings.fallbackVoices !== undefined) {
+      updatePayload.fallback_voice_ids = settings.fallbackVoices;
+    }
+
+    // Only update if there are changes
+    if (Object.keys(updatePayload).length > 0) {
+      await client.agent.update(agentId, updatePayload as Parameters<typeof client.agent.update>[1]);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[Retell] Failed to update agent advanced settings:", error);
+    return false;
+  }
+}
+
+/**
+ * Build advanced settings config for agent creation
+ * Used during onboarding and agent creation
+ */
+export function buildAdvancedSettingsConfig(
+  callSettings: {
+    voicemail_detection_enabled?: boolean;
+    voicemail_message?: string | null;
+    voicemail_detection_timeout_ms?: number;
+    max_call_duration_seconds?: number;
+    reminder_trigger_ms?: number;
+    reminder_max_count?: number;
+    end_call_after_silence_ms?: number;
+    dtmf_enabled?: boolean;
+    dtmf_digit_limit?: number;
+    dtmf_termination_key?: string;
+    dtmf_timeout_ms?: number;
+    denoising_mode?: string;
+    pii_redaction_enabled?: boolean;
+    pii_categories?: string[];
+  },
+  aiConfig: {
+    boosted_keywords?: string[];
+    analysis_summary_prompt?: string | null;
+    analysis_model?: string;
+    fallback_voice_ids?: string[];
+  }
+): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+
+  // Voicemail Detection
+  if (callSettings.voicemail_detection_enabled) {
+    config.enable_voicemail_detection = true;
+    if (callSettings.voicemail_message) {
+      config.voicemail_message = callSettings.voicemail_message;
+    }
+    if (callSettings.voicemail_detection_timeout_ms) {
+      config.voicemail_detection_timeout_ms = callSettings.voicemail_detection_timeout_ms;
+    }
+  }
+
+  // Max Call Duration (convert seconds to ms)
+  if (callSettings.max_call_duration_seconds) {
+    config.max_call_duration_ms = callSettings.max_call_duration_seconds * 1000;
+  }
+
+  // Silence Handling
+  if (callSettings.reminder_trigger_ms) {
+    config.reminder_trigger_ms = callSettings.reminder_trigger_ms;
+  }
+  if (callSettings.reminder_max_count !== undefined) {
+    config.reminder_max_count = callSettings.reminder_max_count;
+  }
+  if (callSettings.end_call_after_silence_ms) {
+    config.end_call_after_silence_ms = callSettings.end_call_after_silence_ms;
+  }
+
+  // DTMF Input
+  if (callSettings.dtmf_enabled) {
+    config.allow_user_dtmf = true;
+    config.user_dtmf_options = {
+      digit_limit: callSettings.dtmf_digit_limit || 10,
+      termination_key: callSettings.dtmf_termination_key || "#",
+      timeout_ms: callSettings.dtmf_timeout_ms || 5000,
+    };
+  }
+
+  // Denoising
+  if (callSettings.denoising_mode) {
+    config.denoising_mode = callSettings.denoising_mode;
+  }
+
+  // Boosted Keywords
+  if (aiConfig.boosted_keywords?.length) {
+    config.boosted_keywords = aiConfig.boosted_keywords;
+  }
+
+  // Custom Summary
+  if (aiConfig.analysis_summary_prompt) {
+    config.analysis_summary_prompt = aiConfig.analysis_summary_prompt;
+  }
+  if (aiConfig.analysis_model) {
+    config.post_call_analysis_model = aiConfig.analysis_model;
+  }
+
+  // PII Redaction
+  if (callSettings.pii_redaction_enabled && callSettings.pii_categories?.length) {
+    config.pii_config = {
+      mode: "post_call",
+      categories: callSettings.pii_categories,
+    };
+  }
+
+  // Fallback Voices
+  if (aiConfig.fallback_voice_ids?.length) {
+    config.fallback_voice_ids = aiConfig.fallback_voice_ids;
+  }
+
+  return config;
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 
