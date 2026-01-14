@@ -71,6 +71,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
 
+    // Log the raw payload to understand Retell's data structure
+    console.log(`[Retell Webhook] Event type: ${event.event}`);
+    console.log(`[Retell Webhook] Full payload:`, JSON.stringify(event, null, 2));
+
     // Webhook event received - processing
 
     // Use any to bypass strict type checking for admin client
@@ -111,37 +115,23 @@ export async function POST(request: NextRequest) {
       }
 
       case "call_ended": {
-        // Get duration - check multiple possible locations where Retell provides duration
-        // Priority: event.duration_ms > call.duration_ms > call.duration_seconds > calculated
-        let durationMs = 0;
-        let durationSeconds = 0;
+        // Calculate duration from timestamps (Retell sends Unix timestamps in milliseconds)
+        const startTs = call.start_timestamp;
+        const endTs = call.end_timestamp;
 
-        // Check event-level duration_ms
-        if (event.duration_ms && event.duration_ms > 0) {
-          durationMs = event.duration_ms;
+        console.log(`[Retell Webhook] call_ended for ${call.call_id}`);
+        console.log(`[Retell Webhook] Timestamps - start: ${startTs}, end: ${endTs}`);
+
+        let durationSeconds = 0;
+        if (startTs && endTs) {
+          const durationMs = endTs - startTs;
           durationSeconds = Math.ceil(durationMs / 1000);
-        }
-        // Check call-level duration_ms
-        else if (call.duration_ms && call.duration_ms > 0) {
-          durationMs = call.duration_ms;
-          durationSeconds = Math.ceil(durationMs / 1000);
-        }
-        // Check call-level duration_seconds (Retell sometimes sends this directly)
-        else if (call.duration_seconds && call.duration_seconds > 0) {
-          durationSeconds = call.duration_seconds;
-          durationMs = durationSeconds * 1000;
-        }
-        // Fallback: calculate from timestamps
-        else if (call.end_timestamp && call.start_timestamp) {
-          // Retell timestamps are in milliseconds (Unix epoch ms)
-          durationMs = call.end_timestamp - call.start_timestamp;
-          durationSeconds = Math.ceil(durationMs / 1000);
+          console.log(`[Retell Webhook] Calculated duration: ${durationMs}ms = ${durationSeconds}s`);
+        } else {
+          console.log(`[Retell Webhook] WARNING: Missing timestamps! Cannot calculate duration.`);
         }
 
         const durationMinutesBilled = durationSeconds > 0 ? Math.max(1, Math.ceil(durationSeconds / 60)) : 0;
-
-        console.log(`[Retell Webhook] Call ${call.call_id} duration: ${durationMs}ms = ${durationSeconds}s (billed: ${durationMinutesBilled} min)`);
-        console.log(`[Retell Webhook] Raw data - event.duration_ms: ${event.duration_ms}, call.duration_ms: ${call.duration_ms}, call.duration_seconds: ${call.duration_seconds}, timestamps: ${call.start_timestamp} -> ${call.end_timestamp}`);
 
         // Determine outcome based on metadata or disconnection reason
         let outcome = "info"; // Default
@@ -186,12 +176,24 @@ export async function POST(request: NextRequest) {
         };
 
         if (existingCall) {
-          await supabase
+          console.log(`[Retell Webhook] Updating existing call ${existingCall.id} with duration_seconds=${durationSeconds}`);
+          const { error: updateError } = await supabase
             .from("calls")
             .update(callData)
             .eq("id", existingCall.id);
+          if (updateError) {
+            console.error(`[Retell Webhook] Update failed:`, updateError);
+          } else {
+            console.log(`[Retell Webhook] Call updated successfully`);
+          }
         } else {
-          await supabase.from("calls").insert(callData);
+          console.log(`[Retell Webhook] Inserting new call with duration_seconds=${durationSeconds}`);
+          const { error: insertError } = await supabase.from("calls").insert(callData);
+          if (insertError) {
+            console.error(`[Retell Webhook] Insert failed:`, insertError);
+          } else {
+            console.log(`[Retell Webhook] Call inserted successfully`);
+          }
         }
 
         // Update business minutes usage
