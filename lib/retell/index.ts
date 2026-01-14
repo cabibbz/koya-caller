@@ -137,6 +137,48 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       },
       voice_id: params.voiceId,
       agent_name: `${params.businessName} - ${params.aiName}`,
+      // Enable call recording for replay functionality
+      enable_recording: true,
+      // Set webhook URL for call events
+      webhook_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://koya-caller.com'}/api/retell/webhook`,
+      // Enable post-call analysis for summary generation
+      post_call_analysis_data: [
+        {
+          type: "call_summary",
+          name: "call_summary",
+          description: "A brief summary of what the caller wanted and the outcome of the call",
+        },
+        {
+          type: "custom",
+          name: "customer_name",
+          description: "The name of the caller if provided",
+        },
+        {
+          type: "custom",
+          name: "customer_phone",
+          description: "The phone number of the caller if provided",
+        },
+        {
+          type: "custom",
+          name: "customer_email",
+          description: "The email address of the caller if provided",
+        },
+        {
+          type: "custom",
+          name: "service_name",
+          description: "The service the caller inquired about or booked",
+        },
+        {
+          type: "custom",
+          name: "appointment_date",
+          description: "The date and time of any appointment booked (ISO format)",
+        },
+        {
+          type: "custom",
+          name: "appointment_booked",
+          description: "Whether an appointment was booked (true/false)",
+        },
+      ],
     };
 
     // Add multilingual settings if Spanish is enabled

@@ -107,6 +107,46 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 llm_id: process.env.RETELL_LLM_ID || "",
               },
               webhook_url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/retell/webhook`,
+              // Enable call recording for replay functionality
+              enable_recording: true,
+              // Enable post-call analysis for summary generation
+              post_call_analysis_data: [
+                {
+                  type: "call_summary",
+                  name: "call_summary",
+                  description: "A brief summary of what the caller wanted and the outcome of the call",
+                },
+                {
+                  type: "custom",
+                  name: "customer_name",
+                  description: "The name of the caller if provided",
+                },
+                {
+                  type: "custom",
+                  name: "customer_phone",
+                  description: "The phone number of the caller if provided",
+                },
+                {
+                  type: "custom",
+                  name: "customer_email",
+                  description: "The email address of the caller if provided",
+                },
+                {
+                  type: "custom",
+                  name: "service_name",
+                  description: "The service the caller inquired about or booked",
+                },
+                {
+                  type: "custom",
+                  name: "appointment_date",
+                  description: "The date and time of any appointment booked (ISO format)",
+                },
+                {
+                  type: "custom",
+                  name: "appointment_booked",
+                  description: "Whether an appointment was booked (true/false)",
+                },
+              ],
             });
 
             // Save agent ID to database
