@@ -260,7 +260,7 @@ export async function incrementCallerCallCount(
 
   try {
     // Try to increment call count
-    // @ts-ignore - increment_caller_count function added by migration
+    // @ts-expect-error - increment_caller_count function added by migration
     await supabase.rpc("increment_caller_count", {
       p_business_id: businessId,
       p_phone_number: normalizedNumber

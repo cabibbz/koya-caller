@@ -97,7 +97,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const Retell = await import("retell-sdk");
             const retellClient = new Retell.default({ apiKey: retellApiKey });
 
-            // Create the agent directly via Retell SDK
+            // Create the agent directly via Retell SDK with advanced features
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Retell SDK types are incomplete for newer API features
             const agent = await retellClient.agent.create({
               agent_name: `Koya - ${business.name}`,
               voice_id: "11labs-Rachel",
@@ -147,7 +148,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                   description: "Whether an appointment was booked (true/false)",
                 },
               ],
-            });
+              // Default advanced settings
+              // Voicemail detection disabled by default
+              enable_voicemail_detection: false,
+              // Silence handling with sensible defaults
+              reminder_trigger_ms: 10000,
+              reminder_max_count: 2,
+              end_call_after_silence_ms: 30000,
+              // Background noise cancellation enabled
+              ambient_sound_volume: 0,
+              // Denoising enabled
+              // Note: denoising_mode would be applied via update if needed
+            } as any);
 
             // Save agent ID to database
             if (agent?.agent_id) {

@@ -15,7 +15,7 @@ import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 
 export const dynamic = "force-dynamic";
 
-async function handler(request: NextRequest) {
+async function handler(_request: NextRequest) {
   try {
     // Get authenticated user
     const supabase = await createClient();

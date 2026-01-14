@@ -124,10 +124,11 @@ interface SettingsClientProps {
   initialPromptConfig?: InitialPromptConfig | null;
 }
 
-type Tab = "call-handling" | "voice" | "language" | "calendar" | "notifications" | "phone-billing" | "advanced-ai";
+type Tab = "call-handling" | "call-features" | "voice" | "language" | "calendar" | "notifications" | "phone-billing" | "advanced-ai";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "call-handling", label: "Call Handling", icon: Phone },
+  { id: "call-features", label: "Call Features", icon: Sparkles },
   { id: "voice", label: "Voice & Personality", icon: Mic },
   { id: "language", label: "Language", icon: Globe },
   { id: "calendar", label: "Calendar", icon: Calendar },
@@ -170,7 +171,7 @@ const REMINDER_OPTIONS: { value: ReminderSetting; label: string }[] = [
 ];
 
 export function SettingsClient({
-  businessId,
+  businessId: _businessId,
   businessInfo,
   initialCallSettings,
   initialAiConfig,
@@ -216,6 +217,7 @@ export function SettingsClient({
     greetingSpanish: initialAiConfig?.greeting_spanish || "",
     afterHoursGreeting: initialAiConfig?.after_hours_greeting || "",
     afterHoursGreetingSpanish: initialAiConfig?.after_hours_greeting_spanish || "",
+    fallbackVoiceIds: (initialAiConfig as unknown as Record<string, unknown>)?.fallback_voice_ids as string[] || [],
   });
   const [voiceSettingsModified, setVoiceSettingsModified] = useState(false);
   const [selectedGender, setSelectedGender] = useState<"female" | "male">("female");
@@ -268,6 +270,41 @@ export function SettingsClient({
     maxFewShotExamples: initialPromptConfig?.maxFewShotExamples ?? DEFAULT_PROMPT_CONFIG.maxFewShotExamples,
   });
   const [advancedAiSettingsModified, setAdvancedAiSettingsModified] = useState(false);
+
+  // Call Features state (Retell advanced features)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const callSettingsData = initialCallSettings as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const aiConfigData = initialAiConfig as any;
+  const [callFeaturesSettings, setCallFeaturesSettings] = useState({
+    // Voicemail Detection
+    voicemailDetectionEnabled: callSettingsData?.voicemail_detection_enabled ?? false,
+    voicemailMessage: callSettingsData?.voicemail_message || "",
+    voicemailDetectionTimeoutMs: callSettingsData?.voicemail_detection_timeout_ms || 30000,
+    // Silence Handling
+    reminderTriggerMs: callSettingsData?.reminder_trigger_ms || 10000,
+    reminderMaxCount: callSettingsData?.reminder_max_count ?? 2,
+    endCallAfterSilenceMs: callSettingsData?.end_call_after_silence_ms || 30000,
+    // DTMF Input
+    dtmfEnabled: callSettingsData?.dtmf_enabled ?? false,
+    dtmfDigitLimit: callSettingsData?.dtmf_digit_limit || 10,
+    dtmfTerminationKey: callSettingsData?.dtmf_termination_key || "#",
+    dtmfTimeoutMs: callSettingsData?.dtmf_timeout_ms || 5000,
+    // Denoising
+    denoisingMode: callSettingsData?.denoising_mode || "noise-cancellation",
+  });
+  const [callFeaturesModified, setCallFeaturesModified] = useState(false);
+
+  // Advanced AI Retell features state
+  const [advancedRetellSettings, setAdvancedRetellSettings] = useState({
+    boostedKeywords: (aiConfigData?.boosted_keywords || []).join(", "),
+    analysisSummaryPrompt: aiConfigData?.analysis_summary_prompt || "",
+    analysisModel: aiConfigData?.analysis_model || "gpt-4.1-mini",
+    piiRedactionEnabled: callSettingsData?.pii_redaction_enabled ?? false,
+    piiCategories: callSettingsData?.pii_categories || ["ssn", "credit_card"],
+    fallbackVoiceIds: aiConfigData?.fallback_voice_ids || [],
+  });
+  const [advancedRetellModified, setAdvancedRetellModified] = useState(false);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -495,6 +532,30 @@ export function SettingsClient({
     }
   };
 
+  const saveCallFeaturesSettings = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/settings/call-features", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(callFeaturesSettings),
+      });
+
+      if (!res.ok) throw new Error("Failed to save call features settings");
+
+      setCallFeaturesModified(false);
+      toast({ title: "Call features saved", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveVoiceSettings = async () => {
     setSaving(true);
     try {
@@ -597,12 +658,21 @@ export function SettingsClient({
       const res = await fetch("/api/dashboard/settings/advanced-ai", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(advancedAiSettings),
+        body: JSON.stringify({
+          ...advancedAiSettings,
+          // Include Retell advanced settings
+          boostedKeywords: advancedRetellSettings.boostedKeywords,
+          analysisSummaryPrompt: advancedRetellSettings.analysisSummaryPrompt,
+          analysisModel: advancedRetellSettings.analysisModel,
+          piiRedactionEnabled: advancedRetellSettings.piiRedactionEnabled,
+          piiCategories: advancedRetellSettings.piiCategories,
+        }),
       });
 
       if (!res.ok) throw new Error("Failed to save advanced AI settings");
 
       setAdvancedAiSettingsModified(false);
+      setAdvancedRetellModified(false);
       toast({ title: "Advanced AI settings saved", variant: "success" });
     } catch (err) {
       toast({
@@ -910,6 +980,265 @@ export function SettingsClient({
         </Card>
       )}
 
+      {/* Call Features Tab */}
+      {activeTab === "call-features" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Call Features</CardTitle>
+            <CardDescription>
+              Configure advanced call handling features powered by Retell AI
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Voicemail Detection */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Voicemail Detection</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Enable voicemail detection</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically detect and leave a message on voicemail
+                  </p>
+                </div>
+                <Switch
+                  checked={callFeaturesSettings.voicemailDetectionEnabled}
+                  onCheckedChange={(checked) => {
+                    setCallFeaturesSettings({ ...callFeaturesSettings, voicemailDetectionEnabled: checked });
+                    setCallFeaturesModified(true);
+                  }}
+                />
+              </div>
+
+              {callFeaturesSettings.voicemailDetectionEnabled && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="voicemailMessage">Voicemail message</Label>
+                    <Textarea
+                      id="voicemailMessage"
+                      placeholder="Hi, this is Koya from [business]. We'll call you back shortly."
+                      value={callFeaturesSettings.voicemailMessage}
+                      onChange={(e) => {
+                        setCallFeaturesSettings({ ...callFeaturesSettings, voicemailMessage: e.target.value });
+                        setCallFeaturesModified(true);
+                      }}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="voicemailTimeout">Detection timeout (seconds)</Label>
+                    <Input
+                      id="voicemailTimeout"
+                      type="number"
+                      min={5}
+                      max={180}
+                      value={callFeaturesSettings.voicemailDetectionTimeoutMs / 1000}
+                      onChange={(e) => {
+                        const seconds = Math.max(5, Math.min(180, parseInt(e.target.value) || 30));
+                        setCallFeaturesSettings({ ...callFeaturesSettings, voicemailDetectionTimeoutMs: seconds * 1000 });
+                        setCallFeaturesModified(true);
+                      }}
+                      className="max-w-[150px]"
+                    />
+                    <p className="text-xs text-muted-foreground">Time to wait for voicemail detection (5-180 seconds)</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Silence Handling */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Silence Handling</h3>
+              <p className="text-sm text-muted-foreground">
+                Configure how Koya handles silent callers
+              </p>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="reminderTrigger">Prompt after (seconds)</Label>
+                  <Input
+                    id="reminderTrigger"
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={callFeaturesSettings.reminderTriggerMs / 1000}
+                    onChange={(e) => {
+                      const seconds = Math.max(5, Math.min(60, parseInt(e.target.value) || 10));
+                      setCallFeaturesSettings({ ...callFeaturesSettings, reminderTriggerMs: seconds * 1000 });
+                      setCallFeaturesModified(true);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">Silence before prompting</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="reminderCount">Max reminders</Label>
+                  <Input
+                    id="reminderCount"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={callFeaturesSettings.reminderMaxCount}
+                    onChange={(e) => {
+                      const count = Math.max(0, Math.min(10, parseInt(e.target.value) || 2));
+                      setCallFeaturesSettings({ ...callFeaturesSettings, reminderMaxCount: count });
+                      setCallFeaturesModified(true);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">Prompts before ending</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="endCallSilence">End call after (seconds)</Label>
+                  <Input
+                    id="endCallSilence"
+                    type="number"
+                    min={10}
+                    max={120}
+                    value={callFeaturesSettings.endCallAfterSilenceMs / 1000}
+                    onChange={(e) => {
+                      const seconds = Math.max(10, Math.min(120, parseInt(e.target.value) || 30));
+                      setCallFeaturesSettings({ ...callFeaturesSettings, endCallAfterSilenceMs: seconds * 1000 });
+                      setCallFeaturesModified(true);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">Total silence to end call</p>
+                </div>
+              </div>
+            </div>
+
+            {/* DTMF Input */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Touch-Tone Input (DTMF)</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Allow callers to enter digits</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Callers can use their keypad for account numbers, extensions, etc.
+                  </p>
+                </div>
+                <Switch
+                  checked={callFeaturesSettings.dtmfEnabled}
+                  onCheckedChange={(checked) => {
+                    setCallFeaturesSettings({ ...callFeaturesSettings, dtmfEnabled: checked });
+                    setCallFeaturesModified(true);
+                  }}
+                />
+              </div>
+
+              {callFeaturesSettings.dtmfEnabled && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="dtmfLimit">Max digits</Label>
+                    <Input
+                      id="dtmfLimit"
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={callFeaturesSettings.dtmfDigitLimit}
+                      onChange={(e) => {
+                        const limit = Math.max(1, Math.min(50, parseInt(e.target.value) || 10));
+                        setCallFeaturesSettings({ ...callFeaturesSettings, dtmfDigitLimit: limit });
+                        setCallFeaturesModified(true);
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dtmfKey">End key</Label>
+                    <Select
+                      value={callFeaturesSettings.dtmfTerminationKey}
+                      onValueChange={(value) => {
+                        setCallFeaturesSettings({ ...callFeaturesSettings, dtmfTerminationKey: value });
+                        setCallFeaturesModified(true);
+                      }}
+                    >
+                      <SelectTrigger id="dtmfKey">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="#"># (pound)</SelectItem>
+                        <SelectItem value="*">* (star)</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dtmfTimeout">Input timeout (seconds)</Label>
+                    <Input
+                      id="dtmfTimeout"
+                      type="number"
+                      min={1}
+                      max={15}
+                      value={callFeaturesSettings.dtmfTimeoutMs / 1000}
+                      onChange={(e) => {
+                        const seconds = Math.max(1, Math.min(15, parseInt(e.target.value) || 5));
+                        setCallFeaturesSettings({ ...callFeaturesSettings, dtmfTimeoutMs: seconds * 1000 });
+                        setCallFeaturesModified(true);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Audio Quality */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Audio Quality</h3>
+              <div className="space-y-2">
+                <Label>Background noise reduction</Label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="denoising"
+                      checked={callFeaturesSettings.denoisingMode === "noise-cancellation"}
+                      onChange={() => {
+                        setCallFeaturesSettings({ ...callFeaturesSettings, denoisingMode: "noise-cancellation" });
+                        setCallFeaturesModified(true);
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <div>
+                      <span className="font-medium">Standard</span>
+                      <p className="text-sm text-muted-foreground">Basic noise cancellation</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="denoising"
+                      checked={callFeaturesSettings.denoisingMode === "noise-and-background-speech-cancellation"}
+                      onChange={() => {
+                        setCallFeaturesSettings({ ...callFeaturesSettings, denoisingMode: "noise-and-background-speech-cancellation" });
+                        setCallFeaturesModified(true);
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <div>
+                      <span className="font-medium">Aggressive</span>
+                      <p className="text-sm text-muted-foreground">Removes noise and background speech</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-4 border-t">
+              <Button onClick={saveCallFeaturesSettings} disabled={saving || !callFeaturesModified}>
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Voice & Personality Tab */}
       {activeTab === "voice" && (
         <Card>
@@ -1099,6 +1428,70 @@ export function SettingsClient({
                   </div>
                 </>
               )}
+            </div>
+
+            {/* Backup Voices */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Backup Voices</h3>
+              <p className="text-sm text-muted-foreground">
+                Select backup voices to use if your primary voice provider experiences an outage.
+                Calls will continue uninterrupted using the fallback voice.
+              </p>
+
+              <div className="space-y-3">
+                {[0, 1].map((index) => {
+                  const currentVoiceId = voiceSettings.fallbackVoiceIds[index] || "";
+                  return (
+                    <div key={index} className="space-y-2">
+                      <Label>Fallback voice {index + 1}</Label>
+                      <Select
+                        value={currentVoiceId}
+                        onValueChange={(value) => {
+                          const newFallbackIds = [...voiceSettings.fallbackVoiceIds];
+                          if (value === "none") {
+                            // Remove this slot and all after it
+                            newFallbackIds.splice(index);
+                          } else {
+                            newFallbackIds[index] = value;
+                          }
+                          // Clean up empty trailing slots
+                          while (newFallbackIds.length > 0 && !newFallbackIds[newFallbackIds.length - 1]) {
+                            newFallbackIds.pop();
+                          }
+                          setVoiceSettings({
+                            ...voiceSettings,
+                            fallbackVoiceIds: newFallbackIds,
+                          });
+                          setVoiceSettingsModified(true);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={`Select fallback voice ${index + 1}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No fallback</SelectItem>
+                          {VOICE_SAMPLES
+                            .filter(v => v.id !== voiceSettings.voiceId && !voiceSettings.fallbackVoiceIds.includes(v.id))
+                            .concat(currentVoiceId ? VOICE_SAMPLES.filter(v => v.id === currentVoiceId) : [])
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((voice) => (
+                              <SelectItem key={voice.id} value={voice.id}>
+                                {voice.name} ({voice.gender === "female" ? "F" : "M"}, {voice.style})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-sm text-muted-foreground">
+                  Backup voices are used in order. If your primary voice is unavailable,
+                  the first fallback will be used. If that&apos;s also unavailable, the second fallback will be tried.
+                </p>
+              </div>
             </div>
 
             {/* Save Button */}
@@ -2018,6 +2411,154 @@ export function SettingsClient({
               </div>
             )}
 
+            {/* Boosted Keywords */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Boosted Keywords</h3>
+              <p className="text-sm text-muted-foreground">
+                Words and phrases to prioritize in speech recognition for more accurate transcription
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="boostedKeywords">Keywords (comma-separated)</Label>
+                <Input
+                  id="boostedKeywords"
+                  placeholder="appointment, schedule, cancel, reschedule, emergency"
+                  value={advancedRetellSettings.boostedKeywords}
+                  onChange={(e) => {
+                    setAdvancedRetellSettings({
+                      ...advancedRetellSettings,
+                      boostedKeywords: e.target.value,
+                    });
+                    setAdvancedRetellModified(true);
+                  }}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Enter industry-specific terms, your business name, service names, or commonly misheard words
+                </p>
+              </div>
+            </div>
+
+            {/* Custom Summary Prompt */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Call Summary</h3>
+              <p className="text-sm text-muted-foreground">
+                Customize how Koya summarizes calls after they end
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="analysisSummaryPrompt">Custom summary prompt (optional)</Label>
+                  <Textarea
+                    id="analysisSummaryPrompt"
+                    placeholder="Summarize this call focusing on: service requested, appointment details, follow-up actions needed, and any special requests..."
+                    value={advancedRetellSettings.analysisSummaryPrompt}
+                    onChange={(e) => {
+                      setAdvancedRetellSettings({
+                        ...advancedRetellSettings,
+                        analysisSummaryPrompt: e.target.value,
+                      });
+                      setAdvancedRetellModified(true);
+                    }}
+                    rows={3}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Leave empty to use the default summary format
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="analysisModel">Analysis model</Label>
+                  <Select
+                    value={advancedRetellSettings.analysisModel}
+                    onValueChange={(value) => {
+                      setAdvancedRetellSettings({
+                        ...advancedRetellSettings,
+                        analysisModel: value,
+                      });
+                      setAdvancedRetellModified(true);
+                    }}
+                  >
+                    <SelectTrigger className="max-w-[250px]">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gpt-4.1-mini">GPT-4.1 Mini (Fast)</SelectItem>
+                      <SelectItem value="claude-4.5-sonnet">Claude Sonnet (Balanced)</SelectItem>
+                      <SelectItem value="gemini-2.5-flash">Gemini Flash (Fast)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Model used for generating call summaries and analysis
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* PII Redaction */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Privacy & Compliance</h3>
+              <p className="text-sm text-muted-foreground">
+                Automatically redact sensitive information from call transcripts
+              </p>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Enable PII redaction</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically detect and mask sensitive data in transcripts
+                  </p>
+                </div>
+                <Switch
+                  checked={advancedRetellSettings.piiRedactionEnabled}
+                  onCheckedChange={(checked) => {
+                    setAdvancedRetellSettings({
+                      ...advancedRetellSettings,
+                      piiRedactionEnabled: checked,
+                    });
+                    setAdvancedRetellModified(true);
+                  }}
+                />
+              </div>
+
+              {advancedRetellSettings.piiRedactionEnabled && (
+                <div className="space-y-3 pl-4 border-l-2 border-muted ml-2">
+                  <Label>Data types to redact</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { id: "ssn", label: "Social Security Numbers" },
+                      { id: "credit_card", label: "Credit Card Numbers" },
+                      { id: "phone_number", label: "Phone Numbers" },
+                      { id: "email", label: "Email Addresses" },
+                      { id: "date_of_birth", label: "Dates of Birth" },
+                      { id: "address", label: "Physical Addresses" },
+                    ].map((category) => (
+                      <label
+                        key={category.id}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={advancedRetellSettings.piiCategories.includes(category.id)}
+                          onCheckedChange={(checked) => {
+                            const newCategories = checked
+                              ? [...advancedRetellSettings.piiCategories, category.id]
+                              : advancedRetellSettings.piiCategories.filter((c: string) => c !== category.id);
+                            setAdvancedRetellSettings({
+                              ...advancedRetellSettings,
+                              piiCategories: newCategories,
+                            });
+                            setAdvancedRetellModified(true);
+                          }}
+                        />
+                        <span className="text-sm">{category.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Selected data types will be replaced with [REDACTED] in transcripts
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Info Box */}
             <div className="rounded-lg bg-muted/50 p-4 mt-4">
               <div className="flex items-start gap-3">
@@ -2033,7 +2574,7 @@ export function SettingsClient({
 
             {/* Save Button */}
             <div className="flex justify-end pt-4 border-t">
-              <Button onClick={saveAdvancedAiSettings} disabled={saving || !advancedAiSettingsModified}>
+              <Button onClick={saveAdvancedAiSettings} disabled={saving || (!advancedAiSettingsModified && !advancedRetellModified)}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (

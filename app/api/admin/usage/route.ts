@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const RETELL_COST_PER_MINUTE_CENTS = 10; // $0.10/min estimate
 const TWILIO_COST_PER_MINUTE_CENTS = 2; // $0.02/min estimate
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
 

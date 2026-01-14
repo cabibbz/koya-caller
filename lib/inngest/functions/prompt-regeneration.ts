@@ -9,6 +9,7 @@
 import { inngest } from "../client";
 import { createServiceClient } from "@/lib/supabase/server";
 import { generatePrompts, buildPromptInputFromDatabase } from "@/lib/claude";
+import { updateAgentAdvancedSettings } from "@/lib/retell";
 
 // =============================================================================
 // Process Single Regeneration Request
@@ -390,7 +391,7 @@ async function updateRetellAgent(
   businessId: string,
   agentId: string,
   englishPrompt: string,
-  spanishPrompt?: string
+  _spanishPrompt?: string
 ): Promise<void> {
   try {
     const RETELL_API_KEY = process.env.RETELL_API_KEY;
@@ -437,16 +438,61 @@ async function updateRetellAgent(
       return;
     }
 
-    const { data: config } = await supabase
+    // Sync advanced settings from database to Retell agent
+    const { data: aiConfig } = await supabase
       .from("ai_config")
-      .select("retell_agent_version")
+      .select("retell_agent_version, boosted_keywords, analysis_summary_prompt, analysis_model, fallback_voice_ids")
       .eq("business_id", businessId)
       .single();
+
+    const { data: callSettings } = await supabase
+      .from("call_settings")
+      .select(`
+        voicemail_detection_enabled, voicemail_message, voicemail_detection_timeout_ms,
+        reminder_trigger_ms, reminder_max_count, end_call_after_silence_ms,
+        dtmf_enabled, dtmf_digit_limit, dtmf_termination_key, dtmf_timeout_ms,
+        denoising_mode, pii_redaction_enabled, pii_categories
+      `)
+      .eq("business_id", businessId)
+      .single();
+
+    // Update advanced Retell agent settings
+    if (callSettings || aiConfig?.boosted_keywords?.length) {
+      await updateAgentAdvancedSettings(agentId, {
+        voicemailDetection: callSettings ? {
+          enabled: callSettings.voicemail_detection_enabled ?? false,
+          message: callSettings.voicemail_message || undefined,
+          timeoutMs: callSettings.voicemail_detection_timeout_ms || 30000,
+        } : undefined,
+        silenceHandling: callSettings ? {
+          reminderTriggerMs: callSettings.reminder_trigger_ms || 10000,
+          reminderMaxCount: callSettings.reminder_max_count ?? 2,
+          endCallAfterSilenceMs: callSettings.end_call_after_silence_ms || 30000,
+        } : undefined,
+        dtmf: callSettings ? {
+          enabled: callSettings.dtmf_enabled ?? false,
+          digitLimit: callSettings.dtmf_digit_limit || 10,
+          terminationKey: callSettings.dtmf_termination_key || "#",
+          timeoutMs: callSettings.dtmf_timeout_ms || 5000,
+        } : undefined,
+        denoisingMode: callSettings?.denoising_mode || "noise-cancellation",
+        boostedKeywords: aiConfig?.boosted_keywords || [],
+        summaryConfig: aiConfig?.analysis_summary_prompt ? {
+          prompt: aiConfig.analysis_summary_prompt,
+          model: aiConfig.analysis_model || "gpt-4.1-mini",
+        } : undefined,
+        piiConfig: callSettings?.pii_redaction_enabled ? {
+          enabled: true,
+          categories: callSettings.pii_categories || ["ssn", "credit_card"],
+        } : undefined,
+        fallbackVoices: aiConfig?.fallback_voice_ids || [],
+      });
+    }
 
     await supabase
       .from("ai_config")
       .update({
-        retell_agent_version: (config?.retell_agent_version || 0) + 1,
+        retell_agent_version: (aiConfig?.retell_agent_version || 0) + 1,
       })
       .eq("business_id", businessId);
   } catch {

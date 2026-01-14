@@ -130,7 +130,8 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
 
     // Then create the agent with voice settings
     // Spec Reference: Lines 1284-1293 (Multilingual agent configuration)
-    const agentConfig: Parameters<typeof client.agent.create>[0] = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Retell SDK types are incomplete for newer API features
+    const agentConfig: any = {
       response_engine: {
         type: "retell-llm",
         llm_id: llm.llm_id,
@@ -184,11 +185,8 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
     // Add multilingual settings if Spanish is enabled
     if (params.spanishEnabled) {
       // Use ElevenLabs multilingual model
-      // @ts-ignore - Adding multilingual properties to agent config
       agentConfig.voice_model = "eleven_multilingual_v2";
-      // @ts-ignore
       agentConfig.language = "multi";
-      // @ts-ignore
       agentConfig.backchannel_words = [
         "yeah",
         "uh-huh",

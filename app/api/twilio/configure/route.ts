@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
       const { error: dbError } = await supabase
         .from("businesses")
-        // @ts-ignore - Supabase generated types issue
+        // @ts-expect-error - Supabase generated types issue
         .update({
           phone_number: TWILIO_PHONE_NUMBER,
           twilio_phone_sid: "mock_existing_number",
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     // Save to database (reuse existing client)
     const { error: dbError } = await supabase
       .from("businesses")
-      // @ts-ignore - Supabase generated types issue
+      // @ts-expect-error - Supabase generated types issue
       .update({
         phone_number: TWILIO_PHONE_NUMBER,
         twilio_phone_sid: phoneNumberResource.sid,

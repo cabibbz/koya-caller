@@ -268,7 +268,7 @@ Return ONLY valid JSON, no other text.`;
     }
 
     // Post-process content for SEO enhancements
-    let processedContent = articleData.content;
+    const processedContent = articleData.content;
 
     // Generate table of contents
     const tableOfContents = generateTableOfContents(processedContent);
