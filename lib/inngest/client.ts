@@ -40,7 +40,9 @@ export const inngest = {
       const { businessId, triggeredBy } = event.data as { businessId: string; triggeredBy: string };
       console.log(`[Inngest Fallback] Queuing prompt regeneration for ${businessId} (${triggeredBy})`);
 
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+      // Always use localhost for internal API calls in development
+      const isDev = process.env.NODE_ENV === "development";
+      const baseUrl = isDev ? "http://localhost:3000" : (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000");
 
       // Fire-and-forget: Don't await, let it run in background
       // This makes the save instant while regeneration happens async

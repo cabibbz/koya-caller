@@ -2,12 +2,15 @@
 -- Allows businesses to configure service upgrade offers
 -- Example: "Upgrade from 30 min to 1 hour for 20% off"
 
+-- Enable uuid extension if not exists
+create extension if not exists "uuid-ossp";
+
 -- ============================================
 -- Upsells Table
 -- Links services together for upgrade offers
 -- ============================================
 create table upsells (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id) on delete cascade,
 
   -- Source service (when customer is booking this...)

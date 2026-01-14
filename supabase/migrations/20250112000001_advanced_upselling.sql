@@ -7,7 +7,7 @@
 -- Example: "Haircut + Beard Trim" = 15% off
 -- ============================================
 create table bundles (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id) on delete cascade,
 
   name text not null,
@@ -31,7 +31,7 @@ comment on table bundles is 'Service bundles with combined discount';
 
 -- Junction table for bundle-service relationships
 create table bundle_services (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   bundle_id uuid not null references bundles(id) on delete cascade,
   service_id uuid not null references services(id) on delete cascade,
   sort_order int default 0,
@@ -52,7 +52,7 @@ create index idx_bundle_services_service on bundle_services(service_id);
 -- Multi-visit packages (buy 5, get 20% off)
 -- ============================================
 create table packages (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id) on delete cascade,
 
   name text not null,
@@ -97,7 +97,7 @@ create index idx_packages_service on packages(service_id);
 -- Recurring membership plans
 -- ============================================
 create table memberships (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id) on delete cascade,
 
   name text not null,

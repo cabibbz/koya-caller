@@ -16,6 +16,8 @@ import { createAppointmentEvent } from "@/lib/calendar";
 // Retell webhook event types
 interface RetellCallEvent {
   event: "call_started" | "call_ended" | "call_analyzed";
+  // duration_ms is provided at the event level for call_ended events
+  duration_ms?: number;
   call: {
     call_id: string;
     agent_id: string;
@@ -26,6 +28,9 @@ interface RetellCallEvent {
     call_status: string;
     start_timestamp?: number;
     end_timestamp?: number;
+    // Duration may also be inside the call object
+    duration_ms?: number;
+    duration_seconds?: number;
     transcript?: string;
     transcript_object?: Array<{ role: string; content: string }>;
     recording_url?: string;
@@ -106,13 +111,37 @@ export async function POST(request: NextRequest) {
       }
 
       case "call_ended": {
-        // Calculate duration
-        const durationMs =
-          call.end_timestamp && call.start_timestamp
-            ? call.end_timestamp - call.start_timestamp
-            : 0;
-        const durationSeconds = Math.ceil(durationMs / 1000);
-        const durationMinutesBilled = Math.ceil(durationSeconds / 60);
+        // Get duration - check multiple possible locations where Retell provides duration
+        // Priority: event.duration_ms > call.duration_ms > call.duration_seconds > calculated
+        let durationMs = 0;
+        let durationSeconds = 0;
+
+        // Check event-level duration_ms
+        if (event.duration_ms && event.duration_ms > 0) {
+          durationMs = event.duration_ms;
+          durationSeconds = Math.ceil(durationMs / 1000);
+        }
+        // Check call-level duration_ms
+        else if (call.duration_ms && call.duration_ms > 0) {
+          durationMs = call.duration_ms;
+          durationSeconds = Math.ceil(durationMs / 1000);
+        }
+        // Check call-level duration_seconds (Retell sometimes sends this directly)
+        else if (call.duration_seconds && call.duration_seconds > 0) {
+          durationSeconds = call.duration_seconds;
+          durationMs = durationSeconds * 1000;
+        }
+        // Fallback: calculate from timestamps
+        else if (call.end_timestamp && call.start_timestamp) {
+          // Retell timestamps are in milliseconds (Unix epoch ms)
+          durationMs = call.end_timestamp - call.start_timestamp;
+          durationSeconds = Math.ceil(durationMs / 1000);
+        }
+
+        const durationMinutesBilled = durationSeconds > 0 ? Math.max(1, Math.ceil(durationSeconds / 60)) : 0;
+
+        console.log(`[Retell Webhook] Call ${call.call_id} duration: ${durationMs}ms = ${durationSeconds}s (billed: ${durationMinutesBilled} min)`);
+        console.log(`[Retell Webhook] Raw data - event.duration_ms: ${event.duration_ms}, call.duration_ms: ${call.duration_ms}, call.duration_seconds: ${call.duration_seconds}, timestamps: ${call.start_timestamp} -> ${call.end_timestamp}`);
 
         // Determine outcome based on metadata or disconnection reason
         let outcome = "info"; // Default

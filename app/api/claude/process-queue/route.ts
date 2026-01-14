@@ -419,12 +419,84 @@ async function fetchBusinessData(
     const { data: callSettings } = await supabase
       .from("call_settings")
       .select(`
-        transfer_number, 
+        transfer_number,
         transfer_on_request, transfer_on_emergency, transfer_on_upset,
         after_hours_enabled, after_hours_can_book
       `)
       .eq("business_id", businessId)
       .single();
+
+    // Fetch upsells with service relations
+    const { data: upsells } = await supabase
+      .from("upsells")
+      .select(`
+        id,
+        discount_percent,
+        pitch_message,
+        trigger_timing,
+        suggest_when_unavailable,
+        source_service:services!source_service_id(name),
+        target_service:services!target_service_id(name)
+      `)
+      .eq("business_id", businessId);
+
+    // Fetch bundles
+    const { data: bundles } = await supabase
+      .from("bundles")
+      .select("id, name, discount_percent, pitch_message")
+      .eq("business_id", businessId);
+
+    // Fetch bundle services for each bundle
+    let bundlesWithServices: Array<{
+      name: string;
+      discount_percent: number;
+      pitch_message: string | null;
+      services: Array<{ name: string }>;
+    }> = [];
+
+    if (bundles && bundles.length > 0) {
+      bundlesWithServices = await Promise.all(
+        (bundles as Array<{ id: string; name: string; discount_percent: number; pitch_message: string | null }>).map(async (b) => {
+          const { data: bundleServices } = await supabase
+            .from("bundle_services")
+            .select("service:services(name)")
+            .eq("bundle_id", b.id);
+          return {
+            name: b.name,
+            discount_percent: b.discount_percent,
+            pitch_message: b.pitch_message,
+            services: (bundleServices || []).map((bs: any) => bs.service).filter(Boolean),
+          };
+        })
+      );
+    }
+
+    // Fetch packages
+    const { data: packages } = await supabase
+      .from("packages")
+      .select(`
+        name,
+        session_count,
+        discount_percent,
+        pitch_message,
+        min_visits_to_pitch,
+        service:services(name)
+      `)
+      .eq("business_id", businessId);
+
+    // Fetch memberships
+    const { data: memberships } = await supabase
+      .from("memberships")
+      .select(`
+        name,
+        price_cents,
+        billing_period,
+        benefits,
+        pitch_message,
+        pitch_after_booking_amount_cents,
+        pitch_after_visit_count
+      `)
+      .eq("business_id", businessId);
 
     const minutesRemaining = Math.max(
       0,
@@ -456,6 +528,11 @@ async function fetchBusinessData(
           after_hours_enabled: true,
           after_hours_can_book: true,
         },
+        // Upselling data for prompt generation
+        upsells: upsells || [],
+        bundles: bundlesWithServices,
+        packages: packages || [],
+        memberships: memberships || [],
         minutesRemaining,
         minutesExhausted: minutesRemaining <= 0,
       },

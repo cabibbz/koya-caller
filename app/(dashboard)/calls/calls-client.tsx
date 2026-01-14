@@ -59,6 +59,7 @@ import {
   Mail,
   FileText,
   Loader2,
+  Download,
 } from "lucide-react";
 import type { Call, Appointment } from "@/types";
 import { ChatTranscript } from "@/components/ui/chat-transcript";
@@ -646,9 +647,26 @@ export function CallsListClient({
                 {/* Recording */}
                 {selectedCall.recording_url && (
                   <div>
-                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                      <Play className="h-4 w-4" />
-                      Recording
+                    <h4 className="text-sm font-medium mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Play className="h-4 w-4" />
+                        Recording
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = selectedCall.recording_url!;
+                          link.download = `call-${selectedCall.id}-${format(new Date(selectedCall.created_at), "yyyy-MM-dd")}.mp3`;
+                          link.target = "_blank";
+                          link.click();
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
                     </h4>
                     <audio
                       controls

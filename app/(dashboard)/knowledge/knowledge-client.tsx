@@ -2582,14 +2582,14 @@ function PackagesSection({ packages, setPackages, services, loading }: PackagesS
           <div className="space-y-2">
             <Label>Applicable Service (Optional)</Label>
             <Select
-              value={newPackage.service_id}
-              onValueChange={(value) => setNewPackage({ ...newPackage, service_id: value })}
+              value={newPackage.service_id || "__all__"}
+              onValueChange={(value) => setNewPackage({ ...newPackage, service_id: value === "__all__" ? "" : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All services" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All services</SelectItem>
+                <SelectItem value="__all__">All services</SelectItem>
                 {services.map((service) => (
                   <SelectItem key={service.id} value={service.id}>
                     {service.name}
