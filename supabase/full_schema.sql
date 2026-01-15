@@ -264,11 +264,28 @@ CREATE TABLE IF NOT EXISTS ai_config (
     "maxFewShotExamples": 3
   }'::jsonb,
 
+  -- Retell advanced features
+  boosted_keywords text[] DEFAULT '{}',
+  analysis_summary_prompt text,
+  analysis_model text DEFAULT 'gpt-4.1-mini',
+  fallback_voice_ids text[] DEFAULT '{}',
+
+  -- Voice control settings
+  voice_temperature numeric(3,2) DEFAULT 1.0,
+  voice_speed numeric(3,2) DEFAULT 1.0,
+  voice_volume numeric(3,2) DEFAULT 1.0,
+  begin_message_delay_ms integer DEFAULT 0,
+
   created_at timestamptz DEFAULT NOW(),
   updated_at timestamptz DEFAULT NOW(),
 
   CONSTRAINT valid_language_mode CHECK (language_mode IN ('auto', 'ask', 'spanish_default')),
-  CONSTRAINT valid_personality CHECK (personality IN ('professional', 'friendly', 'casual'))
+  CONSTRAINT valid_personality CHECK (personality IN ('professional', 'friendly', 'casual')),
+  CONSTRAINT valid_analysis_model CHECK (analysis_model IN ('gpt-4.1-mini', 'claude-4.5-sonnet', 'gemini-2.5-flash')),
+  CONSTRAINT valid_voice_temperature CHECK (voice_temperature >= 0 AND voice_temperature <= 2),
+  CONSTRAINT valid_voice_speed CHECK (voice_speed >= 0.5 AND voice_speed <= 2),
+  CONSTRAINT valid_voice_volume CHECK (voice_volume >= 0 AND voice_volume <= 2),
+  CONSTRAINT valid_begin_message_delay CHECK (begin_message_delay_ms >= 0 AND begin_message_delay_ms <= 5000)
 );
 COMMENT ON TABLE ai_config IS 'AI voice and personality configuration';
 
