@@ -219,6 +219,11 @@ export function SettingsClient({
     afterHoursGreeting: initialAiConfig?.after_hours_greeting || "",
     afterHoursGreetingSpanish: initialAiConfig?.after_hours_greeting_spanish || "",
     fallbackVoiceIds: (initialAiConfig as unknown as Record<string, unknown>)?.fallback_voice_ids as string[] || [],
+    // Voice control settings
+    voiceTemperature: (initialAiConfig as unknown as Record<string, unknown>)?.voice_temperature as number ?? 1.0,
+    voiceSpeed: (initialAiConfig as unknown as Record<string, unknown>)?.voice_speed as number ?? 1.0,
+    voiceVolume: (initialAiConfig as unknown as Record<string, unknown>)?.voice_volume as number ?? 1.0,
+    beginMessageDelayMs: (initialAiConfig as unknown as Record<string, unknown>)?.begin_message_delay_ms as number ?? 0,
   });
   const [voiceSettingsModified, setVoiceSettingsModified] = useState(false);
   const [selectedGender, setSelectedGender] = useState<"female" | "male">("female");
@@ -1536,6 +1541,107 @@ export function SettingsClient({
                   </div>
                 </>
               )}
+            </div>
+
+            {/* Voice Controls */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Voice Controls</h3>
+              <p className="text-sm text-muted-foreground">
+                Fine-tune how Koya&apos;s voice sounds. These settings affect speech rate, expressiveness, and timing.
+              </p>
+
+              {/* Voice Speed */}
+              <div className="space-y-3">
+                <Label htmlFor="voiceSpeed">Speech Speed</Label>
+                <Slider
+                  id="voiceSpeed"
+                  min={0.5}
+                  max={2}
+                  step={0.1}
+                  value={voiceSettings.voiceSpeed}
+                  onChange={(value) => {
+                    setVoiceSettings({ ...voiceSettings, voiceSpeed: value });
+                    setVoiceSettingsModified(true);
+                  }}
+                  showValue={false}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Slower (0.5x)</span>
+                  <span className="font-medium">{voiceSettings.voiceSpeed.toFixed(1)}x</span>
+                  <span>Faster (2.0x)</span>
+                </div>
+              </div>
+
+              {/* Voice Temperature */}
+              <div className="space-y-3">
+                <Label htmlFor="voiceTemperature">Voice Expressiveness</Label>
+                <Slider
+                  id="voiceTemperature"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={voiceSettings.voiceTemperature}
+                  onChange={(value) => {
+                    setVoiceSettings({ ...voiceSettings, voiceTemperature: value });
+                    setVoiceSettingsModified(true);
+                  }}
+                  showValue={false}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Stable</span>
+                  <span className="font-medium">{voiceSettings.voiceTemperature.toFixed(1)}</span>
+                  <span>Expressive</span>
+                </div>
+              </div>
+
+              {/* Voice Volume */}
+              <div className="space-y-3">
+                <Label htmlFor="voiceVolume">Volume</Label>
+                <Slider
+                  id="voiceVolume"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={voiceSettings.voiceVolume}
+                  onChange={(value) => {
+                    setVoiceSettings({ ...voiceSettings, voiceVolume: value });
+                    setVoiceSettingsModified(true);
+                  }}
+                  showValue={false}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Quieter</span>
+                  <span className="font-medium">{voiceSettings.voiceVolume.toFixed(1)}</span>
+                  <span>Louder</span>
+                </div>
+              </div>
+
+              {/* Begin Message Delay */}
+              <div className="space-y-3">
+                <Label htmlFor="beginMessageDelay">Start Delay</Label>
+                <Slider
+                  id="beginMessageDelay"
+                  min={0}
+                  max={5000}
+                  step={250}
+                  value={voiceSettings.beginMessageDelayMs}
+                  onChange={(value) => {
+                    setVoiceSettings({ ...voiceSettings, beginMessageDelayMs: value });
+                    setVoiceSettingsModified(true);
+                  }}
+                  showValue={false}
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Immediate</span>
+                  <span className="font-medium">
+                    {voiceSettings.beginMessageDelayMs === 0 ? "None" : `${(voiceSettings.beginMessageDelayMs / 1000).toFixed(1)}s`}
+                  </span>
+                  <span>5 seconds</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Delay before Koya speaks after the call connects. Useful for a more natural call start.
+                </p>
+              </div>
             </div>
 
             {/* Backup Voices */}

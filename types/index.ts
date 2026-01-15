@@ -179,6 +179,11 @@ export interface AIConfig {
   analysis_summary_prompt: string | null;
   analysis_model: AnalysisModel;
   fallback_voice_ids: string[];
+  // Voice control settings (migration 20250115000001)
+  voice_temperature: number;
+  voice_speed: number;
+  voice_volume: number;
+  begin_message_delay_ms: number;
   created_at: string;
   updated_at: string;
 }

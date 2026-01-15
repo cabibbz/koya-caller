@@ -278,6 +278,11 @@ export interface AgentCreateParams {
   systemPromptSpanish?: string;
   spanishEnabled: boolean;
   languageMode: "auto" | "ask" | "spanish_default";
+  // Voice control settings
+  voiceTemperature?: number; // 0-2, default 1.0 (stability vs expressiveness)
+  voiceSpeed?: number; // 0.5-2, default 1.0 (speech rate)
+  voiceVolume?: number; // 0-2, default 1.0 (loudness)
+  beginMessageDelayMs?: number; // 0-5000, default 0 (delay before first message)
 }
 
 export interface AgentResponse {
@@ -342,8 +347,10 @@ export interface RetellAgentCreateParams {
   interruption_sensitivity?: number;
   voice_speed?: number;
   voice_temperature?: number;
+  volume?: number;
   responsiveness?: number;
   webhook_url?: string;
+  begin_message_delay_ms?: number;
 }
 
 export interface RetellAgent {

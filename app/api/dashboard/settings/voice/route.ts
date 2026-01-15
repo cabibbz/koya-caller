@@ -49,6 +49,11 @@ async function handler(request: NextRequest) {
       afterHoursGreeting,
       afterHoursGreetingSpanish,
       fallbackVoiceIds,
+      // Voice control settings
+      voiceTemperature,
+      voiceSpeed,
+      voiceVolume,
+      beginMessageDelayMs,
     } = body;
 
     // Validate personality
@@ -74,6 +79,11 @@ async function handler(request: NextRequest) {
     if (afterHoursGreeting !== undefined) updateData.after_hours_greeting = afterHoursGreeting;
     if (afterHoursGreetingSpanish !== undefined) updateData.after_hours_greeting_spanish = afterHoursGreetingSpanish;
     if (fallbackVoiceIds !== undefined) updateData.fallback_voice_ids = fallbackVoiceIds || [];
+    // Voice control settings
+    if (voiceTemperature !== undefined) updateData.voice_temperature = Math.max(0, Math.min(2, voiceTemperature));
+    if (voiceSpeed !== undefined) updateData.voice_speed = Math.max(0.5, Math.min(2, voiceSpeed));
+    if (voiceVolume !== undefined) updateData.voice_volume = Math.max(0, Math.min(2, voiceVolume));
+    if (beginMessageDelayMs !== undefined) updateData.begin_message_delay_ms = Math.max(0, Math.min(5000, beginMessageDelayMs));
 
     // Use admin client for updates
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,15 +103,28 @@ async function handler(request: NextRequest) {
       );
     }
 
-    // Update Retell agent with fallback voices if changed
-    if (fallbackVoiceIds !== undefined && aiConfig?.retell_agent_id) {
+    // Update Retell agent with voice settings if changed
+    const hasVoiceUpdates =
+      fallbackVoiceIds !== undefined ||
+      voiceTemperature !== undefined ||
+      voiceSpeed !== undefined ||
+      voiceVolume !== undefined ||
+      beginMessageDelayMs !== undefined;
+
+    if (hasVoiceUpdates && aiConfig?.retell_agent_id) {
       try {
         await updateAgentAdvancedSettings(aiConfig.retell_agent_id, {
-          fallbackVoices: fallbackVoiceIds || [],
+          fallbackVoices: fallbackVoiceIds !== undefined ? (fallbackVoiceIds || []) : undefined,
+          voiceControls: {
+            temperature: voiceTemperature,
+            speed: voiceSpeed,
+            volume: voiceVolume,
+            beginMessageDelayMs: beginMessageDelayMs,
+          },
         });
       } catch (error) {
         // Log but don't fail - settings are saved to DB
-        logError("Voice Update Retell Agent Fallback", error);
+        logError("Voice Update Retell Agent Settings", error);
       }
     }
 

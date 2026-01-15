@@ -202,6 +202,20 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
     agentConfig.interruption_sensitivity = 0.9; // High sensitivity - stops fast when caller talks
     agentConfig.responsiveness = 0.9; // High responsiveness - responds quickly
 
+    // Voice control settings
+    if (params.voiceTemperature !== undefined) {
+      agentConfig.voice_temperature = params.voiceTemperature;
+    }
+    if (params.voiceSpeed !== undefined) {
+      agentConfig.voice_speed = params.voiceSpeed;
+    }
+    if (params.voiceVolume !== undefined) {
+      agentConfig.volume = params.voiceVolume;
+    }
+    if (params.beginMessageDelayMs !== undefined && params.beginMessageDelayMs > 0) {
+      agentConfig.begin_message_delay_ms = params.beginMessageDelayMs;
+    }
+
     const agent = await client.agent.create(agentConfig);
 
     return {
@@ -610,6 +624,17 @@ export interface AdvancedAgentSettings {
     // How quickly to respond after caller stops speaking (0-1, higher = responds faster)
     responseSpeed: number;
   };
+  // Voice Control Settings
+  voiceControls?: {
+    // Voice temperature: stability vs expressiveness (0-2, default 1.0)
+    temperature?: number;
+    // Voice speed: speech rate (0.5-2, default 1.0)
+    speed?: number;
+    // Volume: output loudness (0-2, default 1.0)
+    volume?: number;
+    // Delay before first message in ms (0-5000, default 0)
+    beginMessageDelayMs?: number;
+  };
 }
 
 /**
@@ -711,6 +736,22 @@ export async function updateAgentAdvancedSettings(
       updatePayload.responsiveness = settings.responsiveness.responseSpeed;
     }
 
+    // Voice Control Settings
+    if (settings.voiceControls !== undefined) {
+      if (settings.voiceControls.temperature !== undefined) {
+        updatePayload.voice_temperature = settings.voiceControls.temperature;
+      }
+      if (settings.voiceControls.speed !== undefined) {
+        updatePayload.voice_speed = settings.voiceControls.speed;
+      }
+      if (settings.voiceControls.volume !== undefined) {
+        updatePayload.volume = settings.voiceControls.volume;
+      }
+      if (settings.voiceControls.beginMessageDelayMs !== undefined) {
+        updatePayload.begin_message_delay_ms = settings.voiceControls.beginMessageDelayMs;
+      }
+    }
+
     // Only update if there are changes
     if (Object.keys(updatePayload).length > 0) {
       await client.agent.update(agentId, updatePayload as Parameters<typeof client.agent.update>[1]);
@@ -751,6 +792,11 @@ export function buildAdvancedSettingsConfig(
     analysis_summary_prompt?: string | null;
     analysis_model?: string;
     fallback_voice_ids?: string[];
+    // Voice control settings
+    voice_temperature?: number;
+    voice_speed?: number;
+    voice_volume?: number;
+    begin_message_delay_ms?: number;
   }
 ): Record<string, unknown> {
   const config: Record<string, unknown> = {};
@@ -829,6 +875,20 @@ export function buildAdvancedSettingsConfig(
   }
   if (callSettings.responsiveness !== undefined) {
     config.responsiveness = callSettings.responsiveness;
+  }
+
+  // Voice Control Settings
+  if (aiConfig.voice_temperature !== undefined) {
+    config.voice_temperature = aiConfig.voice_temperature;
+  }
+  if (aiConfig.voice_speed !== undefined) {
+    config.voice_speed = aiConfig.voice_speed;
+  }
+  if (aiConfig.voice_volume !== undefined) {
+    config.volume = aiConfig.voice_volume;
+  }
+  if (aiConfig.begin_message_delay_ms !== undefined && aiConfig.begin_message_delay_ms > 0) {
+    config.begin_message_delay_ms = aiConfig.begin_message_delay_ms;
   }
 
   return config;
