@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_multiple_files",
+      "mcp__memory__read_graph",
+      "Bash(npm run type-check:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx typescript:*)",
+      "Bash(if [ -d \"node_modules\" ])",
+      "Bash(then echo \"node_modules exists\")",
+      "Bash(else echo \"node_modules missing - need to run npm install\")",
+      "Bash(fi)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(npx supabase:*)",
+      "Bash(node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)",
+      "Bash(timeout:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(npm run build:*)",
+      "mcp__filesystem__read_text_file",
+      "WebSearch",
+      "mcp__filesystem__list_directory",
+      "WebFetch(domain:github.com)",
+      "Bash(where:*)",
+      "mcp__filesystem__search_files",
+      "Bash(ls:*)"
+    ]
+  }
+}

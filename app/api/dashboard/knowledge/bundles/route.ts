@@ -1,0 +1,633 @@
+/**
+ * Bundles Knowledge API Route
+ * Manages service bundle offers for the AI phone receptionist
+ *
+ * GET /api/dashboard/knowledge/bundles - List all bundles
+ * POST /api/dashboard/knowledge/bundles - Create new bundle
+ * PUT /api/dashboard/knowledge/bundles - Update bundle
+ * DELETE /api/dashboard/knowledge/bundles?id=xxx - Delete bundle
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { inngest } from "@/lib/inngest/client";
+import {
+  isValidUUID,
+  validateStringLength,
+  validateBoolean,
+  LIMITS,
+} from "@/lib/validation";
+import { logError } from "@/lib/logging";
+
+// Validation helpers
+function validateUuidArray(arr: unknown[]): { valid: boolean; error?: string } {
+  for (const item of arr) {
+    if (!isValidUUID(item)) {
+      return { valid: false, error: "Invalid service ID format" };
+    }
+  }
+  // Check for duplicates
+  const uniqueIds = new Set(arr);
+  if (uniqueIds.size !== arr.length) {
+    return { valid: false, error: "Duplicate service IDs are not allowed" };
+  }
+  return { valid: true };
+}
+
+// GET - List all bundles for the business
+export async function GET(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+
+    // Fetch bundles with their services
+    // Note: Using 'as any' due to Supabase RLS type limitations with joined queries
+    const { data: bundles, error } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundles")
+      .select(`
+        id,
+        name,
+        description,
+        discount_percent,
+        pitch_message,
+        is_active,
+        times_offered,
+        times_accepted,
+        bundle_services(
+          service_id,
+          sort_order,
+          service:services(id, name, duration_minutes, price_cents)
+        )
+      `)
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      logError("Bundles GET", error);
+      return NextResponse.json({ error: "Failed to fetch bundles" }, { status: 500 });
+    }
+
+    // Define types for the joined query result
+    type BundleServiceWithService = {
+      service_id: string;
+      sort_order: number;
+      service: { id: string; name: string; duration_minutes: number; price_cents: number | null } | null;
+    };
+    type BundleWithServices = {
+      id: string;
+      name: string;
+      description: string | null;
+      discount_percent: number;
+      pitch_message: string | null;
+      is_active: boolean;
+      times_offered: number;
+      times_accepted: number;
+      bundle_services: BundleServiceWithService[] | null;
+    };
+
+    // Transform the response to flatten services
+    const transformedBundles = ((bundles || []) as BundleWithServices[]).map((bundle) => ({
+      ...bundle,
+      services: (bundle.bundle_services || [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((bs) => bs.service)
+        .filter(Boolean),
+      bundle_services: undefined,
+    }));
+
+    return NextResponse.json({ bundles: transformedBundles });
+  } catch (error) {
+    logError("Bundles GET", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// POST - Create a new bundle
+export async function POST(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+    const body = await request.json();
+
+    const {
+      name,
+      description,
+      discount_percent = 0,
+      pitch_message,
+      service_ids = [],
+      is_active = true,
+    } = body;
+
+    // Validate required fields
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: "Bundle name is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate field lengths
+    const nameLengthError = validateStringLength(name, LIMITS.MAX_NAME_LENGTH, "Bundle name");
+    if (nameLengthError) {
+      return NextResponse.json({ error: nameLengthError }, { status: 400 });
+    }
+
+    const descLengthError = validateStringLength(description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
+    if (descLengthError) {
+      return NextResponse.json({ error: descLengthError }, { status: 400 });
+    }
+
+    const pitchLengthError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
+    if (pitchLengthError) {
+      return NextResponse.json({ error: pitchLengthError }, { status: 400 });
+    }
+
+    if (!Array.isArray(service_ids) || service_ids.length < LIMITS.MIN_SERVICES_PER_BUNDLE) {
+      return NextResponse.json(
+        { error: `Bundle must include at least ${LIMITS.MIN_SERVICES_PER_BUNDLE} services` },
+        { status: 400 }
+      );
+    }
+
+    // Validate UUID format and check for duplicates
+    const uuidValidation = validateUuidArray(service_ids);
+    if (!uuidValidation.valid) {
+      return NextResponse.json({ error: uuidValidation.error }, { status: 400 });
+    }
+
+    // Validate discount_percent (reject invalid values instead of silent clamp)
+    if (!Number.isInteger(discount_percent) || discount_percent < 0 || discount_percent > 100) {
+      return NextResponse.json(
+        { error: "Discount percent must be a whole number between 0 and 100" },
+        { status: 400 }
+      );
+    }
+
+    // Check bundle count limit
+    const { count: bundleCount } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundles")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId);
+
+    if ((bundleCount || 0) >= LIMITS.MAX_BUNDLES_PER_BUSINESS) {
+      return NextResponse.json(
+        { error: `Maximum of ${LIMITS.MAX_BUNDLES_PER_BUSINESS} bundles allowed. Delete some before creating new ones.` },
+        { status: 400 }
+      );
+    }
+
+    // Validate all service IDs belong to this business
+    const { data: services } = await supabase
+      .from("services")
+      .select("id")
+      .eq("business_id", businessId)
+      .in("id", service_ids);
+
+    if (!services || services.length !== service_ids.length) {
+      return NextResponse.json(
+        { error: "One or more services not found or do not belong to your business" },
+        { status: 400 }
+      );
+    }
+
+    // Create bundle
+    const { data: bundle, error: bundleError } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundles")
+      .insert({
+        business_id: businessId,
+        name: name.trim(),
+        description: description?.trim() || null,
+        discount_percent,
+        pitch_message: pitch_message?.trim() || null,
+        is_active,
+      })
+      .select()
+      .single();
+
+    if (bundleError) {
+      logError("Bundles POST", bundleError);
+      return NextResponse.json({ error: "Failed to create bundle" }, { status: 500 });
+    }
+
+    // Create bundle_services entries
+    const bundleServicesData = service_ids.map((serviceId: string, index: number) => ({
+      bundle_id: bundle.id,
+      service_id: serviceId,
+      sort_order: index,
+    }));
+
+    const { error: servicesError } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundle_services")
+      .insert(bundleServicesData);
+
+    if (servicesError) {
+      logError("Bundles POST Services", servicesError);
+      // Clean up the bundle if services failed
+      const { error: cleanupError } = await (supabase as ReturnType<typeof supabase.from>)
+        .from("bundles")
+        .delete()
+        .eq("id", bundle.id);
+
+      if (cleanupError) {
+        logError(`Bundles POST Cleanup orphaned bundle ${bundle.id}`, cleanupError);
+      }
+      return NextResponse.json({ error: "Failed to create bundle services. Please try again." }, { status: 500 });
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "bundles_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      logError("Bundles POST Inngest", inngestError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      bundle,
+      regenerationQueued,
+    });
+  } catch (error) {
+    logError("Bundles POST", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// PUT - Update a bundle
+export async function PUT(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+    const body = await request.json();
+    const { bundle } = body;
+
+    if (!bundle || !bundle.id) {
+      return NextResponse.json({ error: "Bundle ID required" }, { status: 400 });
+    }
+
+    if (!isValidUUID(bundle.id)) {
+      return NextResponse.json({ error: "Invalid bundle ID format" }, { status: 400 });
+    }
+
+    // Verify bundle exists and belongs to business
+    const { data: existingBundle, error: fetchError } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundles")
+      .select("id")
+      .eq("id", bundle.id)
+      .eq("business_id", businessId)
+      .single();
+
+    if (fetchError || !existingBundle) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
+    }
+
+    // Validate name if provided
+    if (bundle.name !== undefined && !bundle.name?.trim()) {
+      return NextResponse.json(
+        { error: "Bundle name is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate field lengths
+    if (bundle.name) {
+      const nameLengthError = validateStringLength(bundle.name, LIMITS.MAX_NAME_LENGTH, "Bundle name");
+      if (nameLengthError) {
+        return NextResponse.json({ error: nameLengthError }, { status: 400 });
+      }
+    }
+
+    if (bundle.description) {
+      const descLengthError = validateStringLength(bundle.description, LIMITS.MAX_DESCRIPTION_LENGTH, "Description");
+      if (descLengthError) {
+        return NextResponse.json({ error: descLengthError }, { status: 400 });
+      }
+    }
+
+    if (bundle.pitch_message) {
+      const pitchLengthError = validateStringLength(bundle.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
+      if (pitchLengthError) {
+        return NextResponse.json({ error: pitchLengthError }, { status: 400 });
+      }
+    }
+
+    // If service_ids provided, validate and update them
+    if (bundle.service_ids) {
+      if (!Array.isArray(bundle.service_ids) || bundle.service_ids.length < LIMITS.MIN_SERVICES_PER_BUNDLE) {
+        return NextResponse.json(
+          { error: `Bundle must include at least ${LIMITS.MIN_SERVICES_PER_BUNDLE} services` },
+          { status: 400 }
+        );
+      }
+
+      // Validate UUID format and check for duplicates
+      const uuidValidation = validateUuidArray(bundle.service_ids);
+      if (!uuidValidation.valid) {
+        return NextResponse.json({ error: uuidValidation.error }, { status: 400 });
+      }
+
+      const { data: services } = await supabase
+        .from("services")
+        .select("id")
+        .eq("business_id", businessId)
+        .in("id", bundle.service_ids);
+
+      if (!services || services.length !== bundle.service_ids.length) {
+        return NextResponse.json(
+          { error: "One or more services not found or do not belong to your business" },
+          { status: 400 }
+        );
+      }
+
+      // RACE CONDITION FIX: Save existing services before delete so we can restore on failure
+      const { data: existingServices } = await (supabase as ReturnType<typeof supabase.from>)
+        .from("bundle_services")
+        .select("service_id, sort_order")
+        .eq("bundle_id", bundle.id);
+
+      // Delete existing services
+      const { error: deleteError } = await (supabase as ReturnType<typeof supabase.from>)
+        .from("bundle_services")
+        .delete()
+        .eq("bundle_id", bundle.id);
+
+      if (deleteError) {
+        logError("Bundles PUT Delete services", deleteError);
+        return NextResponse.json({ error: "Failed to update bundle services" }, { status: 500 });
+      }
+
+      // Insert new services
+      const bundleServicesData = bundle.service_ids.map((serviceId: string, index: number) => ({
+        bundle_id: bundle.id,
+        service_id: serviceId,
+        sort_order: index,
+      }));
+
+      const { error: servicesError } = await (supabase as ReturnType<typeof supabase.from>)
+        .from("bundle_services")
+        .insert(bundleServicesData);
+
+      if (servicesError) {
+        logError("Bundles PUT Insert services", servicesError);
+        // RESTORE: Try to restore the original services
+        if (existingServices && existingServices.length > 0) {
+          const restoreData = existingServices.map((s: { service_id: string; sort_order: number }) => ({
+            bundle_id: bundle.id,
+            service_id: s.service_id,
+            sort_order: s.sort_order,
+          }));
+          const { error: restoreError } = await (supabase as ReturnType<typeof supabase.from>)
+            .from("bundle_services")
+            .insert(restoreData);
+          if (restoreError) {
+            logError("Bundles PUT Restore services", restoreError);
+            // If restore fails, deactivate the bundle to prevent inconsistent state
+            await (supabase as ReturnType<typeof supabase.from>)
+              .from("bundles")
+              .update({ is_active: false })
+              .eq("id", bundle.id);
+            logError(`Bundles PUT Deactivated bundle ${bundle.id}`, new Error("Bundle deactivated due to restore failure"));
+            return NextResponse.json({ error: "Failed to update bundle services. Bundle has been deactivated for safety. Please re-add services manually." }, { status: 500 });
+          }
+        }
+        return NextResponse.json({ error: "Failed to update bundle services. Please try again." }, { status: 500 });
+      }
+    }
+
+    // Validate discount_percent if provided (reject invalid values instead of silent clamp)
+    if (bundle.discount_percent !== undefined) {
+      if (!Number.isInteger(bundle.discount_percent) || bundle.discount_percent < 0 || bundle.discount_percent > 100) {
+        return NextResponse.json(
+          { error: "Discount percent must be a whole number between 0 and 100" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate is_active is boolean
+    if (bundle.is_active !== undefined && typeof bundle.is_active !== "boolean") {
+      return NextResponse.json(
+        { error: "is_active must be a boolean value" },
+        { status: 400 }
+      );
+    }
+
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+    if (bundle.name !== undefined) updateData.name = bundle.name.trim();
+    if (bundle.description !== undefined) updateData.description = bundle.description?.trim() || null;
+    if (bundle.discount_percent !== undefined) updateData.discount_percent = bundle.discount_percent;
+    if (bundle.pitch_message !== undefined) updateData.pitch_message = bundle.pitch_message?.trim() || null;
+    if (bundle.is_active !== undefined) updateData.is_active = bundle.is_active;
+
+    // Update bundle (only if there are fields to update)
+    if (Object.keys(updateData).length > 0) {
+      const { error } = await (supabase as ReturnType<typeof supabase.from>)
+        .from("bundles")
+        .update(updateData)
+        .eq("id", bundle.id)
+        .eq("business_id", businessId);
+
+      if (error) {
+        logError("Bundles PUT", error);
+        return NextResponse.json({ error: "Failed to update bundle" }, { status: 500 });
+      }
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "bundles_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      logError("Bundles PUT Inngest", inngestError);
+    }
+
+    return NextResponse.json({ success: true, regenerationQueued });
+  } catch (error) {
+    logError("Bundles PUT", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+// DELETE - Delete a bundle
+export async function DELETE(request: NextRequest) {
+  try {
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      );
+    }
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: business } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    }
+
+    const businessId = (business as { id: string }).id;
+
+    const { searchParams } = new URL(request.url);
+    const bundleId = searchParams.get("id");
+
+    if (!bundleId) {
+      return NextResponse.json({ error: "Bundle ID required" }, { status: 400 });
+    }
+
+    if (!isValidUUID(bundleId)) {
+      return NextResponse.json({ error: "Invalid bundle ID format" }, { status: 400 });
+    }
+
+    // Delete bundle (cascade will delete bundle_services)
+    const { data: deletedRows, error } = await (supabase as ReturnType<typeof supabase.from>)
+      .from("bundles")
+      .delete()
+      .eq("id", bundleId)
+      .eq("business_id", businessId)
+      .select();
+
+    if (error) {
+      logError("Bundles DELETE", error);
+      return NextResponse.json({ error: "Failed to delete bundle" }, { status: 500 });
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
+    }
+
+    // Trigger prompt regeneration
+    let regenerationQueued = false;
+    try {
+      await inngest.send({
+        name: "prompt/regeneration.requested",
+        data: {
+          businessId,
+          triggeredBy: "bundles_update",
+        },
+      });
+      regenerationQueued = true;
+    } catch (inngestError) {
+      logError("Bundles DELETE Inngest", inngestError);
+    }
+
+    return NextResponse.json({ success: true, regenerationQueued });
+  } catch (error) {
+    logError("Bundles DELETE", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
