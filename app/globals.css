@@ -132,26 +132,20 @@
   }
 }
 
-/* Glassmorphism effects */
+/* Glassmorphism effects - using solid backgrounds for better readability */
 .glass {
-  background: rgba(24, 24, 27, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.glass-light {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(24, 24, 27, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.glass-strong {
-  background: rgba(24, 24, 27, 0.8);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
+.glass-light {
+  background: rgba(39, 39, 42, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.glass-strong {
+  background: rgba(24, 24, 27, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* 3D perspective */

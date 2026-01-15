@@ -55,6 +55,7 @@ import {
   AlertDescription,
   Checkbox,
 } from "@/components/ui";
+import { Slider } from "@/components/ui/slider";
 import type {
   CallSettings,
   AIConfig,
@@ -292,6 +293,9 @@ export function SettingsClient({
     dtmfTimeoutMs: callSettingsData?.dtmf_timeout_ms || 5000,
     // Denoising
     denoisingMode: callSettingsData?.denoising_mode || "noise-cancellation",
+    // Responsiveness (how quickly Koya responds and stops when caller talks)
+    interruptionSensitivity: callSettingsData?.interruption_sensitivity ?? 0.9,
+    responsiveness: callSettingsData?.responsiveness ?? 0.9,
   });
   const [callFeaturesModified, setCallFeaturesModified] = useState(false);
 
@@ -1221,6 +1225,110 @@ export function SettingsClient({
                     </div>
                   </label>
                 </div>
+              </div>
+            </div>
+
+            {/* Responsiveness Settings */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Responsiveness</h3>
+              <p className="text-sm text-muted-foreground">
+                Control how quickly Koya responds and reacts when callers speak
+              </p>
+
+              {/* Interruption Sensitivity */}
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="interruptionSensitivity">Interruption Sensitivity</Label>
+                  <p className="text-sm text-muted-foreground">
+                    How quickly Koya stops talking when the caller starts speaking
+                  </p>
+                </div>
+                <Slider
+                  id="interruptionSensitivity"
+                  value={callFeaturesSettings.interruptionSensitivity}
+                  onChange={(value) => {
+                    setCallFeaturesSettings({ ...callFeaturesSettings, interruptionSensitivity: value });
+                    setCallFeaturesModified(true);
+                  }}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  valueLabel={(v) => {
+                    if (v >= 0.8) return "Very High";
+                    if (v >= 0.6) return "High";
+                    if (v >= 0.4) return "Medium";
+                    if (v >= 0.2) return "Low";
+                    return "Very Low";
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Higher = Koya stops immediately when caller speaks (recommended: Very High)
+                </p>
+              </div>
+
+              {/* Response Speed */}
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="responsiveness">Response Speed</Label>
+                  <p className="text-sm text-muted-foreground">
+                    How fast Koya responds after the caller finishes speaking
+                  </p>
+                </div>
+                <Slider
+                  id="responsiveness"
+                  value={callFeaturesSettings.responsiveness}
+                  onChange={(value) => {
+                    setCallFeaturesSettings({ ...callFeaturesSettings, responsiveness: value });
+                    setCallFeaturesModified(true);
+                  }}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  valueLabel={(v) => {
+                    if (v >= 0.8) return "Very Fast";
+                    if (v >= 0.6) return "Fast";
+                    if (v >= 0.4) return "Normal";
+                    if (v >= 0.2) return "Slow";
+                    return "Very Slow";
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Higher = Koya responds faster after caller stops talking (recommended: Very Fast)
+                </p>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCallFeaturesSettings({
+                      ...callFeaturesSettings,
+                      interruptionSensitivity: 0.9,
+                      responsiveness: 0.9,
+                    });
+                    setCallFeaturesModified(true);
+                  }}
+                >
+                  Maximum Responsiveness
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCallFeaturesSettings({
+                      ...callFeaturesSettings,
+                      interruptionSensitivity: 0.5,
+                      responsiveness: 0.5,
+                    });
+                    setCallFeaturesModified(true);
+                  }}
+                >
+                  Balanced
+                </Button>
               </div>
             </div>
 

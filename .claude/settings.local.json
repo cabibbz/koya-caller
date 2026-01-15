@@ -26,7 +26,13 @@
       "Bash(git push:*)",
       "Bash(npm run build:*)",
       "mcp__filesystem__read_text_file",
-      "WebSearch"
+      "WebSearch",
+      "mcp__filesystem__list_directory",
+      "WebFetch(domain:github.com)",
+      "Bash(where:*)",
+      "mcp__filesystem__search_files",
+      "Bash(ls:*)",
+      "Bash(npx next build)"
     ]
   }
 }

@@ -1,9 +1,14 @@
 -- =============================================================================
--- KOYA CALLER - COMPLETE DATABASE SCHEMA
--- Generated: 2026-01-12
+-- KOYA CALLER - DATABASE SNAPSHOT
+-- Generated: 2025-01-14
+-- Description: Full schema snapshot including responsiveness settings
 --
--- This is an idempotent schema file that can be run against a fresh database.
--- Tables are ordered by dependency (no forward references).
+-- This snapshot includes all tables, functions, triggers, and constraints.
+-- Run this against a fresh Supabase database to set up the complete schema.
+--
+-- New in this version:
+-- - Added interruption_sensitivity and responsiveness columns to call_settings
+-- - These control how quickly Koya responds to caller speech
 -- =============================================================================
 
 -- Enable required extensions
@@ -264,15 +269,22 @@ CREATE TABLE IF NOT EXISTS ai_config (
     "maxFewShotExamples": 3
   }'::jsonb,
 
+  -- Advanced Retell features
+  boosted_keywords text[] DEFAULT '{}'::text[],
+  analysis_summary_prompt text,
+  analysis_model text DEFAULT 'gpt-4.1-mini',
+  fallback_voice_ids text[] DEFAULT '{}'::text[],
+
   created_at timestamptz DEFAULT NOW(),
   updated_at timestamptz DEFAULT NOW(),
 
   CONSTRAINT valid_language_mode CHECK (language_mode IN ('auto', 'ask', 'spanish_default')),
-  CONSTRAINT valid_personality CHECK (personality IN ('professional', 'friendly', 'casual'))
+  CONSTRAINT valid_personality CHECK (personality IN ('professional', 'friendly', 'casual')),
+  CONSTRAINT valid_analysis_model CHECK (analysis_model IN ('gpt-4.1-mini', 'claude-4.5-sonnet', 'gemini-2.5-flash'))
 );
 COMMENT ON TABLE ai_config IS 'AI voice and personality configuration';
 
--- Call Settings
+-- Call Settings (includes responsiveness settings)
 CREATE TABLE IF NOT EXISTS call_settings (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   business_id uuid REFERENCES businesses(id) ON DELETE CASCADE UNIQUE,
@@ -323,8 +335,16 @@ CREATE TABLE IF NOT EXISTS call_settings (
   pii_redaction_enabled boolean DEFAULT false,
   pii_categories text[] DEFAULT ARRAY['ssn', 'credit_card']::text[],
 
-  -- Responsiveness Settings (how quickly and sensitively to respond)
+  -- ============================================
+  -- RESPONSIVENESS SETTINGS (New in this version)
+  -- Controls how quickly Koya responds to caller speech
+  -- ============================================
+  -- How sensitive to caller interruptions (0-1)
+  -- Higher values = stops faster when caller starts speaking
   interruption_sensitivity numeric(3,2) DEFAULT 0.9,
+
+  -- How quickly to respond after caller stops speaking (0-1)
+  -- Higher values = responds faster
   responsiveness numeric(3,2) DEFAULT 0.9,
 
   created_at timestamptz DEFAULT NOW(),
@@ -343,8 +363,8 @@ CREATE TABLE IF NOT EXISTS call_settings (
   CONSTRAINT valid_responsiveness CHECK (responsiveness >= 0 AND responsiveness <= 1)
 );
 COMMENT ON TABLE call_settings IS 'Call handling configuration';
-COMMENT ON COLUMN call_settings.interruption_sensitivity IS 'How sensitive to caller interruptions (0-1). Higher = stops faster when caller speaks.';
-COMMENT ON COLUMN call_settings.responsiveness IS 'How quickly to respond after caller stops speaking (0-1). Higher = responds faster.';
+COMMENT ON COLUMN call_settings.interruption_sensitivity IS 'How sensitive to caller interruptions (0-1). Higher = stops faster when caller speaks. Default 0.9 for highly responsive behavior.';
+COMMENT ON COLUMN call_settings.responsiveness IS 'How quickly to respond after caller stops speaking (0-1). Higher = responds faster. Default 0.9 for highly responsive behavior.';
 
 -- Notification Settings
 CREATE TABLE IF NOT EXISTS notification_settings (
@@ -1057,9 +1077,6 @@ ALTER TABLE admin_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_logs ENABLE ROW LEVEL SECURITY;
 
--- Note: RLS policies should be created separately as they require DROP IF EXISTS
--- which can be complex. See migrations for policy definitions.
-
 -- =============================================================================
 -- SECTION 14: GRANTS
 -- =============================================================================
@@ -1072,5 +1089,5 @@ GRANT SELECT ON caller_insights TO authenticated;
 GRANT SELECT ON caller_insights TO service_role;
 
 -- =============================================================================
--- END OF SCHEMA
+-- END OF SCHEMA SNAPSHOT
 -- =============================================================================

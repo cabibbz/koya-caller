@@ -51,6 +51,9 @@ async function handler(request: NextRequest) {
       dtmfTimeoutMs,
       // Denoising
       denoisingMode,
+      // Responsiveness (how quickly Koya responds and stops when caller talks)
+      interruptionSensitivity,
+      responsiveness,
     } = body;
 
     // Validate timeouts are within acceptable ranges
@@ -62,6 +65,13 @@ async function handler(request: NextRequest) {
     }
     if (endCallAfterSilenceMs && (endCallAfterSilenceMs < 10000 || endCallAfterSilenceMs > 120000)) {
       return NextResponse.json({ error: "End call silence must be between 10-120 seconds" }, { status: 400 });
+    }
+    // Validate responsiveness settings are within 0-1 range
+    if (interruptionSensitivity !== undefined && (interruptionSensitivity < 0 || interruptionSensitivity > 1)) {
+      return NextResponse.json({ error: "Interruption sensitivity must be between 0 and 1" }, { status: 400 });
+    }
+    if (responsiveness !== undefined && (responsiveness < 0 || responsiveness > 1)) {
+      return NextResponse.json({ error: "Responsiveness must be between 0 and 1" }, { status: 400 });
     }
 
     // Use admin client for updates
@@ -89,6 +99,9 @@ async function handler(request: NextRequest) {
           dtmf_timeout_ms: dtmfTimeoutMs || 5000,
           // Denoising
           denoising_mode: denoisingMode || "noise-cancellation",
+          // Responsiveness (default to high values for responsive behavior)
+          interruption_sensitivity: interruptionSensitivity ?? 0.9,
+          responsiveness: responsiveness ?? 0.9,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "business_id" }
@@ -131,6 +144,10 @@ async function handler(request: NextRequest) {
           timeoutMs: dtmfTimeoutMs || 5000,
         },
         denoisingMode: denoisingMode || "noise-cancellation",
+        responsiveness: {
+          interruptionSensitivity: interruptionSensitivity ?? 0.9,
+          responseSpeed: responsiveness ?? 0.9,
+        },
       });
 
       if (!updateSuccess) {

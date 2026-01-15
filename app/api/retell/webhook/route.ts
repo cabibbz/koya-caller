@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { verifyWebhookSignature } from "@/lib/retell";
+import { verifyWebhookSignature, getCallDetails } from "@/lib/retell";
 import { inngest } from "@/lib/inngest";
 import { createAppointmentEvent } from "@/lib/calendar";
 import { logError } from "@/lib/logging";
@@ -115,20 +115,59 @@ export async function POST(request: NextRequest) {
       }
 
       case "call_ended": {
-        // Calculate duration from timestamps (Retell sends Unix timestamps in milliseconds)
-        const startTs = call.start_timestamp;
-        const endTs = call.end_timestamp;
-
         console.log(`[Retell Webhook] call_ended for ${call.call_id}`);
-        console.log(`[Retell Webhook] Timestamps - start: ${startTs}, end: ${endTs}`);
 
+        // Fetch full call details from Retell API for accurate duration and recording URL
+        // The webhook payload may not include all details, so we fetch directly from Retell
+        const retellCallDetails = await getCallDetails(call.call_id);
+
+        // Use Retell API data if available, otherwise fall back to webhook data
+        let durationMs = 0;
         let durationSeconds = 0;
-        if (startTs && endTs) {
-          const durationMs = endTs - startTs;
+        let recordingUrl: string | null = null;
+        let transcriptObject = call.transcript_object || null;
+        let startTimestamp = call.start_timestamp;
+        let endTimestamp = call.end_timestamp;
+        let disconnectionReason = call.disconnection_reason;
+
+        if (retellCallDetails) {
+          // Use data from Retell API (more reliable)
+          durationMs = retellCallDetails.duration_ms;
           durationSeconds = Math.ceil(durationMs / 1000);
-          console.log(`[Retell Webhook] Calculated duration: ${durationMs}ms = ${durationSeconds}s`);
+          recordingUrl = retellCallDetails.recording_url;
+          transcriptObject = retellCallDetails.transcript_object || transcriptObject;
+          startTimestamp = retellCallDetails.start_timestamp || startTimestamp;
+          endTimestamp = retellCallDetails.end_timestamp || endTimestamp;
+          disconnectionReason = retellCallDetails.disconnection_reason || disconnectionReason;
+
+          console.log(`[Retell Webhook] Using Retell API data - duration: ${durationMs}ms (${durationSeconds}s), recording: ${recordingUrl ? "present" : "absent"}`);
         } else {
-          console.log(`[Retell Webhook] WARNING: Missing timestamps! Cannot calculate duration.`);
+          // Fall back to webhook payload data
+          console.log(`[Retell Webhook] Retell API unavailable, using webhook data`);
+
+          // Try duration_ms from event or call object first
+          if (event.duration_ms) {
+            durationMs = event.duration_ms;
+            durationSeconds = Math.ceil(durationMs / 1000);
+            console.log(`[Retell Webhook] Using event.duration_ms: ${durationMs}ms = ${durationSeconds}s`);
+          } else if (call.duration_ms) {
+            durationMs = call.duration_ms;
+            durationSeconds = Math.ceil(durationMs / 1000);
+            console.log(`[Retell Webhook] Using call.duration_ms: ${durationMs}ms = ${durationSeconds}s`);
+          } else if (call.duration_seconds) {
+            durationSeconds = call.duration_seconds;
+            durationMs = durationSeconds * 1000;
+            console.log(`[Retell Webhook] Using call.duration_seconds: ${durationSeconds}s`);
+          } else if (startTimestamp && endTimestamp) {
+            // Calculate from timestamps as last resort
+            durationMs = endTimestamp - startTimestamp;
+            durationSeconds = Math.ceil(durationMs / 1000);
+            console.log(`[Retell Webhook] Calculated from timestamps: ${durationMs}ms = ${durationSeconds}s`);
+          } else {
+            console.log(`[Retell Webhook] WARNING: No duration data available!`);
+          }
+
+          recordingUrl = call.recording_url || null;
         }
 
         const durationMinutesBilled = durationSeconds > 0 ? Math.max(1, Math.ceil(durationSeconds / 60)) : 0;
@@ -142,7 +181,7 @@ export async function POST(request: NextRequest) {
           outcome = "transferred";
         } else if (metadata.message_taken === "true") {
           outcome = "message";
-        } else if (call.disconnection_reason === "user_hangup" && durationSeconds < 10) {
+        } else if (disconnectionReason === "user_hangup" && durationSeconds < 10) {
           outcome = "missed";
         }
 
@@ -161,22 +200,29 @@ export async function POST(request: NextRequest) {
           retell_call_id: call.call_id,
           from_number: call.from_number || null,
           to_number: call.to_number || null,
-          started_at: call.start_timestamp
-            ? new Date(call.start_timestamp).toISOString()
+          started_at: startTimestamp
+            ? new Date(startTimestamp).toISOString()
             : null,
-          ended_at: call.end_timestamp
-            ? new Date(call.end_timestamp).toISOString()
+          ended_at: endTimestamp
+            ? new Date(endTimestamp).toISOString()
             : new Date().toISOString(),
           duration_seconds: durationSeconds,
           duration_minutes_billed: durationMinutesBilled,
           language: language,
-          recording_url: call.recording_url || null,
-          transcript: call.transcript_object || null,
+          recording_url: recordingUrl,
+          transcript: transcriptObject,
           outcome: outcome,
         };
 
+        console.log(`[Retell Webhook] Final call data:`, {
+          duration_seconds: durationSeconds,
+          duration_minutes_billed: durationMinutesBilled,
+          recording_url: recordingUrl ? "present" : "absent",
+          transcript: transcriptObject ? "present" : "absent",
+        });
+
         if (existingCall) {
-          console.log(`[Retell Webhook] Updating existing call ${existingCall.id} with duration_seconds=${durationSeconds}`);
+          console.log(`[Retell Webhook] Updating existing call ${existingCall.id}`);
           const { error: updateError } = await supabase
             .from("calls")
             .update(callData)
@@ -187,7 +233,7 @@ export async function POST(request: NextRequest) {
             console.log(`[Retell Webhook] Call updated successfully`);
           }
         } else {
-          console.log(`[Retell Webhook] Inserting new call with duration_seconds=${durationSeconds}`);
+          console.log(`[Retell Webhook] Inserting new call`);
           const { error: insertError } = await supabase.from("calls").insert(callData);
           if (insertError) {
             console.error(`[Retell Webhook] Insert failed:`, insertError);

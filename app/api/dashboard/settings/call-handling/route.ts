@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
@@ -51,9 +51,12 @@ async function handler(request: NextRequest) {
       recordingEnabled,
     } = body;
 
+    // Use admin client to bypass RLS (user already authenticated above)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminSupabase = createAdminClient() as any;
+
     // Upsert call settings
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: callSettings, error: updateError } = await (supabase as any)
+    const { data: callSettings, error: updateError } = await adminSupabase
       .from("call_settings")
       .upsert(
         {
@@ -80,14 +83,15 @@ async function handler(request: NextRequest) {
       .single();
 
     if (updateError) {
+      logError("Call Settings Upsert", updateError);
       return NextResponse.json(
-        { error: "Failed to update call settings" },
+        { error: "Failed to update call settings", details: updateError.message },
         { status: 500 }
       );
     }
 
     // Queue prompt regeneration for settings changes
-    await queuePromptRegeneration(supabase, business.id, "settings_update");
+    await queuePromptRegeneration(adminSupabase, business.id, "settings_update");
 
     return NextResponse.json({
       success: true,

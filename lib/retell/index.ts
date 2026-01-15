@@ -197,6 +197,11 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       ];
     }
 
+    // Set high responsiveness by default - Koya stops immediately when caller speaks
+    // and responds quickly after caller finishes
+    agentConfig.interruption_sensitivity = 0.9; // High sensitivity - stops fast when caller talks
+    agentConfig.responsiveness = 0.9; // High responsiveness - responds quickly
+
     const agent = await client.agent.create(agentConfig);
 
     return {
@@ -443,6 +448,69 @@ export async function createDemoCall(options: {
 }
 
 // =============================================================================
+// Call Details Retrieval
+// =============================================================================
+
+/**
+ * Retrieve full call details from Retell API
+ * This is used after a call ends to get accurate duration and recording URL
+ */
+export async function getCallDetails(callId: string): Promise<{
+  duration_ms: number;
+  recording_url: string | null;
+  transcript_object: Array<{ role: string; content: string }> | null;
+  start_timestamp: number | null;
+  end_timestamp: number | null;
+  disconnection_reason: string | null;
+  call_analysis: {
+    call_summary?: string;
+    user_sentiment?: string;
+    call_successful?: boolean;
+    custom_analysis_data?: Record<string, unknown>;
+  } | null;
+} | null> {
+  const client = getRetellClient();
+
+  if (!client) {
+    // Mock mode - return null to indicate we should use webhook data
+    console.log("[Retell] Mock mode - skipping call details retrieval");
+    return null;
+  }
+
+  try {
+    console.log(`[Retell] Retrieving call details for ${callId}`);
+    const callResponse = await client.call.retrieve(callId);
+
+    console.log(`[Retell] Retrieved call details:`, {
+      duration_ms: callResponse.duration_ms,
+      recording_url: callResponse.recording_url ? "present" : "absent",
+      transcript_length: callResponse.transcript_object?.length || 0,
+    });
+
+    return {
+      duration_ms: callResponse.duration_ms || 0,
+      recording_url: callResponse.recording_url || null,
+      transcript_object: callResponse.transcript_object?.map((t: { role: string; content: string }) => ({
+        role: t.role,
+        content: t.content,
+      })) || null,
+      start_timestamp: callResponse.start_timestamp || null,
+      end_timestamp: callResponse.end_timestamp || null,
+      disconnection_reason: callResponse.disconnection_reason || null,
+      call_analysis: callResponse.call_analysis ? {
+        call_summary: callResponse.call_analysis.call_summary,
+        user_sentiment: callResponse.call_analysis.user_sentiment,
+        call_successful: callResponse.call_analysis.call_successful,
+        custom_analysis_data: callResponse.call_analysis.custom_analysis_data as Record<string, unknown> | undefined,
+      } : null,
+    };
+  } catch (error) {
+    console.error(`[Retell] Failed to retrieve call details for ${callId}:`, error);
+    return null;
+  }
+}
+
+// =============================================================================
 // Call Analysis Helpers
 // =============================================================================
 
@@ -535,6 +603,13 @@ export interface AdvancedAgentSettings {
   };
   // Fallback Voices
   fallbackVoices?: string[];
+  // Responsiveness Settings (how quickly and sensitively to respond)
+  responsiveness?: {
+    // How sensitive to caller interruptions (0-1, higher = stops faster when caller speaks)
+    interruptionSensitivity: number;
+    // How quickly to respond after caller stops speaking (0-1, higher = responds faster)
+    responseSpeed: number;
+  };
 }
 
 /**
@@ -611,22 +686,29 @@ export async function updateAgentAdvancedSettings(
       }
     }
 
-    // PII Redaction
+    // PII Redaction - only set if enabling (omit to disable)
     if (settings.piiConfig !== undefined) {
       if (settings.piiConfig.enabled && settings.piiConfig.categories?.length) {
         updatePayload.pii_config = {
           mode: "post_call",
           categories: settings.piiConfig.categories,
         };
-      } else {
-        // Disable PII redaction by not including it
-        updatePayload.pii_config = null;
       }
+      // Note: To disable PII, we simply don't include pii_config in the payload
+      // Retell API doesn't accept null for this field
     }
 
     // Fallback Voices
     if (settings.fallbackVoices !== undefined) {
       updatePayload.fallback_voice_ids = settings.fallbackVoices;
+    }
+
+    // Responsiveness Settings
+    if (settings.responsiveness !== undefined) {
+      // Interruption sensitivity: 0-1, higher = stops faster when caller speaks
+      updatePayload.interruption_sensitivity = settings.responsiveness.interruptionSensitivity;
+      // Responsiveness: 0-1, higher = responds faster after caller stops speaking
+      updatePayload.responsiveness = settings.responsiveness.responseSpeed;
     }
 
     // Only update if there are changes
@@ -661,6 +743,8 @@ export function buildAdvancedSettingsConfig(
     denoising_mode?: string;
     pii_redaction_enabled?: boolean;
     pii_categories?: string[];
+    interruption_sensitivity?: number;
+    responsiveness?: number;
   },
   aiConfig: {
     boosted_keywords?: string[];
@@ -737,6 +821,14 @@ export function buildAdvancedSettingsConfig(
   // Fallback Voices
   if (aiConfig.fallback_voice_ids?.length) {
     config.fallback_voice_ids = aiConfig.fallback_voice_ids;
+  }
+
+  // Responsiveness Settings
+  if (callSettings.interruption_sensitivity !== undefined) {
+    config.interruption_sensitivity = callSettings.interruption_sensitivity;
+  }
+  if (callSettings.responsiveness !== undefined) {
+    config.responsiveness = callSettings.responsiveness;
   }
 
   return config;
