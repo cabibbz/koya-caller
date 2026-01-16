@@ -14,7 +14,6 @@ import {
   Plus,
   Trash2,
   Loader2,
-  CheckCircle,
   AlertCircle,
   Brain,
   Briefcase,
@@ -64,7 +63,6 @@ import {
 } from "@/components/ui";
 import type { Service, FAQ, BusinessHours } from "@/types";
 import { toast } from "@/hooks/use-toast";
-import { EmptyStateKnowledge } from "@/components/ui/empty-state";
 
 // Extracted content from website scraping
 interface ExtractedContent {
@@ -221,7 +219,7 @@ export function KnowledgeClient({
   const [upsells, setUpsells] = useState<Upsell[]>([]);
   const [upsellsLoaded, setUpsellsLoaded] = useState(false);
   const [upsellsLoading, setUpsellsLoading] = useState(false);
-  const [editingUpsell, setEditingUpsell] = useState<Upsell | null>(null);
+  const [_editingUpsell, setEditingUpsell] = useState<Upsell | null>(null);
   const [newUpsell, setNewUpsell] = useState<Partial<Upsell>>({
     source_service_id: "",
     target_service_id: "",
@@ -292,7 +290,7 @@ export function KnowledgeClient({
       if (!res.ok) {
         // Failed to trigger regeneration
       }
-    } catch (err) {
+    } catch (_err) {
       // Regeneration error handled silently
     } finally {
       setRegenerating(false);
@@ -546,7 +544,7 @@ export function KnowledgeClient({
       // Select all by default
       setSelectedServices(new Set(data.data.services.map((_: unknown, i: number) => i)));
       setSelectedFaqs(new Set(data.data.faqs.map((_: unknown, i: number) => i)));
-    } catch (err) {
+    } catch (_err) {
       setImportError("An error occurred while scraping the website");
     } finally {
       setImporting(false);
@@ -672,7 +670,7 @@ export function KnowledgeClient({
       setSuggestedFaqs(data.faqs || []);
       setSelectedSuggestions(new Set(data.faqs.map((_: unknown, i: number) => i)));
       setSuggestDialogOpen(true);
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to generate suggestions", variant: "destructive" });
     } finally {
       setSuggesting(false);
@@ -734,7 +732,7 @@ export function KnowledgeClient({
       }
 
       setTestResponse(data.response);
-    } catch (err) {
+    } catch (_err) {
       setTestResponse("Error: Failed to test knowledge. Please try again.");
     } finally {
       setTesting(false);
@@ -780,7 +778,7 @@ export function KnowledgeClient({
 
       // Reload the page to show new data
       window.location.reload();
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Import failed", variant: "destructive" });
     } finally {
       setImportingCsv(false);
@@ -800,7 +798,7 @@ export function KnowledgeClient({
         setUpsells(data.upsells || []);
         setUpsellsLoaded(true);
       }
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to load upsells", variant: "destructive" });
     } finally {
       setUpsellsLoading(false);
@@ -856,7 +854,7 @@ export function KnowledgeClient({
       });
 
       toast({ title: "Upsell created", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to create upsell", variant: "destructive" });
     } finally {
       setSavingUpsell(false);
@@ -881,7 +879,7 @@ export function KnowledgeClient({
       setUpsells(upsells.map(u => u.id === upsell.id ? upsell : u));
       setEditingUpsell(null);
       toast({ title: "Upsell updated", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to update upsell", variant: "destructive" });
     } finally {
       setSavingUpsell(false);
@@ -901,7 +899,7 @@ export function KnowledgeClient({
 
       setUpsells(upsells.filter(u => u.id !== id));
       toast({ title: "Upsell deleted", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to delete upsell", variant: "destructive" });
     }
   };
@@ -917,7 +915,7 @@ export function KnowledgeClient({
         setBundles(data.bundles || []);
         setBundlesLoaded(true);
       }
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to load bundles", variant: "destructive" });
     } finally {
       setBundlesLoading(false);
@@ -935,7 +933,7 @@ export function KnowledgeClient({
         setPackages(data.packages || []);
         setPackagesLoaded(true);
       }
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to load packages", variant: "destructive" });
     } finally {
       setPackagesLoading(false);
@@ -953,7 +951,7 @@ export function KnowledgeClient({
         setMemberships(data.memberships || []);
         setMembershipsLoaded(true);
       }
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to load memberships", variant: "destructive" });
     } finally {
       setMembershipsLoading(false);
@@ -2293,7 +2291,7 @@ function BundlesSection({ bundles, setBundles, services, loading }: BundlesSecti
       if (!res.ok) throw new Error("Failed to delete bundle");
       setBundles(bundles.filter((b) => b.id !== id));
       toast({ title: "Bundle deleted", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to delete bundle", variant: "destructive" });
     }
   };
@@ -2307,7 +2305,7 @@ function BundlesSection({ bundles, setBundles, services, loading }: BundlesSecti
       });
       if (!res.ok) throw new Error("Failed to update bundle");
       setBundles(bundles.map((b) => (b.id === bundle.id ? { ...b, is_active: !b.is_active } : b)));
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to update bundle", variant: "destructive" });
     }
   };
@@ -2537,7 +2535,7 @@ function PackagesSection({ packages, setPackages, services, loading }: PackagesS
       if (!res.ok) throw new Error("Failed to delete package");
       setPackages(packages.filter((p) => p.id !== id));
       toast({ title: "Package deleted", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to delete package", variant: "destructive" });
     }
   };
@@ -2551,7 +2549,7 @@ function PackagesSection({ packages, setPackages, services, loading }: PackagesS
       });
       if (!res.ok) throw new Error("Failed to update package");
       setPackages(packages.map((p) => (p.id === pkg.id ? { ...p, is_active: !p.is_active } : p)));
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to update package", variant: "destructive" });
     }
   };
@@ -2801,7 +2799,7 @@ function MembershipsSection({ memberships, setMemberships, loading }: Membership
       if (!res.ok) throw new Error("Failed to delete membership");
       setMemberships(memberships.filter((m) => m.id !== id));
       toast({ title: "Membership deleted", variant: "success" });
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to delete membership", variant: "destructive" });
     }
   };
@@ -2815,7 +2813,7 @@ function MembershipsSection({ memberships, setMemberships, loading }: Membership
       });
       if (!res.ok) throw new Error("Failed to update membership");
       setMemberships(memberships.map((m) => (m.id === membership.id ? { ...m, is_active: !m.is_active } : m)));
-    } catch (err) {
+    } catch (_err) {
       toast({ title: "Failed to update membership", variant: "destructive" });
     }
   };

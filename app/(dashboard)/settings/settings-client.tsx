@@ -503,7 +503,7 @@ export function SettingsClient({
       };
 
       audio.load();
-    } catch (err) {
+    } catch (_err) {
       setLoadingVoiceId(null);
       setPlayingVoiceId(null);
     }

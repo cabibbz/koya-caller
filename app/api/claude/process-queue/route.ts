@@ -174,7 +174,7 @@ export async function GET(): Promise<NextResponse> {
       queue: statusCounts,
       lastChecked: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to fetch queue status" },
       { status: 500 }
@@ -537,7 +537,7 @@ async function fetchBusinessData(
         minutesExhausted: minutesRemaining <= 0,
       },
     };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: "Failed to fetch business data" };
   }
 }
@@ -580,7 +580,7 @@ async function savePrompts(
       success: true,
       retellAgentId: current?.retell_agent_id,
     };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: "Failed to save prompts" };
   }
 }
@@ -594,7 +594,7 @@ async function updateRetellAgent(
   businessId: string,
   agentId: string,
   englishPrompt: string,
-  spanishPrompt?: string
+  _spanishPrompt?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const RETELL_API_KEY = process.env.RETELL_API_KEY;

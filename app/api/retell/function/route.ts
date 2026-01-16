@@ -359,7 +359,7 @@ async function handleFindNextAvailable(
       message: "I'm sorry, we're fully booked for the next two weeks. Would you like to leave a message and have someone call you back?",
     };
 
-  } catch (error) {
+  } catch (_error) {
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
@@ -515,7 +515,7 @@ async function handleCheckAvailability(
       data: { availableSlots: slots },
     };
 
-  } catch (error) {
+  } catch (_error) {
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
@@ -783,7 +783,7 @@ async function handleBookAppointment(
           .update({ external_event_id: externalEventId })
           .eq("id", aptData.id);
       }
-    } catch (calendarError) {
+    } catch (_calendarError) {
       // Calendar sync failed but appointment is still booked in DB
       // Log silently - don't fail the booking
     }
@@ -806,7 +806,7 @@ async function handleBookAppointment(
         body: `Your appointment at ${businessData?.name || "our office"} is confirmed for ${formattedDate} at ${formattedTime}. Service: ${aptData.service_name}. Reply CANCEL to cancel.`,
         messageType: "booking_confirmation",
       });
-    } catch (smsError) {
+    } catch (_smsError) {
       // Error handled silently
     }
 
@@ -874,7 +874,7 @@ async function handleTransferCall(
       },
     };
 
-  } catch (error) {
+  } catch (_error) {
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
@@ -946,7 +946,7 @@ async function handleTakeMessage(
             body: `${urgencyEmoji} Message from ${caller_name} (${caller_phone}): "${message.substring(0, 100)}${message.length > 100 ? "..." : ""}"`,
             messageType: "message_alert",
           });
-        } catch (smsError) {
+        } catch (_smsError) {
           // Error handled silently
         }
       }
@@ -962,7 +962,7 @@ async function handleTakeMessage(
       },
     };
 
-  } catch (error) {
+  } catch (_error) {
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
@@ -1016,7 +1016,7 @@ async function handleSendSMS(
       data: { sent: true },
     };
 
-  } catch (error) {
+  } catch (_error) {
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,
@@ -1060,7 +1060,7 @@ async function handleEndCall(
       data: { ended: true, reason },
     };
 
-  } catch (error) {
+  } catch (_error) {
     return {
       success: true,
       message: "Goodbye!",

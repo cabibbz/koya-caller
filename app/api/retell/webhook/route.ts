@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     switch (event.event) {
       case "call_started": {
         // Create initial call record
-        const { error: insertError } = await supabase.from("calls").insert({
+        const { error: _insertError } = await supabase.from("calls").insert({
           business_id: businessId,
           retell_call_id: call.call_id,
           from_number: call.from_number || null,
@@ -364,7 +364,7 @@ export async function POST(request: NextRequest) {
                       .update({ external_event_id: eventId })
                       .eq("id", newAppointment.id);
                   }
-                } catch (calendarError) {
+                } catch (_calendarError) {
                   // Don't fail the whole webhook - calendar sync is nice-to-have
                 }
               }

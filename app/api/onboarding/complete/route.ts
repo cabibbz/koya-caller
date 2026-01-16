@@ -169,7 +169,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                 .eq("business_id", businessId);
             }
           }
-        } catch (agentError) {
+        } catch (_agentError) {
           // Don't fail onboarding if agent creation fails
         }
       } else {
@@ -269,7 +269,7 @@ async function fetchBusinessData(supabase: any, businessId: string) {
       minutesRemaining: 200,
       minutesExhausted: false,
     };
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }

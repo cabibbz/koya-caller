@@ -13,7 +13,7 @@ import { getCallDetails } from "@/lib/retell";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     // Get authenticated user
     const supabase = await createClient();

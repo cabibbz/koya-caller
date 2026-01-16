@@ -14,7 +14,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,13 +37,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import {
   Search,
   Filter,
   Phone,
   Play,
-  Pause,
   Flag,
   MessageSquare,
   Calendar,
@@ -56,7 +55,6 @@ import {
   PhoneMissed,
   Clock,
   User,
-  Mail,
   FileText,
   Loader2,
   Download,
@@ -174,7 +172,7 @@ export function CallsListClient({
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: "Failed to load call details",
         description: "Network error occurred",
@@ -242,7 +240,7 @@ export function CallsListClient({
         variant: "success",
       });
       router.refresh();
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: "Failed to update flag",
         description: "Network error occurred",
@@ -273,7 +271,7 @@ export function CallsListClient({
         variant: "success",
       });
       router.refresh();
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: "Failed to save note",
         description: "Network error occurred",
