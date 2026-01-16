@@ -659,3 +659,118 @@ export async function sendDailySummaryEmail(params: {
 
   return sendEmail({ to, subject, html });
 }
+
+export async function sendCalendarDisconnectEmail(params: {
+  to: string;
+  businessName: string;
+  provider: "google" | "outlook";
+  reason: "manual" | "auth_failure" | "token_expired";
+  reconnectUrl: string;
+}): Promise<EmailResult> {
+  const { to, businessName, provider, reason, reconnectUrl } = params;
+
+  const providerName = provider === "google" ? "Google Calendar" : "Outlook Calendar";
+
+  const reasonMessages = {
+    manual: "You disconnected your calendar integration.",
+    auth_failure: "We were unable to refresh your calendar access. Your authorization may have been revoked.",
+    token_expired: "Your calendar connection expired and could not be renewed automatically.",
+  };
+
+  const subject = `Calendar Disconnected - ${businessName}`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center; }
+        .header h1 { color: white; margin: 0; font-size: 24px; }
+        .warning-icon { font-size: 48px; margin-bottom: 10px; }
+        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; }
+        .alert-box { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px 20px; border-radius: 4px; margin-bottom: 20px; }
+        .alert-box h3 { margin: 0 0 8px 0; color: #92400E; }
+        .alert-box p { margin: 0; color: #78350F; }
+        .info-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .info-row { display: flex; padding: 8px 0; }
+        .info-label { color: #6b7280; width: 120px; }
+        .info-value { font-weight: 600; }
+        .button { display: inline-block; background: #3B82F6; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+        .cta { text-align: center; margin-top: 20px; }
+        .footer { text-align: center; margin-top: 24px; color: #9ca3af; font-size: 12px; }
+        .impact { background: white; padding: 16px; border-radius: 8px; margin-top: 16px; }
+        .impact h4 { margin: 0 0 8px 0; font-size: 14px; color: #374151; }
+        .impact ul { margin: 0; padding-left: 20px; color: #6b7280; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="warning-icon">&#9888;</div>
+          <h1>Calendar Disconnected</h1>
+        </div>
+        <div class="content">
+          <div class="alert-box">
+            <h3>${providerName} has been disconnected</h3>
+            <p>${reasonMessages[reason]}</p>
+          </div>
+
+          <div class="info-card">
+            <div class="info-row">
+              <span class="info-label">Business:</span>
+              <span class="info-value">${businessName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Calendar:</span>
+              <span class="info-value">${providerName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Status:</span>
+              <span class="info-value" style="color: #DC2626;">Disconnected</span>
+            </div>
+          </div>
+
+          <div class="impact">
+            <h4>What this means:</h4>
+            <ul>
+              <li>Koya will use the built-in calendar for scheduling</li>
+              <li>New appointments won't sync to ${providerName}</li>
+              <li>Existing calendar events are unaffected</li>
+            </ul>
+          </div>
+
+          <div class="cta">
+            <p>To restore calendar sync, reconnect your calendar in settings:</p>
+            <a href="${reconnectUrl}" class="button">Reconnect Calendar</a>
+          </div>
+        </div>
+        <div class="footer">
+          <p>Koya - Your AI Phone Receptionist for ${businessName}</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+Calendar Disconnected - ${businessName}
+
+${providerName} has been disconnected from your Koya account.
+
+Reason: ${reasonMessages[reason]}
+
+What this means:
+- Koya will use the built-in calendar for scheduling
+- New appointments won't sync to ${providerName}
+- Existing calendar events are unaffected
+
+To restore calendar sync, visit: ${reconnectUrl}
+
+--
+Koya - Your AI Phone Receptionist
+  `.trim();
+
+  return sendEmail({ to, subject, html, text });
+}

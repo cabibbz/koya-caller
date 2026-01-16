@@ -25,7 +25,6 @@ import {
   Square,
   ChevronDown,
   ChevronUp,
-  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -160,7 +159,7 @@ export function Step2Services() {
         await saveStep2Data(formData);
         goNext();
         router.push("/onboarding/faqs");
-      } catch (err) {
+      } catch (_err) {
         setError("Failed to save. Please try again.");
       }
     });
@@ -443,7 +442,7 @@ interface ServiceItemProps {
 
 function ServiceItem({
   service,
-  index,
+  index: _index,
   isEditing,
   onToggle,
   onEdit,

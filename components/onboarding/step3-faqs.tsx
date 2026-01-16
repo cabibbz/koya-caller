@@ -23,7 +23,6 @@ import {
   CheckSquare,
   Square,
   MessageSquare,
-  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,7 +117,7 @@ export function Step3FAQs() {
         await saveStep3Data(formData);
         goNext();
         router.push("/onboarding/calendar");
-      } catch (err) {
+      } catch (_err) {
         setError("Failed to save. Please try again.");
       }
     });
@@ -323,7 +322,7 @@ interface FAQItemProps {
 
 function FAQItem({
   faq,
-  index,
+  index: _index,
   isEditing,
   onToggle,
   onEdit,

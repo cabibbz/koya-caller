@@ -10,7 +10,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Phone, Clock, AlertCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -65,7 +64,7 @@ export function Step5CallHandling() {
           // Pre-fill transfer number from user's phone if available
           // This would come from signup data
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       } finally {
         setIsLoading(false);

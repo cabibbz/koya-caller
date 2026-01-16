@@ -195,7 +195,7 @@ export async function fetchCallerContext(
     // No history found
     return defaultContext;
 
-  } catch (error) {
+  } catch (_error) {
     // Return default context on error
     return defaultContext;
   }
@@ -243,7 +243,7 @@ export async function updateCallerProfile(
     if (error) {
       // Table might not exist yet - that's okay
     }
-  } catch (error) {
+  } catch (_error) {
     // Silently fail - profile update is not critical
   }
 }
@@ -265,7 +265,7 @@ export async function incrementCallerCallCount(
       p_business_id: businessId,
       p_phone_number: normalizedNumber
     });
-  } catch (error) {
+  } catch (_error) {
     // Function might not exist - that's okay
   }
 }

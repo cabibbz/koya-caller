@@ -31,7 +31,6 @@ import {
 import {
   withRetry,
   isClaudeRetryable,
-  handleClaudeFailure,
 } from "@/lib/errors";
 
 // =============================================================================

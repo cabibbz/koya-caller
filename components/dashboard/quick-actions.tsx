@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import {
   Phone,
   Calendar,
-  MessageSquare,
   Settings,
   BookOpen,
   Headphones,

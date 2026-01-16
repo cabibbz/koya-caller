@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
+import { logError } from "@/lib/logging";
 
 // =============================================================================
 // TYPE EXPORTS
@@ -195,7 +196,7 @@ export async function findOne<T>(
 ): Promise<T | null> {
   const result = await executeQuery(query);
   if (result.error) {
-    console.error("[DB] Query error:", result.error);
+    logError("DB Query", result.error);
     return null;
   }
   return result.data;
@@ -209,7 +210,7 @@ export async function findMany<T>(
 ): Promise<T[]> {
   const result = await executeListQuery(query);
   if (result.error) {
-    console.error("[DB] Query error:", result.error);
+    logError("DB Query", result.error);
     return [];
   }
   return result.data;

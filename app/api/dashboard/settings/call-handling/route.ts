@@ -44,6 +44,7 @@ async function handler(request: NextRequest) {
       transferOnUpset,
       transferKeywords,
       transferHoursType,
+      transferHoursCustom,
       afterHoursEnabled,
       afterHoursCanBook,
       afterHoursMessageOnly,
@@ -70,6 +71,7 @@ async function handler(request: NextRequest) {
             ? transferKeywords.split(",").map((k: string) => k.trim()).filter(Boolean)
             : [],
           transfer_hours_type: transferHoursType || "always",
+          transfer_hours_custom: transferHoursType === "custom" ? transferHoursCustom : null,
           after_hours_enabled: afterHoursEnabled ?? true,
           after_hours_can_book: afterHoursCanBook ?? true,
           after_hours_message_only: afterHoursMessageOnly ?? false,

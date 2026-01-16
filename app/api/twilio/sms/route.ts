@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     
     // Check if this is a status callback or incoming message
     const messageStatus = params.MessageStatus;
-    const messageSid = params.MessageSid || params.SmsSid;
+    const _messageSid = params.MessageSid || params.SmsSid;
     
     if (messageStatus) {
       // This is a status callback
@@ -171,8 +171,8 @@ async function handleIncomingMessage(params: Record<string, string>): Promise<Re
 async function handleStatusCallback(params: Record<string, string>): Promise<Response> {
   const messageSid = params.MessageSid || params.SmsSid || "";
   const messageStatus = params.MessageStatus || "";
-  const errorCode = params.ErrorCode;
-  const errorMessage = params.ErrorMessage;
+  const _errorCode = params.ErrorCode;
+  const _errorMessage = params.ErrorMessage;
   
   // Update message status in database
   const supabase = createAdminClient();
@@ -186,7 +186,7 @@ async function handleStatusCallback(params: Record<string, string>): Promise<Res
   }
   
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-  const { error } = await (supabase as any)
+  const { error: _error } = await (supabase as any)
     .from("sms_messages")
     .update({ status: dbStatus })
     .eq("twilio_sid", messageSid);

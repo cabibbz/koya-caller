@@ -10,11 +10,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { getCallDetails } from "@/lib/retell";
+import { logError } from "@/lib/logging";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    // Rate limit check
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+
     // Get authenticated user
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -47,7 +56,7 @@ export async function POST(_request: NextRequest) {
       .limit(50); // Limit to prevent timeout
 
     if (fetchError) {
-      console.error("[Call Sync] Error fetching calls:", fetchError);
+      logError("Call Sync", fetchError);
       return NextResponse.json(
         { error: "Failed to fetch calls" },
         { status: 500 }
@@ -61,8 +70,6 @@ export async function POST(_request: NextRequest) {
         synced: 0,
       });
     }
-
-    console.log(`[Call Sync] Found ${callsToSync.length} calls to sync`);
 
     let syncedCount = 0;
     let errorCount = 0;
@@ -103,11 +110,10 @@ export async function POST(_request: NextRequest) {
           if (Object.keys(updateData).length > 0) {
             await (adminSupabase as any).from("calls").update(updateData).eq("id", call.id);
             syncedCount++;
-            console.log(`[Call Sync] Synced call ${call.id}: duration=${updateData.duration_seconds}s, recording=${updateData.recording_url ? "yes" : "no"}`);
           }
         }
       } catch (error) {
-        console.error(`[Call Sync] Error syncing call ${call.id}:`, error);
+        logError("Call Sync", error);
         errorCount++;
       }
 
@@ -123,7 +129,7 @@ export async function POST(_request: NextRequest) {
       total: callsToSync.length,
     });
   } catch (error) {
-    console.error("[Call Sync] Error:", error);
+    logError("Call Sync", error);
     return NextResponse.json(
       { error: "Failed to sync calls" },
       { status: 500 }

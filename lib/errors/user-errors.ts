@@ -35,7 +35,7 @@ const NETWORK_ERROR_MESSAGES: Record<string, string> = {
   "NetworkError": "Network error. Please check your internet connection and try again.",
 };
 
-const VALIDATION_ERROR_MESSAGES: Record<string, string> = {
+const _VALIDATION_ERROR_MESSAGES: Record<string, string> = {
   "invalid_email": "Please enter a valid email address.",
   "invalid_phone": "Please enter a valid phone number.",
   "invalid_url": "Please enter a valid URL.",

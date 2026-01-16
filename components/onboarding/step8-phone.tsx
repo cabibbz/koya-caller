@@ -48,7 +48,6 @@ import {
   type Step8FormData,
   type PhoneSetupType,
   type PhoneProvider,
-  type AvailablePhoneNumber,
   DEFAULT_STEP8_DATA,
   PHONE_PROVIDER_OPTIONS,
 } from "@/types/onboarding";
@@ -105,7 +104,7 @@ export function Step8PhoneNumber() {
           setHasExistingNumber(data.hasExistingNumber);
           setExistingNumber(data.phoneNumber);
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       } finally {
         setCheckingExisting(false);
@@ -308,13 +307,13 @@ END:VCARD`;
       setStep8Data(formData);
       completeStep(8);
       router.push("/onboarding/test");
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     } finally {
       setIsSaving(false);
     }
   };
-  
+
   return (
     <div className="space-y-8">
       {/* Loading State */}

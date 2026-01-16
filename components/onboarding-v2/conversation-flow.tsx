@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChatBubble } from "./chat-bubble";
-import { KoyaAvatar } from "./koya-avatar";
 import { LearningAnimation } from "./learning-animation";
 import { PhonePreviewMini } from "./phone-preview";
 import { ChevronRight, Building2, Briefcase, Stethoscope, Car, Utensils, Wrench, Scissors } from "lucide-react";
@@ -87,7 +86,7 @@ export function ConversationFlow({
   const [isTyping, setIsTyping] = useState(true); // Start with typing indicator
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const learningCompleteRef = useRef(false);
-  const initializedRef = useRef(false);
+  const _initializedRef = useRef(false);
 
   // Auto-scroll to bottom
   useEffect(() => {

@@ -11,8 +11,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Loader2, ChevronDown, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, ChevronDown, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -23,7 +22,7 @@ import {
   saveBusinessType,
 } from "@/lib/onboarding/actions";
 import { StepHeader, OnboardingNavigation } from "./navigation";
-import type { BusinessTypeOption, BusinessTemplate } from "@/types/onboarding";
+import type { BusinessTypeOption } from "@/types/onboarding";
 import {
   templateServiceToFormData,
   templateFAQToFormData,
@@ -112,7 +111,7 @@ export function Step1BusinessType({
           setBusinessType(typeSlug, typeName);
           setTemplateLoaded(true);
         }
-      } catch (err) {
+      } catch (_err) {
         setError("Failed to load business template. Please try again.");
       } finally {
         setIsLoadingTemplate(false);
@@ -164,7 +163,7 @@ export function Step1BusinessType({
 
         goNext();
         router.push("/onboarding/services");
-      } catch (err) {
+      } catch (_err) {
         setError("Failed to save. Please try again.");
       }
     });

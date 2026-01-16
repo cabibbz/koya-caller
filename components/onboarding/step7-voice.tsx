@@ -135,7 +135,7 @@ export function Step7VoicePersonality() {
       
       // Start loading
       audio.load();
-    } catch (error) {
+    } catch (_error) {
       setLoadingVoiceId(null);
       setPlayingVoiceId(null);
     }
@@ -185,7 +185,7 @@ export function Step7VoicePersonality() {
       
       // Navigate to next step
       router.push("/onboarding/phone");
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     } finally {
       setIsSaving(false);

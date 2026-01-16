@@ -199,7 +199,7 @@ export const sendAppointmentReminderEvent = inngest.createFunction(
       appointmentId,
       businessId,
       customerPhone,
-      customerName,
+      customerName: _customerName,
       scheduledAt,
       serviceName,
       reminderType,

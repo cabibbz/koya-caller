@@ -3,7 +3,7 @@
  */
 
 import Link from "next/link";
-import { Phone, Mail, MapPin } from "lucide-react";
+import { Phone, Mail } from "lucide-react";
 
 const footerLinks = {
   product: [

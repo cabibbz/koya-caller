@@ -5,7 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { API_CONFIG } from "@/lib/config";
-import { errors, ErrorCode } from "./responses";
+import { errors } from "./responses";
+import { logError } from "@/lib/logging";
 
 // =============================================================================
 // TYPES
@@ -123,7 +124,7 @@ export async function parseJsonBody<T = Record<string, unknown>>(
  * Get authenticated user from request (placeholder - integrate with your auth)
  */
 export async function getAuthUser(
-  request: NextRequest
+  _request: NextRequest
 ): Promise<{ id: string; email: string; isAdmin: boolean } | null> {
   // This should integrate with your Supabase auth
   // For now, return null to indicate no auth
@@ -195,7 +196,7 @@ export function withErrorBoundary(handler: ApiHandler): ApiHandler {
     try {
       return await handler(request, context);
     } catch (error) {
-      console.error("[API Error]", error);
+      logError("API Error Boundary", error);
 
       if (error instanceof Error && error.message === "Request timeout") {
         return errors.serviceUnavailable("Request timed out");
@@ -247,7 +248,7 @@ export function createApiHandler(
 
       return response;
     } catch (error) {
-      console.error("[API Error]", error);
+      logError("API Handler", error);
       return withCors(errors.internalError());
     }
   };

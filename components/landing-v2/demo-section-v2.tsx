@@ -192,7 +192,7 @@ export function DemoSectionV2() {
       if (retellClientRef.current) {
         try {
           retellClientRef.current.stopCall();
-        } catch (e) {}
+        } catch (_e) {}
       }
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
@@ -222,7 +222,7 @@ export function DemoSectionV2() {
     try {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (micError) {
+      } catch (_micError) {
         throw new Error(
           "Microphone access denied. Please allow microphone access to talk to Koya."
         );
@@ -311,7 +311,7 @@ export function DemoSectionV2() {
     if (retellClientRef.current) {
       try {
         retellClientRef.current.stopCall();
-      } catch (e) {
+      } catch (_e) {
         // Error handled silently
       }
     }
@@ -332,7 +332,7 @@ export function DemoSectionV2() {
           retellClientRef.current.mute();
         }
         setIsMuted(!isMuted);
-      } catch (e) {
+      } catch (_e) {
         // Error handled silently
       }
     }

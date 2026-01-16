@@ -49,7 +49,7 @@ export function Step6Language() {
           setFormData(existing);
           setStep6Data(existing);
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       } finally {
         setIsLoading(false);

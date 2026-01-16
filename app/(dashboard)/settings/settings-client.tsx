@@ -162,8 +162,25 @@ const LANGUAGE_MODE_OPTIONS: { value: LanguageMode; label: string; description: 
 const TRANSFER_HOURS_OPTIONS: { value: TransferHoursType; label: string }[] = [
   { value: "always", label: "Always available" },
   { value: "business_hours", label: "Business hours only" },
-  { value: "custom", label: "Custom schedule (coming soon)" },
+  { value: "custom", label: "Custom schedule" },
 ];
+
+const DAYS_OF_WEEK = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
+
+interface TransferScheduleDay {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  enabled: boolean;
+}
 
 const REMINDER_OPTIONS: { value: ReminderSetting; label: string }[] = [
   { value: "off", label: "No reminder" },
@@ -191,6 +208,14 @@ export function SettingsClient({
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [loadingVoiceId, setLoadingVoiceId] = useState<string | null>(null);
 
+  // Default custom transfer schedule (M-F 9-5)
+  const defaultTransferSchedule: TransferScheduleDay[] = DAYS_OF_WEEK.map(day => ({
+    day_of_week: day.value,
+    start_time: "09:00",
+    end_time: "17:00",
+    enabled: day.value >= 1 && day.value <= 5, // Mon-Fri enabled by default
+  }));
+
   // Call handling state
   const [callSettings, setCallSettings] = useState({
     transferNumber: initialCallSettings?.transfer_number || "",
@@ -200,6 +225,7 @@ export function SettingsClient({
     transferOnUpset: initialCallSettings?.transfer_on_upset ?? false,
     transferKeywords: initialCallSettings?.transfer_keywords?.join(", ") || "",
     transferHoursType: (initialCallSettings?.transfer_hours_type || "always") as TransferHoursType,
+    transferHoursCustom: (initialCallSettings?.transfer_hours_custom as TransferScheduleDay[] | null) || defaultTransferSchedule,
     afterHoursEnabled: initialCallSettings?.after_hours_enabled ?? true,
     afterHoursCanBook: initialCallSettings?.after_hours_can_book ?? true,
     afterHoursMessageOnly: initialCallSettings?.after_hours_message_only ?? false,
@@ -868,6 +894,64 @@ export function SettingsClient({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Custom Transfer Schedule */}
+              {callSettings.transferHoursType === "custom" && (
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
+                  <Label className="text-sm font-medium">Custom Transfer Schedule</Label>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Set specific hours when transfers to a human are available
+                  </p>
+                  <div className="space-y-2">
+                    {callSettings.transferHoursCustom.map((day, index) => (
+                      <div key={day.day_of_week} className="flex items-center gap-3">
+                        <div className="w-24">
+                          <Label className="text-sm">{DAYS_OF_WEEK[day.day_of_week].label}</Label>
+                        </div>
+                        <Switch
+                          checked={day.enabled}
+                          onCheckedChange={(checked) => {
+                            const updated = [...callSettings.transferHoursCustom];
+                            updated[index] = { ...day, enabled: checked };
+                            setCallSettings({ ...callSettings, transferHoursCustom: updated });
+                            setCallSettingsModified(true);
+                          }}
+                        />
+                        {day.enabled && (
+                          <>
+                            <Input
+                              type="time"
+                              value={day.start_time}
+                              onChange={(e) => {
+                                const updated = [...callSettings.transferHoursCustom];
+                                updated[index] = { ...day, start_time: e.target.value };
+                                setCallSettings({ ...callSettings, transferHoursCustom: updated });
+                                setCallSettingsModified(true);
+                              }}
+                              className="w-28"
+                            />
+                            <span className="text-sm text-muted-foreground">to</span>
+                            <Input
+                              type="time"
+                              value={day.end_time}
+                              onChange={(e) => {
+                                const updated = [...callSettings.transferHoursCustom];
+                                updated[index] = { ...day, end_time: e.target.value };
+                                setCallSettings({ ...callSettings, transferHoursCustom: updated });
+                                setCallSettingsModified(true);
+                              }}
+                              className="w-28"
+                            />
+                          </>
+                        )}
+                        {!day.enabled && (
+                          <span className="text-sm text-muted-foreground">Closed</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* After Hours */}

@@ -55,7 +55,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
     }
 
     return { user: extractUserInfo(user), error: null };
-  } catch (error) {
+  } catch (_error) {
     return { user: null, error: "Authentication check failed" };
   }
 }
@@ -64,7 +64,7 @@ export async function getAuthenticatedUser(): Promise<AuthResult> {
  * Require authenticated user - redirects to login if not authenticated
  */
 export async function requireAuth(): Promise<AuthenticatedUser> {
-  const { user, error } = await getAuthenticatedUser();
+  const { user, error: _error } = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");
@@ -137,7 +137,7 @@ export function canPerformAdminActions(user: AuthenticatedUser): boolean {
  * Returns user info or throws error response
  */
 export async function validateApiAuth(): Promise<AuthenticatedUser> {
-  const { user, error } = await getAuthenticatedUser();
+  const { user, error: _error } = await getAuthenticatedUser();
 
   if (!user) {
     throw new Error("Unauthorized");

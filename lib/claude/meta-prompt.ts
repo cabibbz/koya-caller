@@ -8,7 +8,7 @@
  */
 
 import type { PromptGenerationInput, EnhancedPromptConfig } from "./types";
-import { generateIndustryContextSection, getIndustryEnhancement } from "./industry-prompts";
+import { generateIndustryContextSection } from "./industry-prompts";
 import { generateSentimentInstructions } from "./sentiment-responses";
 import { generateErrorHandlingInstructions } from "./error-templates";
 import { getRelevantExamples, formatExamplesForPrompt } from "./few-shot-examples";

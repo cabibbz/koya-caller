@@ -21,6 +21,7 @@ import type {
   DynamicVariables,
 } from "./types";
 import { RETELL_FUNCTIONS, prepareDynamicVariables } from "./functions";
+import { logError } from "@/lib/logging";
 
 // =============================================================================
 // Retell Client
@@ -487,19 +488,11 @@ export async function getCallDetails(callId: string): Promise<{
 
   if (!client) {
     // Mock mode - return null to indicate we should use webhook data
-    console.log("[Retell] Mock mode - skipping call details retrieval");
     return null;
   }
 
   try {
-    console.log(`[Retell] Retrieving call details for ${callId}`);
     const callResponse = await client.call.retrieve(callId);
-
-    console.log(`[Retell] Retrieved call details:`, {
-      duration_ms: callResponse.duration_ms,
-      recording_url: callResponse.recording_url ? "present" : "absent",
-      transcript_length: callResponse.transcript_object?.length || 0,
-    });
 
     return {
       duration_ms: callResponse.duration_ms || 0,
@@ -519,7 +512,7 @@ export async function getCallDetails(callId: string): Promise<{
       } : null,
     };
   } catch (error) {
-    console.error(`[Retell] Failed to retrieve call details for ${callId}:`, error);
+    logError("Retell Call Details", error);
     return null;
   }
 }
@@ -759,7 +752,7 @@ export async function updateAgentAdvancedSettings(
 
     return true;
   } catch (error) {
-    console.error("[Retell] Failed to update agent advanced settings:", error);
+    logError("Retell Agent Update", error);
     return false;
   }
 }

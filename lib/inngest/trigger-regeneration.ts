@@ -6,6 +6,7 @@
  */
 
 import { inngest } from "./client";
+import { logError } from "@/lib/logging";
 
 const INNGEST_EVENT_KEY = process.env.INNGEST_EVENT_KEY;
 
@@ -26,13 +27,12 @@ export async function triggerPromptRegeneration(
       });
       return { success: true, method: "inngest" };
     } catch (error) {
-      console.error("[Regeneration] Inngest send failed:", error);
+      logError("Regeneration", error);
       // Fall through to direct processing
     }
   }
 
   // Fallback: Direct processing via process-queue endpoint
-  console.log(`[Regeneration] Inngest not configured, using direct processing for ${businessId}`);
 
   try {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -65,7 +65,6 @@ export async function triggerPromptRegeneration(
       };
     }
 
-    console.log(`[Regeneration] Direct processing completed successfully for ${businessId}`);
     return { success: true, method: "direct" };
   } catch (error) {
     return {

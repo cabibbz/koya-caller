@@ -17,7 +17,7 @@ import {
 } from "@/lib/claude/error-templates";
 import { createCalendarClient, createAppointmentEvent } from "@/lib/calendar";
 import { DateTime } from "luxon";
-import { maskSensitiveData, maskPhone } from "@/lib/security";
+import { logError } from "@/lib/logging";
 
 // =============================================================================
 // Types
@@ -118,12 +118,8 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json() as RetellFunctionRequest;
     const body = parseRetellRequest(rawBody);
 
-    // Debug logging (mask sensitive data)
-    console.log("[Retell Function] Received:", rawBody.name, "business_id:", maskSensitiveData(body.business_id));
-
     // Validate business_id
     if (!body.business_id) {
-      console.error("[Retell Function] No business_id in request metadata");
       return NextResponse.json({
         success: false,
         message: "I'm having trouble processing that request. Let me help you another way.",
@@ -172,7 +168,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error("[Retell Function] Unhandled error:", error);
+    logError("Retell Function", error);
     return NextResponse.json({
       success: false,
       message: "An error occurred processing this request",
@@ -550,15 +546,6 @@ async function handleBookAppointment(
     notes?: string;
   };
 
-  // Log what we received from the AI (mask sensitive data)
-  console.log("[Book Appointment] Received args:", {
-    date,
-    time,
-    customer_name: maskSensitiveData(customer_name || ""),
-    customer_phone: maskPhone(customer_phone || ""),
-    service
-  });
-
   if (!date || !time || !customer_name || !customer_phone || !service) {
     return {
       success: false,
@@ -606,12 +593,6 @@ async function handleBookAppointment(
 
     // Parse in business timezone, then convert to JS Date (UTC internally)
     const dt = DateTime.fromISO(`${date}T${normalizedTime}`, { zone: timezone });
-    console.log("[Book Appointment] Parsed date:", {
-      input: `${date}T${normalizedTime}`,
-      parsed: dt.toISO(),
-      valid: dt.isValid,
-      timezone,
-    });
 
     if (!dt.isValid) {
       throw new Error(`Invalid date/time: ${date} ${time}`);
@@ -619,11 +600,6 @@ async function handleBookAppointment(
 
     // Validation: Can't book in the past
     const now = DateTime.now().setZone(timezone);
-    console.log("[Book Appointment] Date comparison:", {
-      requested: dt.toISO(),
-      now: now.toISO(),
-      isPast: dt < now,
-    });
 
     if (dt < now) {
       return {
@@ -720,15 +696,6 @@ async function handleBookAppointment(
       // Calendar check failed - proceed with booking
     }
 
-    // Create appointment (mask sensitive data in logs)
-    console.log("[Book Appointment] Creating appointment:", {
-      business_id: maskSensitiveData(body.business_id),
-      customer_name: maskSensitiveData(customer_name),
-      customer_phone: maskPhone(customer_phone),
-      service: serviceInfo?.name || service,
-      scheduled_at: scheduledAt.toISOString(),
-    });
-
     // Only include call_id if it's a valid UUID (not empty or Retell's format)
     const callId = body.call_id && body.call_id.length === 36 ? body.call_id : null;
 
@@ -752,17 +719,14 @@ async function handleBookAppointment(
       .single();
 
     if (aptError) {
-      console.error("[Book Appointment] Database error:", aptError);
+      logError("Book Appointment", aptError);
       throw new Error(`Failed to create appointment: ${aptError.message}`);
     }
 
     const aptData = appointment as { id: string; service_name: string } | null;
     if (!aptData) {
-      console.error("[Book Appointment] No data returned from insert");
       throw new Error("Failed to create appointment: no data returned");
     }
-
-    console.log("[Book Appointment] Success! Appointment ID:", aptData.id);
 
     // Sync to external calendar (Google/Outlook)
     try {
@@ -828,7 +792,7 @@ async function handleBookAppointment(
     };
 
   } catch (error) {
-    console.error("[Book Appointment] Error:", error);
+    logError("Book Appointment", error);
     const personality = await getBusinessPersonality(supabase, body.business_id);
     return {
       success: false,

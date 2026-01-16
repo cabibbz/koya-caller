@@ -116,7 +116,7 @@ export function LiveStatsSection() {
             setCallsToday(data.settings.stats_calls_today.value);
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       }
     }

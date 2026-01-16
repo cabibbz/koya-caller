@@ -54,7 +54,7 @@ export function DemoSection() {
       if (retellClientRef.current) {
         try {
           retellClientRef.current.stopCall()
-        } catch (e) {
+        } catch (_e) {
           // Ignore cleanup errors
         }
       }
@@ -88,7 +88,7 @@ export function DemoSection() {
       // Request microphone permission
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch (micError) {
+      } catch (_micError) {
         throw new Error("Microphone access denied. Please allow microphone access to talk to Koya.")
       }
 
@@ -178,7 +178,7 @@ export function DemoSection() {
     if (retellClientRef.current) {
       try {
         retellClientRef.current.stopCall()
-      } catch (e) {
+      } catch (_e) {
         // Error handled silently
       }
     }
@@ -198,7 +198,7 @@ export function DemoSection() {
           retellClientRef.current.mute()
         }
         setIsMuted(!isMuted)
-      } catch (e) {
+      } catch (_e) {
         // Error handled silently
       }
     }

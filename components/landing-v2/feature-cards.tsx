@@ -42,7 +42,7 @@ const features = [
 export function FeatureCards() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-      {features.map((feature, index) => (
+      {features.map((feature) => (
         <motion.div
           key={feature.title}
           initial={{ opacity: 0, y: 30 }}

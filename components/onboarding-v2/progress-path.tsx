@@ -47,7 +47,7 @@ export function ProgressPath({ currentPhase, className }: ProgressPathProps) {
           />
 
           {/* Phase nodes */}
-          {phases.map((phase, index) => {
+          {phases.map((phase) => {
             const isComplete = currentPhase > phase.id;
             const isActive = currentPhase === phase.id;
             const isPending = currentPhase < phase.id;

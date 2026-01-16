@@ -151,8 +151,7 @@ async function handler(request: NextRequest) {
       });
 
       if (!updateSuccess) {
-        // Log but don't fail - settings are saved, agent update can be retried
-        console.warn("[Call Features] Failed to update Retell agent, settings saved to DB");
+        // Settings are saved to DB, agent update can be retried
       }
     }
 

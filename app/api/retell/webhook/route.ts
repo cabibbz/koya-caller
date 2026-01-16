@@ -71,10 +71,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
 
-    // Log the raw payload to understand Retell's data structure
-    console.log(`[Retell Webhook] Event type: ${event.event}`);
-    console.log(`[Retell Webhook] Full payload:`, JSON.stringify(event, null, 2));
-
     // Webhook event received - processing
 
     // Use any to bypass strict type checking for admin client
@@ -115,7 +111,6 @@ export async function POST(request: NextRequest) {
       }
 
       case "call_ended": {
-        console.log(`[Retell Webhook] call_ended for ${call.call_id}`);
 
         // Fetch full call details from Retell API for accurate duration and recording URL
         // The webhook payload may not include all details, so we fetch directly from Retell
@@ -140,31 +135,22 @@ export async function POST(request: NextRequest) {
           endTimestamp = retellCallDetails.end_timestamp || endTimestamp;
           disconnectionReason = retellCallDetails.disconnection_reason || disconnectionReason;
 
-          console.log(`[Retell Webhook] Using Retell API data - duration: ${durationMs}ms (${durationSeconds}s), recording: ${recordingUrl ? "present" : "absent"}`);
         } else {
           // Fall back to webhook payload data
-          console.log(`[Retell Webhook] Retell API unavailable, using webhook data`);
-
           // Try duration_ms from event or call object first
           if (event.duration_ms) {
             durationMs = event.duration_ms;
             durationSeconds = Math.ceil(durationMs / 1000);
-            console.log(`[Retell Webhook] Using event.duration_ms: ${durationMs}ms = ${durationSeconds}s`);
           } else if (call.duration_ms) {
             durationMs = call.duration_ms;
             durationSeconds = Math.ceil(durationMs / 1000);
-            console.log(`[Retell Webhook] Using call.duration_ms: ${durationMs}ms = ${durationSeconds}s`);
           } else if (call.duration_seconds) {
             durationSeconds = call.duration_seconds;
             durationMs = durationSeconds * 1000;
-            console.log(`[Retell Webhook] Using call.duration_seconds: ${durationSeconds}s`);
           } else if (startTimestamp && endTimestamp) {
             // Calculate from timestamps as last resort
             durationMs = endTimestamp - startTimestamp;
             durationSeconds = Math.ceil(durationMs / 1000);
-            console.log(`[Retell Webhook] Calculated from timestamps: ${durationMs}ms = ${durationSeconds}s`);
-          } else {
-            console.log(`[Retell Webhook] WARNING: No duration data available!`);
           }
 
           recordingUrl = call.recording_url || null;
@@ -214,31 +200,18 @@ export async function POST(request: NextRequest) {
           outcome: outcome,
         };
 
-        console.log(`[Retell Webhook] Final call data:`, {
-          duration_seconds: durationSeconds,
-          duration_minutes_billed: durationMinutesBilled,
-          recording_url: recordingUrl ? "present" : "absent",
-          transcript: transcriptObject ? "present" : "absent",
-        });
-
         if (existingCall) {
-          console.log(`[Retell Webhook] Updating existing call ${existingCall.id}`);
           const { error: updateError } = await supabase
             .from("calls")
             .update(callData)
             .eq("id", existingCall.id);
           if (updateError) {
-            console.error(`[Retell Webhook] Update failed:`, updateError);
-          } else {
-            console.log(`[Retell Webhook] Call updated successfully`);
+            logError("Retell Webhook", updateError);
           }
         } else {
-          console.log(`[Retell Webhook] Inserting new call`);
           const { error: insertError } = await supabase.from("calls").insert(callData);
           if (insertError) {
-            console.error(`[Retell Webhook] Insert failed:`, insertError);
-          } else {
-            console.log(`[Retell Webhook] Call inserted successfully`);
+            logError("Retell Webhook", insertError);
           }
         }
 

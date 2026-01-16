@@ -79,7 +79,7 @@ export function HeroSectionV2() {
               className="flex flex-wrap items-center justify-center lg:justify-start gap-4 mb-8 text-sm text-zinc-400"
             >
               {["No credit card required", "5-minute setup", "Cancel anytime"].map(
-                (item, i) => (
+                (item) => (
                   <div key={item} className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-emerald-500" />
                     <span>{item}</span>

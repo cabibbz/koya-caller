@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const params = await parseTwilioParams(request);
     
     const dialCallStatus = params.DialCallStatus || "failed";
-    const dialCallDuration = parseInt(params.DialCallDuration || "0", 10);
+    const _dialCallDuration = parseInt(params.DialCallDuration || "0", 10);
     
     // Generate appropriate response
     const twiml = generateDialStatusResponse({

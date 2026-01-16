@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
   try {
     const params = await parseTwilioParams(request);
     
-    const callSid = params.CallSid || "";
+    const _callSid = params.CallSid || "";
     const callStatus = params.CallStatus || "";
     const callDuration = parseInt(params.CallDuration || "0", 10);
     const fromNumber = params.From || "";
     const toNumber = params.To || params.Called || "";
-    const direction = params.Direction || "";
+    const _direction = params.Direction || "";
     const timestamp = params.Timestamp || new Date().toISOString();
     
     const supabase = createAdminClient();

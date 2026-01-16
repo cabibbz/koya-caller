@@ -5,6 +5,7 @@
  */
 
 import { Inngest } from "inngest";
+import { logError, logWarning } from "@/lib/logging";
 
 const INNGEST_EVENT_KEY = process.env.INNGEST_EVENT_KEY;
 
@@ -31,14 +32,13 @@ export const inngest = {
         await baseInngest.send(event);
         return;
       } catch (error) {
-        console.error("[Inngest] Send failed, falling back to direct:", error);
+        logError("Inngest Send", error);
       }
     }
 
     // Fallback: Handle prompt regeneration in background (fire-and-forget)
     if (event.name === "prompt/regeneration.requested") {
       const { businessId, triggeredBy } = event.data as { businessId: string; triggeredBy: string };
-      console.log(`[Inngest Fallback] Queuing prompt regeneration for ${businessId} (${triggeredBy})`);
 
       // Always use localhost for internal API calls in development
       const isDev = process.env.NODE_ENV === "development";
@@ -56,23 +56,21 @@ export const inngest = {
       })
         .then(async (response) => {
           if (!response.ok) {
-            console.error(`[Inngest Fallback] Process queue returned ${response.status}`);
+            logError("Inngest Fallback", `Process queue returned ${response.status}`);
           } else {
             const result = await response.json();
-            if (result.success) {
-              console.log(`[Inngest Fallback] Prompt regeneration completed successfully`);
-            } else {
-              console.error(`[Inngest Fallback] Regeneration failed:`, result.errors);
+            if (!result.success) {
+              logError("Inngest Fallback", result.errors);
             }
           }
         })
         .catch((error) => {
-          console.error("[Inngest Fallback] Direct processing failed:", error);
+          logError("Inngest Fallback", error);
         });
 
       // Return immediately - don't wait for regeneration
     } else {
-      console.warn(`[Inngest] Event ${event.name} not processed - Inngest not configured`);
+      logWarning("Inngest", `Event ${event.name} not processed - Inngest not configured`);
     }
   },
 

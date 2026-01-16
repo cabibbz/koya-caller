@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // First, deactivate any existing active numbers for this business
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { error: deactivateError } = await (supabase as any)
+    const { error: _deactivateError } = await (supabase as any)
       .from("phone_numbers")
       .update({ is_active: false })
       .eq("business_id", businessId)

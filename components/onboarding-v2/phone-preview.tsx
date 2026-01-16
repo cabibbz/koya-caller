@@ -8,7 +8,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Volume2, VolumeX, Phone, Mic, MicOff } from "lucide-react";
+import { Volume2, VolumeX, Phone, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface PhonePreviewProps {

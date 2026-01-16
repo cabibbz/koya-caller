@@ -5,9 +5,7 @@
  * Split-screen with conversation on left, preview on right
  */
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import { ProgressPath, OnboardingPhase } from "./progress-path";
 import { PhonePreview } from "./phone-preview";
 import { KoyaAvatar } from "./koya-avatar";

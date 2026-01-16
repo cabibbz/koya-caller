@@ -315,7 +315,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (isRetellConfigured()) {
-      const success = await updateAgent(configData.retell_agent_id as string, {
+      const _success = await updateAgent(configData.retell_agent_id as string, {
         voiceId: body.voiceId || configData.voice_id as string,
         personality: body.personality || configData.personality as "professional" | "friendly" | "casual",
         greeting: body.customGreeting || configData.greeting as string,

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     
     const recordingUrl = params.RecordingUrl;
     const recordingDuration = parseInt(params.RecordingDuration || "0", 10);
-    const callSid = params.CallSid;
+    const _callSid = params.CallSid;
     const fromNumber = params.From || "";
     const toNumber = params.To || "";
     
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         
         // Create a call record with the voicemail
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-        const { data: callRecord, error: callError } = await (supabase as any)
+        const { data: callRecord, error: _callError } = await (supabase as any)
           .from("calls")
           .insert({
             business_id: businessId,

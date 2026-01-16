@@ -381,7 +381,7 @@ async function savePrompts(
       retellAgentId: current?.retell_agent_id,
       newVersion,
     };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: "Failed to save prompts" };
   }
 }

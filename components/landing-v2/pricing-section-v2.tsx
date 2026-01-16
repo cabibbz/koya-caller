@@ -92,13 +92,6 @@ const defaultTiers = [
   },
 ];
 
-// Map icon names to components
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  Phone,
-  Zap,
-  BarChart3,
-};
-
 export function PricingSectionV2() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -135,7 +128,7 @@ export function PricingSectionV2() {
             })
           );
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       }
     }

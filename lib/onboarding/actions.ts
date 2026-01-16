@@ -109,7 +109,7 @@ export async function getCurrentBusiness() {
 // Spec Lines 216-220
 // ============================================
 
-export async function saveBusinessType(typeSlug: string, typeName: string) {
+export async function saveBusinessType(typeSlug: string, _typeName: string) {
   const supabase = await getWriteClient();
   
   const {

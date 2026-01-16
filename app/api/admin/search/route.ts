@@ -10,11 +10,16 @@ import { logError } from "@/lib/logging";
 export const dynamic = "force-dynamic";
 
 /**
- * Sanitize search query for safe use in ILIKE patterns
- * Escapes special PostgreSQL pattern characters: %, _, \
+ * Sanitize search query for safe use in ILIKE patterns and PostgREST .or() clauses
+ * Escapes special PostgreSQL pattern characters and PostgREST filter syntax
  */
 function sanitizeSearchQuery(query: string): string {
-  return query
+  // First, strip any characters that could interfere with PostgREST filter syntax
+  // Only allow alphanumeric, spaces, common punctuation marks that are safe
+  const safeChars = query.replace(/[^a-zA-Z0-9\s\-@.+]/g, "");
+
+  // Then escape PostgreSQL ILIKE special characters
+  return safeChars
     .replace(/\\/g, "\\\\") // Escape backslashes first
     .replace(/%/g, "\\%")   // Escape percent signs
     .replace(/_/g, "\\_");  // Escape underscores

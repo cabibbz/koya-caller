@@ -86,7 +86,7 @@ export function Step9TestCall() {
       if (retellClientRef.current) {
         try {
           retellClientRef.current.stopCall();
-        } catch (e) {
+        } catch (_e) {
           // Ignore cleanup errors
         }
       }
@@ -109,7 +109,7 @@ export function Step9TestCall() {
       // Request microphone permission first
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (micError) {
+      } catch (_micError) {
         throw new Error("Microphone access denied. Please allow microphone access to make a call.");
       }
       
@@ -193,7 +193,7 @@ export function Step9TestCall() {
     if (retellClientRef.current) {
       try {
         retellClientRef.current.stopCall();
-      } catch (e) {
+      } catch (_e) {
         // Error handled silently
       }
     }

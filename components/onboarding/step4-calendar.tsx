@@ -110,7 +110,7 @@ export function Step4Calendar() {
           setFormData(existing);
           setStep4Data(existing);
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       } finally {
         setIsLoading(false);

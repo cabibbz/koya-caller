@@ -625,7 +625,7 @@ export function generateSentimentInstructions(
 export function getAcknowledgment(
   level: SentimentLevel,
   personality: Personality,
-  language: "en" | "es" = "en"
+  _language: "en" | "es" = "en"
 ): string {
   // Note: Spanish translations would need to be added to SENTIMENT_INDICATORS
   // For now, returns English

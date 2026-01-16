@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 import { logError } from "@/lib/logging";
+import { sendCalendarDisconnectEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -263,6 +264,16 @@ async function handleDELETE(_request: NextRequest) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
+    // Get current provider before disconnecting (for email notification)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
+    const { data: existingIntegration } = await (supabase as any)
+      .from("calendar_integrations")
+      .select("provider")
+      .eq("business_id", business.id)
+      .single();
+
+    const previousProvider = existingIntegration?.provider;
+
     // Reset to built-in calendar
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: calendarIntegration, error: updateError } = await (supabase as any)
@@ -287,6 +298,21 @@ async function handleDELETE(_request: NextRequest) {
         { error: "Failed to disconnect calendar" },
         { status: 500 }
       );
+    }
+
+    // Send email notification if disconnecting from Google or Outlook
+    if (previousProvider === "google" || previousProvider === "outlook") {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.koyacaller.com";
+      await sendCalendarDisconnectEmail({
+        to: user.email || "",
+        businessName: business.name,
+        provider: previousProvider,
+        reason: "manual",
+        reconnectUrl: `${baseUrl}/settings?tab=calendar`,
+      }).catch((emailError) => {
+        // Log but don't fail the request if email fails
+        logError("Calendar disconnect email", emailError);
+      });
     }
 
     return NextResponse.json({

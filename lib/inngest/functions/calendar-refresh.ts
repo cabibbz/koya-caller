@@ -84,7 +84,7 @@ export const refreshCalendarToken = inngest.createFunction(
     id: "calendar-token-refresh",
     name: "Refresh Calendar Token",
     retries: 3,
-    onFailure: async ({ event, error }) => {
+    onFailure: async ({ event, error: _error }) => {
       // On final failure, mark calendar as disconnected and notify user
       // The event object in onFailure contains the original event in event.data.event
       const originalEvent = (event as any).data?.event;

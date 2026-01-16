@@ -42,6 +42,7 @@ import {
   Loader2,
   Bot,
   UserPlus,
+  CalendarClock,
 } from "lucide-react";
 import {
   Button,
@@ -59,6 +60,13 @@ import {
   SheetHeader,
   SheetTitle,
   Skeleton,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  Input,
+  Label,
 } from "@/components/ui";
 import type { Appointment, AppointmentStatus } from "@/types";
 import { EmptyStateAppointments } from "@/components/ui/empty-state";
@@ -90,6 +98,9 @@ export function AppointmentsClient({
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
 
   // Fetch appointments with abort controller to prevent race conditions
   useEffect(() => {
@@ -237,6 +248,62 @@ export function AppointmentsClient({
         toast({
           title: "Action failed",
           description: "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (_error) {
+      toast({
+        title: "Something went wrong",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle reschedule action
+  const openRescheduleDialog = () => {
+    if (!selectedAppointment) return;
+    // Pre-populate with current date/time
+    const scheduledDate = parseISO(selectedAppointment.scheduled_at || "");
+    setRescheduleDate(format(scheduledDate, "yyyy-MM-dd"));
+    setRescheduleTime(format(scheduledDate, "HH:mm"));
+    setRescheduleOpen(true);
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedAppointment || !rescheduleDate || !rescheduleTime) return;
+
+    setActionLoading(true);
+    try {
+      // Combine date and time into ISO string
+      const newScheduledAt = new Date(`${rescheduleDate}T${rescheduleTime}:00`).toISOString();
+
+      const res = await fetch(`/api/dashboard/appointments/${selectedAppointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reschedule",
+          scheduled_at: newScheduledAt,
+        }),
+      });
+
+      if (res.ok) {
+        await refetchAppointments();
+        setRescheduleOpen(false);
+        setSheetOpen(false);
+        setSelectedAppointment(null);
+        toast({
+          title: "Appointment rescheduled",
+          description: `New time: ${format(new Date(newScheduledAt), "EEEE, MMM d 'at' h:mm a")}`,
+          variant: "success",
+        });
+      } else {
+        const data = await res.json();
+        toast({
+          title: data.error || "Reschedule failed",
+          description: data.message || "Please try a different time.",
           variant: "destructive",
         });
       }
@@ -929,11 +996,18 @@ export function AppointmentsClient({
                 </div>
               )}
 
-              {/* Reschedule placeholder */}
+              {/* Reschedule button */}
               {selectedAppointment.status === "confirmed" && (
                 <div className="pt-2">
-                  <Button variant="outline" size="sm" className="w-full" disabled>
-                    Reschedule (coming soon)
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={openRescheduleDialog}
+                    disabled={actionLoading}
+                  >
+                    <CalendarClock className="w-4 h-4 mr-2" />
+                    Reschedule
                   </Button>
                 </div>
               )}
@@ -941,6 +1015,53 @@ export function AppointmentsClient({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Reschedule Dialog */}
+      <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Appointment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-date">New Date</Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                min={format(new Date(), "yyyy-MM-dd")}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-time">New Time</Label>
+              <Input
+                id="reschedule-time"
+                type="time"
+                value={rescheduleTime}
+                onChange={(e) => setRescheduleTime(e.target.value)}
+              />
+            </div>
+            {selectedAppointment && (
+              <p className="text-sm text-muted-foreground">
+                Current: {format(parseISO(selectedAppointment.scheduled_at || ""), "EEEE, MMM d 'at' h:mm a")}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReschedule}
+              disabled={actionLoading || !rescheduleDate || !rescheduleTime}
+            >
+              {actionLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Confirm Reschedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

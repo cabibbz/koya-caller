@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { getCallById, getAppointmentByCallId } from "@/lib/db/calls";
 import { getCallDetails } from "@/lib/retell";
+import { logInfo } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export async function GET(
     // This handles cases where the webhook didn't update the call properly
     let updatedCall = call;
     if (call.retell_call_id && (call.duration_seconds === 0 || call.duration_seconds === null || !call.recording_url)) {
-      console.log(`[Call Detail] Syncing missing data from Retell for call ${call.id} (retell_call_id: ${call.retell_call_id})`);
+      logInfo("Call Detail", `Syncing missing data from Retell for call ${call.id}`);
 
       const retellData = await getCallDetails(call.retell_call_id);
 
@@ -102,7 +103,6 @@ export async function GET(
         }
 
         if (Object.keys(updateData).length > 0) {
-          console.log(`[Call Detail] Updating call ${call.id} with synced data:`, Object.keys(updateData));
           await (adminSupabase as any).from("calls").update(updateData).eq("id", call.id);
 
           // Refresh the call data

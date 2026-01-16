@@ -10,7 +10,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Phone,
-  Mail,
   Twitter,
   Linkedin,
   Instagram,

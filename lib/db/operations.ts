@@ -22,7 +22,6 @@ import type {
   CalendarIntegrationUpdate,
   AvailabilitySlot,
   AvailabilitySlotInsert,
-  AvailabilitySlotUpdate,
   PhoneNumber,
   PhoneNumberInsert,
   PhoneNumberUpdate,

@@ -7,10 +7,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError, logWarning } from "@/lib/logging";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 // GET - Read current prompt and config
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
+    // Rate limit check
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -73,7 +82,7 @@ export async function GET(_request: NextRequest) {
       neverSay: knowledgeData?.never_say || null,
     });
   } catch (error) {
-    console.error("[Prompt API] GET error:", error);
+    logError("Prompt API GET", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -81,6 +90,13 @@ export async function GET(_request: NextRequest) {
 // PUT - Direct raw edit of prompt
 export async function PUT(request: NextRequest) {
   try {
+    // Rate limit check
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -167,7 +183,7 @@ export async function PUT(request: NextRequest) {
           }
         }
       } catch (syncError) {
-        console.error("[Prompt API] Retell sync error:", syncError);
+        logWarning("Prompt API Retell Sync", String(syncError));
       }
     }
 
@@ -177,7 +193,7 @@ export async function PUT(request: NextRequest) {
       synced,
     });
   } catch (error) {
-    console.error("[Prompt API] PUT error:", error);
+    logError("Prompt API PUT", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -185,6 +201,13 @@ export async function PUT(request: NextRequest) {
 // POST - Regenerate prompt with options
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit check
+    const ip = getClientIP(request.headers);
+    const rateLimitResult = await checkRateLimit("dashboard", ip);
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -248,7 +271,7 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("[Prompt API] POST error:", error);
+    logError("Prompt API POST", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

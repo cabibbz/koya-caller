@@ -12,7 +12,6 @@ import {
   rateLimitExceededResponse,
   addRateLimitHeaders,
   type RateLimiterType,
-  type RateLimitResult,
 } from "./index";
 import {
   verifyRetellSignature,

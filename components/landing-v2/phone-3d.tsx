@@ -6,7 +6,7 @@
  */
 
 import { motion } from "framer-motion";
-import { Mic, PhoneOff, Phone, Speaker } from "lucide-react";
+import { Mic, PhoneOff, Speaker } from "lucide-react";
 
 export function Phone3D() {
   return (

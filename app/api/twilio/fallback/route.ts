@@ -15,10 +15,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 import twilio from "twilio";
 import {
   generateFallbackGreeting,
-  generateAfterHoursGreeting,
-  generateMinutesExhaustedGreeting,
   simpleSay,
 } from "@/lib/twilio/twiml";
+import { logError } from "@/lib/logging";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://koyacaller.com";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
@@ -34,7 +33,7 @@ function verifyTwilioSignature(
 }
 
 // Helper to parse Twilio form data
-async function parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
+async function _parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
   const text = await request.text();
   const formData = new URLSearchParams(text);
   const params: Record<string, string> = {};
@@ -118,14 +117,14 @@ export async function POST(request: NextRequest) {
       const webhookUrl = `${appUrl}/api/twilio/fallback`;
 
       if (!verifyTwilioSignature(webhookUrl, params, signature)) {
-        console.error("[Twilio Fallback] Invalid signature");
+        logError("Twilio Fallback", "Invalid signature");
         return new Response("Unauthorized", { status: 401 });
       }
     }
 
     const toNumber = params.To || "";
-    const callSid = params.CallSid || "";
-    const reason = params.ErrorCode ? `error:${params.ErrorCode}` : "fallback";
+    const _callSid = params.CallSid || "";
+    const _reason = params.ErrorCode ? `error:${params.ErrorCode}` : "fallback";
     
     // Get business info
     const business = await getBusinessFromNumber(toNumber);

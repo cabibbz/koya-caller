@@ -133,10 +133,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const callSid = params.CallSid;
-    const fromNumber = params.From || "";
+    const _callSid = params.CallSid;
+    const _fromNumber = params.From || "";
     const toNumber = params.To || "";
-    const callStatus = params.CallStatus;
+    const _callStatus = params.CallStatus;
 
     // Incoming call received - processing
     

@@ -19,6 +19,7 @@ import {
   buildPromptInputFromDatabase,
 } from "@/lib/claude";
 import type { ProcessQueueResponse } from "@/lib/claude/types";
+import { logError } from "@/lib/logging";
 
 // =============================================================================
 // Configuration
@@ -62,7 +63,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
 
     // Direct business processing mode (fallback when Inngest not configured)
     if (directBusinessId) {
-      console.log(`[Process Queue] Direct processing for business ${directBusinessId}`);
       const result = await processBusinessDirectly(supabase, directBusinessId, body.triggeredBy || "direct");
 
       return NextResponse.json({
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ProcessQu
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
-    console.error("[Process Queue] Error:", error);
+    logError("Process Queue", error);
     return NextResponse.json(
       { success: false, processed: 0, failed: 0, errors: [{ businessId: "", error: "Internal server error" }] },
       { status: 500 }
@@ -193,15 +193,12 @@ export async function GET(): Promise<NextResponse> {
 async function processBusinessDirectly(
   supabase: any,
   businessId: string,
-  triggeredBy: string
+  _triggeredBy: string
 ): Promise<ProcessResult> {
-  console.log(`[Process Queue] Starting direct regeneration for ${businessId} (triggered by: ${triggeredBy})`);
-
   try {
     // Fetch business data
     const businessData = await fetchBusinessData(supabase, businessId);
     if (!businessData.success) {
-      console.error(`[Process Queue] Failed to fetch business data: ${businessData.error}`);
       return { success: false, error: businessData.error };
     }
 
@@ -209,24 +206,19 @@ async function processBusinessDirectly(
     const promptInput = buildPromptInputFromDatabase(businessData.data);
 
     // Generate prompts using Claude
-    console.log(`[Process Queue] Generating prompts for ${businessId}...`);
     const result = await generatePrompts(promptInput);
     if (!result.success) {
-      console.error(`[Process Queue] Prompt generation failed: ${result.error}`);
       return { success: false, error: result.error };
     }
 
     // Save prompts to ai_config
-    console.log(`[Process Queue] Saving prompts for ${businessId}...`);
     const saveResult = await savePrompts(supabase, businessId, result.prompts!);
     if (!saveResult.success) {
-      console.error(`[Process Queue] Failed to save prompts: ${saveResult.error}`);
       return { success: false, error: saveResult.error };
     }
 
     // Update Retell agent if exists
     if (saveResult.retellAgentId) {
-      console.log(`[Process Queue] Syncing to Retell agent ${saveResult.retellAgentId}...`);
       await updateRetellAgent(
         supabase,
         businessId,
@@ -236,11 +228,10 @@ async function processBusinessDirectly(
       );
     }
 
-    console.log(`[Process Queue] Successfully processed business ${businessId}`);
     return { success: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[Process Queue] Direct processing error: ${errorMessage}`);
+    logError("Process Queue Direct", error);
     return { success: false, error: errorMessage };
   }
 }
@@ -371,7 +362,6 @@ async function fetchBusinessData(
       .single();
 
     if (bizError || !business) {
-      console.error("[Process Queue] Business fetch error:", bizError);
       return { success: false, error: "Business not found" };
     }
 
@@ -601,14 +591,12 @@ async function updateRetellAgent(
 
     if (!RETELL_API_KEY) {
       const errorMsg = "RETELL_API_KEY not configured";
-      console.error(`[Retell Sync] ${errorMsg}`);
       await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
       return { success: false, error: errorMsg };
     }
 
     // Update the Retell LLM with new prompt
     // First, get the LLM ID from the agent
-    console.log(`[Retell Sync] Fetching agent ${agentId}...`);
     const agentResponse = await fetch(
       `https://api.retellai.com/get-agent/${agentId}`,
       {
@@ -621,7 +609,6 @@ async function updateRetellAgent(
     if (!agentResponse.ok) {
       const errorText = await agentResponse.text();
       const errorMsg = `Failed to fetch Retell agent: ${agentResponse.status} - ${errorText}`;
-      console.error(`[Retell Sync] ${errorMsg}`);
       await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
       return { success: false, error: errorMsg };
     }
@@ -631,13 +618,11 @@ async function updateRetellAgent(
 
     if (!llmId) {
       const errorMsg = "Retell agent has no LLM ID configured";
-      console.error(`[Retell Sync] ${errorMsg}`);
       await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
       return { success: false, error: errorMsg };
     }
 
     // Update the LLM prompt
-    console.log(`[Retell Sync] Updating LLM ${llmId} with new prompt...`);
     const updateResponse = await fetch(
       `https://api.retellai.com/update-retell-llm/${llmId}`,
       {
@@ -655,7 +640,6 @@ async function updateRetellAgent(
     if (!updateResponse.ok) {
       const errorText = await updateResponse.text();
       const errorMsg = `Failed to update Retell LLM: ${updateResponse.status} - ${errorText}`;
-      console.error(`[Retell Sync] ${errorMsg}`);
       await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
       return { success: false, error: errorMsg };
     }
@@ -675,12 +659,11 @@ async function updateRetellAgent(
       })
       .eq("business_id", businessId);
 
-    console.log(`[Retell Sync] Successfully synced prompt to Retell for business ${businessId}`);
     await logToSystemLogs(supabase, businessId, "retell_sync_success", "Prompt synced to Retell agent");
     return { success: true };
   } catch (error) {
     const errorMsg = `Retell sync exception: ${error instanceof Error ? error.message : "Unknown error"}`;
-    console.error(`[Retell Sync] ${errorMsg}`);
+    logError("Retell Sync", error);
     await logToSystemLogs(supabase, businessId, "retell_sync_failed", errorMsg);
     return { success: false, error: errorMsg };
   }
