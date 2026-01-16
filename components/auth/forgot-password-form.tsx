@@ -33,7 +33,7 @@ export function ForgotPasswordForm() {
       }
 
       setSuccess(true);
-    } catch (err) {
+    } catch (_err) {
       // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {

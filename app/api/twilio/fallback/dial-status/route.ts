@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     
     return twimlResponse(twiml);
     
-  } catch (error) {
+  } catch (_error) {
     return twimlResponse(simpleSay(
       "We apologize for the technical difficulty. Goodbye."
     ));

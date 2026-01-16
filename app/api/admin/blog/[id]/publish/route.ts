@@ -43,7 +43,7 @@ export async function POST(
     }
 
     return NextResponse.json({ success: true, post });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to publish post" }, { status: 500 });
   }
 }

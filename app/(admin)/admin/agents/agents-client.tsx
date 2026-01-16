@@ -16,11 +16,9 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
-  ExternalLink,
   Phone,
   Clock,
   MessageSquare,
-  Building2,
   Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

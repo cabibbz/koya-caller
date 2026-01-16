@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
       llmId: agent.llm_id,
     });
 
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to create agent" },
       { status: 500 }
@@ -361,7 +361,7 @@ export async function PATCH(request: NextRequest) {
       agentId: configData.retell_agent_id,
     });
 
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to update agent" },
       { status: 500 }
@@ -435,7 +435,7 @@ export async function DELETE(request: NextRequest) {
       message: "Agent deleted successfully",
     });
 
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to delete agent" },
       { status: 500 }
@@ -504,7 +504,7 @@ export async function GET(request: NextRequest) {
       agentVersion: configData?.retell_agent_version || 0,
     });
 
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to get agent status" },
       { status: 500 }

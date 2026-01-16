@@ -36,7 +36,7 @@ interface Upsell {
   times_accepted?: number;
 }
 
-interface UpsellWithServices extends Upsell {
+interface _UpsellWithServices extends Upsell {
   source_service?: { id: string; name: string };
   target_service?: { id: string; name: string };
 }

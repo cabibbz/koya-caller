@@ -17,7 +17,7 @@ interface OnboardingPhase1Props {
   userId: string;
 }
 
-export function OnboardingPhase1({ businessTypes, userId }: OnboardingPhase1Props) {
+export function OnboardingPhase1({ businessTypes, userId: _userId }: OnboardingPhase1Props) {
   const router = useRouter();
   const [businessName, setBusinessName] = useState("Your Business");
   const [greeting, setGreeting] = useState<string | undefined>();
@@ -49,7 +49,7 @@ export function OnboardingPhase1({ businessTypes, userId }: OnboardingPhase1Prop
         // Navigate to phase 2
         router.push("/onboarding/tune");
       }
-    } catch (error) {
+    } catch (_error) {
       // Failed to save handled silently
     }
   };

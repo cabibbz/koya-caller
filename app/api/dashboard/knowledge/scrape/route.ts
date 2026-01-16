@@ -137,7 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScrapeRes
       data: extractedContent,
       scrapedUrl: validatedUrl.toString(),
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -228,7 +228,7 @@ async function fetchWebsiteContent(url: string): Promise<string | null> {
     }
 
     return textContent;
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -375,10 +375,10 @@ Return only the JSON object:`;
         faqs: Array.isArray(parsed.faqs) ? parsed.faqs.filter(f => f.question && f.answer) : [],
         additionalInfo: parsed.additionalInfo || undefined,
       };
-    } catch (parseError) {
+    } catch (_parseError) {
       return null;
     }
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }

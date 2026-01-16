@@ -74,7 +74,7 @@ export function SiteSettingsClient() {
           setError("No settings found in database. Make sure the migration was run.");
         }
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Failed to load settings");
     } finally {
       setLoading(false);
@@ -100,7 +100,7 @@ export function SiteSettingsClient() {
 
       setSaved(key);
       setTimeout(() => setSaved(null), 2000);
-    } catch (err) {
+    } catch (_err) {
       setError("Failed to save setting");
     } finally {
       setSaving(null);

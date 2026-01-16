@@ -90,7 +90,7 @@ ${topic ? `Related to: ${topic}` : ""}`;
     const fileName = `blog/${postId}-${Date.now()}.png`;
 
     // Upload to Supabase Storage (create bucket if needed)
-    const { data: uploadData, error: uploadError } = await adminClient.storage
+    const { data: _uploadData, error: uploadError } = await adminClient.storage
       .from("public")
       .upload(fileName, imageBuffer, {
         contentType: "image/png",

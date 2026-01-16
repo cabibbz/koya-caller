@@ -98,7 +98,7 @@ function isWithinBusinessHours(
     const closeMinutes = closeHour * 60 + closeMin;
     
     return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
-  } catch (error) {
+  } catch (_error) {
     return true; // Default to open on error
   }
 }

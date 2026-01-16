@@ -9,7 +9,6 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  CreditCard,
   Search,
   RefreshCw,
   Pause,
@@ -18,8 +17,6 @@ import {
   Plus,
   AlertCircle,
   Loader2,
-  CheckCircle,
-  DollarSign,
   ArrowUpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

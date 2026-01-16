@@ -24,8 +24,6 @@ import {
   Download,
   Eye,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-
 interface AuditLog {
   id: string;
   admin_user_id: string;

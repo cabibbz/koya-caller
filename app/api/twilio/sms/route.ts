@@ -9,7 +9,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { formatPhoneDisplay } from "@/lib/twilio";
 
 // Helper to parse Twilio form data
 async function parseTwilioParams(request: NextRequest): Promise<Record<string, string>> {
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
       return handleIncomingMessage(params);
     }
     
-  } catch (error) {
+  } catch (_error) {
     // Return empty TwiML response (don't auto-reply on error)
     return twimlResponse(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
   }

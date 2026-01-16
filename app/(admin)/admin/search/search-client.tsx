@@ -17,7 +17,6 @@ import {
   User,
   Clock,
   ExternalLink,
-  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -72,7 +71,7 @@ export function SearchClient() {
 
       const data = await response.json();
       setResults(data.results || []);
-    } catch (err) {
+    } catch (_err) {
       // Error handled silently
       setResults([]);
     } finally {

@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     // Thank the caller
     return twimlResponse(generateRecordingComplete());
     
-  } catch (error) {
+  } catch (_error) {
     return twimlResponse(simpleSay(
       "Thank you for your message. Goodbye."
     ));

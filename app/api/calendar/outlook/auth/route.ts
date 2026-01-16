@@ -44,7 +44,7 @@ async function handlePOST(request: NextRequest) {
     let authUrl: string;
     try {
       authUrl = getOutlookAuthUrl(state);
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json(
         { error: "Outlook Calendar is not configured. Please contact support." },
         { status: 503 }
@@ -67,7 +67,7 @@ async function handlePOST(request: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to initiate Outlook Calendar connection" },
       { status: 500 }

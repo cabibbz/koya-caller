@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 const VALID_PROVIDERS = ["google", "outlook", "built_in"];
 
-async function handleGET(request: NextRequest) {
+async function handleGET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -246,7 +246,7 @@ async function handlePOST(request: NextRequest) {
   }
 }
 
-async function handleDELETE(request: NextRequest) {
+async function handleDELETE(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {

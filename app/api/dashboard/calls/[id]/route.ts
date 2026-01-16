@@ -128,7 +128,7 @@ export async function GET(
         appointment,
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to fetch call details" },
       { status: 500 }

@@ -51,7 +51,7 @@ export function LoginForm() {
       const destination = result.redirectTo || redirectTo;
       router.push(destination);
       router.refresh();
-    } catch (err) {
+    } catch (_err) {
       // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {

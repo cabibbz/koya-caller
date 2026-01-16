@@ -109,7 +109,7 @@ export default function TestPage() {
         setTestStatus("complete");
       });
 
-      retellClient.on("error", (err) => {
+      retellClient.on("error", (_err) => {
         stopDurationTimer();
         setError("Call error occurred. Please try again.");
         setTestStatus("error");
@@ -159,7 +159,7 @@ export default function TestPage() {
     try {
       await fetch("/api/onboarding/complete", { method: "POST" });
       router.push("/dashboard");
-    } catch (error) {
+    } catch (_error) {
       router.push("/dashboard");
     }
   };

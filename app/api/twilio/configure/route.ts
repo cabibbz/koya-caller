@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
       message: "Existing number configured successfully",
     });
 
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to configure phone number" },
       { status: 500 }

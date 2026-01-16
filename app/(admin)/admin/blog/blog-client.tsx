@@ -5,7 +5,7 @@
  * Features: Editor, Scheduling, Image Generation, SEO Scoring, Analytics
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -125,7 +125,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
   const [posts, setPosts] = useState<BlogPost[]>(initialPosts);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [currentStep, setCurrentStep] = useState<GenerationStep>("topic");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [_isGenerating, setIsGenerating] = useState(false);
   const [generatedPost, setGeneratedPost] = useState<BlogPost | null>(null);
 
   // Generation config
@@ -267,7 +267,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
               if (refreshData.post) {
                 setGeneratedPost(refreshData.post);
               }
-            } catch (imgError) {
+            } catch (_imgError) {
               // Error handled silently
             } finally {
               setIsGeneratingImage(false);
@@ -285,7 +285,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
       } else {
         throw new Error(data.error || "Generation failed");
       }
-    } catch (error) {
+    } catch (_error) {
       setCurrentStep("review");
     } finally {
       setIsGenerating(false);
@@ -314,7 +314,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
       if (response.ok) {
         setPosts(posts.map(p => p.id === editingPost.id ? editingPost : p));
       }
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     } finally {
       setIsSaving(false);
@@ -327,7 +327,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
       setPosts(posts.map(p =>
         p.id === postId ? { ...p, status: "published" as const, published_at: new Date().toISOString() } : p
       ));
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     }
   };
@@ -353,7 +353,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
       setScheduleEnabled(false);
       setScheduleDate("");
       setScheduleTime("");
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     }
   };
@@ -368,7 +368,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setEditingPost(null);
         setViewMode("list");
       }
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     }
   };
@@ -398,7 +398,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setEditingPost(updatedPost);
         setPosts(posts.map(p => p.id === editingPost.id ? updatedPost : p));
       }
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     } finally {
       setIsGeneratingImage(false);
@@ -413,7 +413,7 @@ export function BlogManagementClient({ initialPosts, presets }: BlogManagementCl
         setEditingPost(data.post);
         setViewMode("editor");
       }
-    } catch (error) {
+    } catch (_error) {
       // Error handled silently
     }
   };

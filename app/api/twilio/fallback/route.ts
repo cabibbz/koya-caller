@@ -15,9 +15,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 import twilio from "twilio";
 import {
   generateFallbackGreeting,
-  generateFallbackMenuResponse,
-  generateRecordingComplete,
-  generateDialStatusResponse,
   generateAfterHoursGreeting,
   generateMinutesExhaustedGreeting,
   simpleSay,
@@ -149,7 +146,7 @@ export async function POST(request: NextRequest) {
     
     return twimlResponse(twiml);
     
-  } catch (error) {
+  } catch (_error) {
     return twimlResponse(simpleSay(
       "We apologize, but we are experiencing technical difficulties. Please try your call again later."
     ));

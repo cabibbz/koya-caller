@@ -89,7 +89,7 @@ async function handler(_request: NextRequest) {
         phoneNumbers: phoneNumbers || [],
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to fetch settings" },
       { status: 500 }

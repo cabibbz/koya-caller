@@ -15,8 +15,6 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle,
-  XCircle,
-  ExternalLink,
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest) {
 
     // Try to get logs from system_logs table, fall back to generating from calls
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: logs, error } = await (supabase as any)
+    const { data: logs, error: _error } = await (supabase as any)
       .from("system_logs")
       .select("*")
       .order("created_at", { ascending: false })

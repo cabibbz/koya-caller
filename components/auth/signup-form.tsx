@@ -56,7 +56,7 @@ export function SignupForm() {
       if (result.redirectTo) {
         router.push(result.redirectTo);
       }
-    } catch (err) {
+    } catch (_err) {
       // Error handled silently
       setError("Something went wrong. Please try again.");
     } finally {

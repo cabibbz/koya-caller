@@ -122,7 +122,7 @@ export const POST = withRateLimit(
             success: true,
             message: "Plan updated successfully",
           });
-        } catch (upgradeError) {
+        } catch (_upgradeError) {
           // Fall back to portal for complex cases
           const portalSession = await stripe.billingPortal.sessions.create({
             customer: biz.stripe_customer_id,
@@ -171,7 +171,7 @@ export const POST = withRateLimit(
       return NextResponse.json({
         url: checkoutSession.url,
       });
-    } catch (error) {
+    } catch (_error) {
       return NextResponse.json(
         { error: "Failed to create checkout session" },
         { status: 500 }

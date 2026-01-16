@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       settings: settingsMap,
       raw: settings
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({
       settings: getDefaultSettings(null)
     });

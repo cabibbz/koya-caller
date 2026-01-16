@@ -19,7 +19,6 @@ import {
   getCallsByBusinessId,
   getRecentCalls,
   updateCall,
-  getAppointmentByCallId
 } from "@/lib/db/calls";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 import { logError } from "@/lib/logging";

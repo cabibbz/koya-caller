@@ -39,7 +39,7 @@ export async function GET(
     }
 
     return NextResponse.json({ post });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to fetch post" }, { status: 500 });
   }
 }
@@ -105,7 +105,7 @@ export async function PATCH(
     }
 
     return NextResponse.json({ success: true, post });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to update post" }, { status: 500 });
   }
 }
@@ -140,7 +140,7 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to delete post" }, { status: 500 });
   }
 }

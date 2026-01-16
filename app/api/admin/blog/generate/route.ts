@@ -263,7 +263,7 @@ Return ONLY valid JSON, no other text.`;
       } else {
         throw new Error("No JSON found in response");
       }
-    } catch (parseError) {
+    } catch (_parseError) {
       throw new Error("Failed to parse AI response");
     }
 

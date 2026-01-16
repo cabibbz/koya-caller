@@ -88,7 +88,7 @@ export async function GET() {
       success: true,
       voices: formattedVoices.length > 0 ? formattedVoices : FALLBACK_VOICES,
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({
       success: true,
       voices: FALLBACK_VOICES,

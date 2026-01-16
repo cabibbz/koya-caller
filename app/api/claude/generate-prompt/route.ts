@@ -118,7 +118,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateP
       prompts: result.prompts,
       mock: result.mock,
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
@@ -258,7 +258,7 @@ async function fetchBusinessData(
         minutesExhausted: minutesRemaining <= 0,
       },
     };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: "Failed to fetch business data" };
   }
 }
@@ -304,7 +304,7 @@ async function savePrompts(
       success: true,
       retellAgentId: current?.retell_agent_id,
     };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: "Failed to save prompts" };
   }
 }
@@ -329,7 +329,7 @@ async function updateRetellAgent(
         systemPrompt,
       }),
     });
-  } catch (error) {
+  } catch (_error) {
     // Prompt is saved, Retell update can be retried
   }
 }

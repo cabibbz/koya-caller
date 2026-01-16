@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 // GET - Read current prompt and config
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
     const businessId = business.id;
 
     const body = await request.json();
-    const { syncToRetell = true, waitForResult = false } = body;
+    const { syncToRetell: _syncToRetell = true, waitForResult = false } = body;
 
     // Import inngest and trigger regeneration
     const { inngest } = await import("@/lib/inngest/client");

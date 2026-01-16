@@ -16,7 +16,6 @@ import { ProgressPath, KoyaAvatar } from "@/components/onboarding-v2";
 import {
   Check,
   ChevronRight,
-  ChevronLeft,
   Sparkles,
   MessageSquare,
   BookOpen,
@@ -95,7 +94,7 @@ export default function TunePage() {
             setSelectedVoice(data.voiceId);
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Set defaults on error
         setServices([
           { id: "1", name: "General Inquiry", duration: 15 },
@@ -121,7 +120,7 @@ export default function TunePage() {
             setSelectedVoice(data.voices[0].voice_id);
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Error handled silently
       } finally {
         setLoadingVoices(false);
@@ -555,7 +554,7 @@ export default function TunePage() {
                         // Still navigate on error - user can fix later
                         router.push("/onboarding/test");
                       }
-                    } catch (error) {
+                    } catch (_error) {
                       router.push("/onboarding/test");
                     }
                   }}

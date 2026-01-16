@@ -6,7 +6,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Phone, Users, Zap, Heart, Target, Shield } from "lucide-react";
+import { Zap, Heart, Target, Shield } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "About Us",

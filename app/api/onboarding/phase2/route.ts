@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         sort_order: index,
       }));
 
-      const { error: servicesError } = await adminClient
+      const { error: _servicesError } = await adminClient
         .from("services")
         .insert(servicesToInsert);
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         sort_order: index,
       }));
 
-      const { error: faqsError } = await adminClient
+      const { error: _faqsError } = await adminClient
         .from("faqs")
         .insert(faqsToInsert);
 
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Save voice selection
     if (voiceId) {
-      const { error: voiceError } = await adminClient
+      const { error: _voiceError } = await adminClient
         .from("ai_config")
         .upsert({
           business_id: businessId,
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET endpoint to load existing data
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

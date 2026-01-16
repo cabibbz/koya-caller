@@ -15,7 +15,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Users,
   Search,
   RefreshCw,
   ExternalLink,
@@ -141,7 +140,7 @@ export function AdminCustomersClient() {
     }).format(cents / 100);
   };
 
-  const formatMinutes = (seconds: number | null) => {
+  const _formatMinutes = (seconds: number | null) => {
     if (!seconds) return "0m";
     const mins = Math.floor(seconds / 60);
     return `${mins}m`;

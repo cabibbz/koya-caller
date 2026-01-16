@@ -14,12 +14,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { redirect as twimlRedirect, simpleSay } from "@/lib/twilio/twiml";
+import { redirect as twimlRedirect } from "@/lib/twilio/twiml";
 import {
   handleRetellFailure,
-  withRetry,
-  isRetellRetryable,
-  logSystemWarning,
 } from "@/lib/errors";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://koyacaller.com";
@@ -282,7 +279,7 @@ export async function POST(request: NextRequest) {
       return twimlResponse(twimlRedirect(`${appUrl}/api/twilio/fallback`));
     }
     
-  } catch (error) {
+  } catch (_error) {
     return twimlResponse(twimlRedirect(`${appUrl}/api/twilio/fallback`));
   }
 }

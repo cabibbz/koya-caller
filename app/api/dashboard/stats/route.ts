@@ -67,7 +67,7 @@ async function handler(_request: NextRequest) {
         healthStatus: "active",
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: "Failed to fetch dashboard stats" },
       { status: 500 }

@@ -21,8 +21,6 @@ import {
   RefreshCw,
   AlertCircle,
   Loader2,
-  ArrowUp,
-  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

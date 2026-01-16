@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { searchPhoneNumbers, isTwilioConfigured } from "@/lib/twilio";
+import { searchPhoneNumbers } from "@/lib/twilio";
 
 interface SearchRequest {
   areaCode: string;

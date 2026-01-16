@@ -251,7 +251,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         if (!error && lead) {
           leadId = lead.id;
         }
-      } catch (dbError) {
+      } catch (_dbError) {
         // Non-fatal - continue with call even if lead capture fails
       }
     }
@@ -341,7 +341,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
       }
-    } catch (agentError) {
+    } catch (_agentError) {
       return NextResponse.json({
         success: false,
         leadId,

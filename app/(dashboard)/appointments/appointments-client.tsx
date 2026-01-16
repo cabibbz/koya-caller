@@ -36,12 +36,10 @@ import {
   Phone,
   Mail,
   User,
-  X,
   Check,
   XCircle,
   AlertCircle,
   Loader2,
-  Plus,
   Bot,
   UserPlus,
 } from "lucide-react";
@@ -49,7 +47,6 @@ import {
   Button,
   Card,
   CardHeader,
-  CardTitle,
   CardContent,
   Badge,
   Select,
@@ -62,9 +59,6 @@ import {
   SheetHeader,
   SheetTitle,
   Skeleton,
-  Input,
-  Label,
-  Textarea,
 } from "@/components/ui";
 import type { Appointment, AppointmentStatus } from "@/types";
 import { EmptyStateAppointments } from "@/components/ui/empty-state";
@@ -82,9 +76,9 @@ type CalendarView = "month" | "week" | "day";
 type ListFilter = "upcoming" | "past" | "all";
 
 export function AppointmentsClient({
-  businessId,
-  timezone,
-  services,
+  businessId: _businessId,
+  timezone: _timezone,
+  services: _services,
 }: AppointmentsClientProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
@@ -206,7 +200,7 @@ export function AppointmentsClient({
         const data = await res.json();
         setAppointments(data.appointments || []);
       }
-    } catch (error) {
+    } catch (_error) {
       // Silent catch - error already shown via action toast
     } finally {
       setLoading(false);
@@ -246,7 +240,7 @@ export function AppointmentsClient({
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: "Something went wrong",
         description: "Please try again.",

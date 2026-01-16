@@ -15,8 +15,6 @@ import { inngest } from "@/lib/inngest/client";
 import {
   isValidUUID,
   validateStringLength,
-  validateInteger,
-  validateBoolean,
   LIMITS,
 } from "@/lib/validation";
 import { logError } from "@/lib/logging";

@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
-      } catch (err) {
+      } catch (_err) {
         // Ignore errors - queue processing is async
       }
     }
