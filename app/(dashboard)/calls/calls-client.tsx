@@ -669,7 +669,7 @@ export function CallsListClient({
                     <audio
                       controls
                       className="w-full"
-                      src={selectedCall.recording_url}
+                      src={`/api/dashboard/calls/${selectedCall.id}/recording`}
                     />
                   </div>
                 )}
