@@ -2367,7 +2367,11 @@ export function SettingsClient({
                   <p className="mt-4 text-muted-foreground">
                     No phone number assigned yet
                   </p>
-                  <Button className="mt-4" variant="outline">
+                  <Button
+                    className="mt-4"
+                    variant="outline"
+                    onClick={() => window.location.href = "/onboarding?step=8"}
+                  >
                     Set Up Phone Number
                   </Button>
                 </div>
