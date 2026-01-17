@@ -8,7 +8,7 @@
  * All save buttons trigger prompt regeneration (Line 720, 727, 733, 741, 746)
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Save,
   Plus,
@@ -84,6 +84,13 @@ interface ExtractedContent {
   additionalInfo?: string;
 }
 
+interface OfferSettings {
+  upsellsEnabled: boolean;
+  bundlesEnabled: boolean;
+  packagesEnabled: boolean;
+  membershipsEnabled: boolean;
+}
+
 interface KnowledgeClientProps {
   businessId: string;
   initialBusiness: {
@@ -99,12 +106,13 @@ interface KnowledgeClientProps {
   initialBusinessHours: BusinessHours[];
   spanishEnabled: boolean;
   lastPromptGenerated: string | null;
+  initialOfferSettings: OfferSettings;
 }
 
 type Tab = "services" | "faqs" | "business" | "additional" | "offers";
 
 // Offer sub-tab type
-type OfferSubTab = "upsells" | "bundles" | "packages" | "memberships";
+type OfferSubTab = "upsells" | "bundles" | "packages" | "memberships" | "settings";
 
 // Upsell type
 interface Upsell {
@@ -178,6 +186,7 @@ export function KnowledgeClient({
   initialBusinessHours,
   spanishEnabled,
   lastPromptGenerated,
+  initialOfferSettings,
 }: KnowledgeClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>("services");
   const [saving, setSaving] = useState(false);
@@ -219,6 +228,7 @@ export function KnowledgeClient({
   const [upsells, setUpsells] = useState<Upsell[]>([]);
   const [upsellsLoaded, setUpsellsLoaded] = useState(false);
   const [upsellsLoading, setUpsellsLoading] = useState(false);
+  const upsellsLoadingRef = useRef(false);
   const [_editingUpsell, setEditingUpsell] = useState<Upsell | null>(null);
   const [newUpsell, setNewUpsell] = useState<Partial<Upsell>>({
     source_service_id: "",
@@ -238,16 +248,24 @@ export function KnowledgeClient({
   const [bundles, setBundles] = useState<Bundle[]>([]);
   const [bundlesLoaded, setBundlesLoaded] = useState(false);
   const [bundlesLoading, setBundlesLoading] = useState(false);
+  const bundlesLoadingRef = useRef(false);
 
   // Packages state
   const [packages, setPackages] = useState<Package[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
   const [packagesLoading, setPackagesLoading] = useState(false);
+  const packagesLoadingRef = useRef(false);
 
   // Memberships state
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const [membershipsLoading, setMembershipsLoading] = useState(false);
+  const membershipsLoadingRef = useRef(false);
+
+  // Offer settings state (enable/disable toggles)
+  const [offerSettings, setOfferSettings] = useState<OfferSettings>(initialOfferSettings);
+  const [offerSettingsModified, setOfferSettingsModified] = useState(false);
+  const [savingOfferSettings, setSavingOfferSettings] = useState(false);
 
   // Website import state
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -296,6 +314,36 @@ export function KnowledgeClient({
       setRegenerating(false);
     }
   }, [businessId]);
+
+  // Save offer settings
+  const saveOfferSettings = async () => {
+    setSavingOfferSettings(true);
+    try {
+      const res = await fetch("/api/dashboard/settings/offers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          upsellsEnabled: offerSettings.upsellsEnabled,
+          bundlesEnabled: offerSettings.bundlesEnabled,
+          packagesEnabled: offerSettings.packagesEnabled,
+          membershipsEnabled: offerSettings.membershipsEnabled,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save offer settings");
+
+      setOfferSettingsModified(false);
+      toast({ title: "Offer settings saved", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Failed to save",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setSavingOfferSettings(false);
+    }
+  };
 
   // Save services - Line 727
   const saveServices = async () => {
@@ -789,21 +837,26 @@ export function KnowledgeClient({
 
   // Load upsells when tab is selected
   const loadUpsells = useCallback(async () => {
-    if (upsellsLoaded || upsellsLoading) return;
+    if (upsellsLoadingRef.current) return;
+    upsellsLoadingRef.current = true;
     setUpsellsLoading(true);
     try {
       const res = await fetch("/api/dashboard/knowledge/upsells");
       if (res.ok) {
         const data = await res.json();
         setUpsells(data.upsells || []);
-        setUpsellsLoaded(true);
+      } else {
+        console.error("Failed to load upsells:", res.status);
+        toast({ title: "Failed to load upsells", variant: "destructive" });
       }
-    } catch (_err) {
+    } catch (err) {
+      console.error("Error loading upsells:", err);
       toast({ title: "Failed to load upsells", variant: "destructive" });
     } finally {
+      setUpsellsLoaded(true);
       setUpsellsLoading(false);
     }
-  }, [upsellsLoaded, upsellsLoading]);
+  }, []);
 
   // Create new upsell
   const createUpsell = async () => {
@@ -906,72 +959,88 @@ export function KnowledgeClient({
 
   // Load bundles
   const loadBundles = useCallback(async () => {
-    if (bundlesLoaded || bundlesLoading) return;
+    if (bundlesLoadingRef.current) return;
+    bundlesLoadingRef.current = true;
     setBundlesLoading(true);
     try {
       const res = await fetch("/api/dashboard/knowledge/bundles");
       if (res.ok) {
         const data = await res.json();
         setBundles(data.bundles || []);
-        setBundlesLoaded(true);
+      } else {
+        console.error("Failed to load bundles:", res.status);
+        toast({ title: "Failed to load bundles", variant: "destructive" });
       }
-    } catch (_err) {
+    } catch (err) {
+      console.error("Error loading bundles:", err);
       toast({ title: "Failed to load bundles", variant: "destructive" });
     } finally {
+      setBundlesLoaded(true);
       setBundlesLoading(false);
     }
-  }, [bundlesLoaded, bundlesLoading]);
+  }, []);
 
   // Load packages
   const loadPackages = useCallback(async () => {
-    if (packagesLoaded || packagesLoading) return;
+    if (packagesLoadingRef.current) return;
+    packagesLoadingRef.current = true;
     setPackagesLoading(true);
     try {
       const res = await fetch("/api/dashboard/knowledge/packages");
       if (res.ok) {
         const data = await res.json();
         setPackages(data.packages || []);
-        setPackagesLoaded(true);
+      } else {
+        console.error("Failed to load packages:", res.status);
+        toast({ title: "Failed to load packages", variant: "destructive" });
       }
-    } catch (_err) {
+    } catch (err) {
+      console.error("Error loading packages:", err);
       toast({ title: "Failed to load packages", variant: "destructive" });
     } finally {
+      setPackagesLoaded(true);
       setPackagesLoading(false);
     }
-  }, [packagesLoaded, packagesLoading]);
+  }, []);
 
   // Load memberships
   const loadMemberships = useCallback(async () => {
-    if (membershipsLoaded || membershipsLoading) return;
+    if (membershipsLoadingRef.current) return;
+    membershipsLoadingRef.current = true;
     setMembershipsLoading(true);
     try {
       const res = await fetch("/api/dashboard/knowledge/memberships");
       if (res.ok) {
         const data = await res.json();
         setMemberships(data.memberships || []);
-        setMembershipsLoaded(true);
+      } else {
+        console.error("Failed to load memberships:", res.status);
+        toast({ title: "Failed to load memberships", variant: "destructive" });
       }
-    } catch (_err) {
+    } catch (err) {
+      console.error("Error loading memberships:", err);
       toast({ title: "Failed to load memberships", variant: "destructive" });
     } finally {
+      setMembershipsLoaded(true);
       setMembershipsLoading(false);
     }
-  }, [membershipsLoaded, membershipsLoading]);
+  }, []);
 
   // Load offers data when switching to offers tab
+  // Using refs in load functions prevents duplicate calls even with React Strict Mode
   useEffect(() => {
     if (activeTab === "offers") {
-      if (offerSubTab === "upsells" && !upsellsLoaded && !upsellsLoading) {
+      if (offerSubTab === "upsells") {
         loadUpsells();
-      } else if (offerSubTab === "bundles" && !bundlesLoaded && !bundlesLoading) {
+      } else if (offerSubTab === "bundles") {
         loadBundles();
-      } else if (offerSubTab === "packages" && !packagesLoaded && !packagesLoading) {
+      } else if (offerSubTab === "packages") {
         loadPackages();
-      } else if (offerSubTab === "memberships" && !membershipsLoaded && !membershipsLoading) {
+      } else if (offerSubTab === "memberships") {
         loadMemberships();
       }
     }
-  }, [activeTab, offerSubTab, upsellsLoaded, upsellsLoading, loadUpsells, bundlesLoaded, bundlesLoading, loadBundles, packagesLoaded, packagesLoading, loadPackages, membershipsLoaded, membershipsLoading, loadMemberships]);
+  }, [activeTab, offerSubTab, loadUpsells, loadBundles, loadPackages, loadMemberships]);
 
   const tabs = [
     { id: "services" as const, label: "Services", icon: Briefcase, modified: servicesModified },
@@ -1591,6 +1660,7 @@ export function KnowledgeClient({
                 { id: "bundles" as const, label: "Bundle Deals" },
                 { id: "packages" as const, label: "Multi-Visit Packages" },
                 { id: "memberships" as const, label: "Memberships" },
+                { id: "settings" as const, label: "Offer Settings" },
               ].map((subTab) => (
                 <Button
                   key={subTab.id}
@@ -1838,6 +1908,87 @@ export function KnowledgeClient({
                 setMemberships={setMemberships}
                 loading={membershipsLoading}
               />
+            )}
+
+            {/* Offer Settings Sub-Tab */}
+            {offerSubTab === "settings" && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-medium">Offer Settings</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Control which types of offers Koya can suggest during calls
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <Label className="text-base">Service Upgrades</Label>
+                        <p className="text-sm text-muted-foreground">Suggest upgraded services to callers</p>
+                      </div>
+                      <Switch
+                        checked={offerSettings.upsellsEnabled}
+                        onCheckedChange={(checked) => {
+                          setOfferSettings({ ...offerSettings, upsellsEnabled: checked });
+                          setOfferSettingsModified(true);
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <Label className="text-base">Bundle Deals</Label>
+                        <p className="text-sm text-muted-foreground">Offer service bundles at a discount</p>
+                      </div>
+                      <Switch
+                        checked={offerSettings.bundlesEnabled}
+                        onCheckedChange={(checked) => {
+                          setOfferSettings({ ...offerSettings, bundlesEnabled: checked });
+                          setOfferSettingsModified(true);
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <Label className="text-base">Multi-Visit Packages</Label>
+                        <p className="text-sm text-muted-foreground">Suggest package deals for repeat visits</p>
+                      </div>
+                      <Switch
+                        checked={offerSettings.packagesEnabled}
+                        onCheckedChange={(checked) => {
+                          setOfferSettings({ ...offerSettings, packagesEnabled: checked });
+                          setOfferSettingsModified(true);
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <Label className="text-base">Memberships</Label>
+                        <p className="text-sm text-muted-foreground">Pitch membership plans to callers</p>
+                      </div>
+                      <Switch
+                        checked={offerSettings.membershipsEnabled}
+                        onCheckedChange={(checked) => {
+                          setOfferSettings({ ...offerSettings, membershipsEnabled: checked });
+                          setOfferSettingsModified(true);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-4">
+                    <Button onClick={saveOfferSettings} disabled={savingOfferSettings || !offerSettingsModified}>
+                      {savingOfferSettings ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-2" />
+                      )}
+                      Save Settings
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

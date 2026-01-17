@@ -205,7 +205,8 @@ export type RegenerationTrigger =
   | "faqs_update"
   | "knowledge_update"
   | "settings_update"
-  | "language_update";
+  | "language_update"
+  | "offer_settings_update";
 
 /**
  * Queue item status

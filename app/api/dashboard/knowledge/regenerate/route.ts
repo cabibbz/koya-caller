@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       "knowledge_update",
       "settings_update",
       "language_update",
+      "offer_settings_update",
     ];
 
     const trigger = validTriggers.includes(triggerType) 

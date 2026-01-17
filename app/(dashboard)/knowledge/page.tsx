@@ -77,10 +77,10 @@ export default async function KnowledgePage() {
     .eq("business_id", business.id)
     .order("day_of_week");
 
-  // Get AI config for language info
+  // Get AI config for language info and offer settings
   const { data: aiConfig } = await supabase
     .from("ai_config")
-    .select("spanish_enabled, system_prompt_generated_at")
+    .select("spanish_enabled, system_prompt_generated_at, upsells_enabled, bundles_enabled, packages_enabled, memberships_enabled")
     .eq("business_id", business.id)
     .single();
 
@@ -103,6 +103,12 @@ export default async function KnowledgePage() {
       initialBusinessHours={(businessHours || []) as any[]}
       spanishEnabled={((aiConfig as any)?.spanish_enabled as boolean) || false}
       lastPromptGenerated={((aiConfig as any)?.system_prompt_generated_at as string) || null}
+      initialOfferSettings={{
+        upsellsEnabled: ((aiConfig as any)?.upsells_enabled as boolean) ?? true,
+        bundlesEnabled: ((aiConfig as any)?.bundles_enabled as boolean) ?? true,
+        packagesEnabled: ((aiConfig as any)?.packages_enabled as boolean) ?? true,
+        membershipsEnabled: ((aiConfig as any)?.memberships_enabled as boolean) ?? true,
+      }}
     />
   );
   /* eslint-enable @typescript-eslint/no-explicit-any */
