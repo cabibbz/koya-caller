@@ -20,6 +20,7 @@ export interface VoiceOption {
   isMultilingual: boolean;
 }
 
+// All voice IDs verified against Retell API as of 2026-01
 export const VOICE_OPTIONS: VoiceOption[] = [
   {
     id: "11labs-Adrian",
@@ -30,10 +31,10 @@ export const VOICE_OPTIONS: VoiceOption[] = [
     isMultilingual: true,
   },
   {
-    id: "11labs-Rachel",
+    id: "11labs-Grace",
     provider: "elevenlabs",
     gender: "female",
-    name: "Rachel",
+    name: "Grace",
     description: "Warm, conversational female voice",
     isMultilingual: true,
   },

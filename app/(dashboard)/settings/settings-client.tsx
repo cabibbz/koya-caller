@@ -1474,15 +1474,15 @@ export function SettingsClient({
                   <div
                     key={voice.id}
                     className={`relative rounded-lg border p-4 cursor-pointer transition-all ${
-                      voiceSettings.voiceId === voice.id
+                      voiceSettings.voiceId === voice.retellVoiceId
                         ? "border-primary bg-primary/5 ring-1 ring-primary"
                         : "border-muted hover:border-muted-foreground/50"
                     }`}
                     onClick={() => {
                       setVoiceSettings({
                         ...voiceSettings,
-                        voiceId: voice.id,
-                        voiceIdSpanish: voice.supportsBilingual ? voice.id : voiceSettings.voiceIdSpanish,
+                        voiceId: voice.retellVoiceId,
+                        voiceIdSpanish: voice.supportsBilingual ? voice.retellVoiceId : voiceSettings.voiceIdSpanish,
                       });
                       setVoiceSettingsModified(true);
                     }}
@@ -1769,11 +1769,11 @@ export function SettingsClient({
                         <SelectContent>
                           <SelectItem value="none">No fallback</SelectItem>
                           {VOICE_SAMPLES
-                            .filter(v => v.id !== voiceSettings.voiceId && !voiceSettings.fallbackVoiceIds.includes(v.id))
-                            .concat(currentVoiceId ? VOICE_SAMPLES.filter(v => v.id === currentVoiceId) : [])
+                            .filter(v => v.retellVoiceId !== voiceSettings.voiceId && !voiceSettings.fallbackVoiceIds.includes(v.retellVoiceId))
+                            .concat(currentVoiceId ? VOICE_SAMPLES.filter(v => v.retellVoiceId === currentVoiceId) : [])
                             .sort((a, b) => a.name.localeCompare(b.name))
                             .map((voice) => (
-                              <SelectItem key={voice.id} value={voice.id}>
+                              <SelectItem key={voice.retellVoiceId} value={voice.retellVoiceId}>
                                 {voice.name} ({voice.gender === "female" ? "F" : "M"}, {voice.style})
                               </SelectItem>
                             ))}

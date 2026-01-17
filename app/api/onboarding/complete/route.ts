@@ -67,12 +67,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Fetch all business data for prompt generation
     const businessData = await fetchBusinessData(adminSupabase, businessId);
 
+    // Get existing ai_config to preserve voice settings from step 7
+    const { data: existingConfig } = await adminSupabase
+      .from("ai_config")
+      .select("voice_id, voice_id_spanish, personality, ai_name, greeting, spanish_enabled, language_mode")
+      .eq("business_id", businessId)
+      .single();
+
+    const savedVoiceId = existingConfig?.voice_id || "11labs-Grace";
+    const savedAiName = existingConfig?.ai_name || "Koya";
+    const savedPersonality = existingConfig?.personality || "professional";
+    const savedGreeting = existingConfig?.greeting || `Thanks for calling ${business.name}, this is ${savedAiName}, how can I help you?`;
+    const savedSpanishEnabled = existingConfig?.spanish_enabled || false;
+    const savedLanguageMode = existingConfig?.language_mode || "auto";
+
     if (businessData) {
       const promptInput = buildPromptInputFromDatabase(businessData);
       const promptResult = await generatePrompts(promptInput);
 
       if (promptResult.success && promptResult.prompts) {
-        // Save generated prompt to ai_config
+        // Save generated prompt to ai_config (preserving voice settings from step 7)
         await adminSupabase
           .from("ai_config")
           .upsert({
@@ -81,11 +95,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             system_prompt_spanish: promptResult.prompts.spanishPrompt || null,
             system_prompt_version: 1,
             system_prompt_generated_at: new Date().toISOString(),
-            ai_name: "Koya",
-            personality: "professional",
-            spanish_enabled: false,
-            language_mode: "auto",
-            greeting: `Thanks for calling ${business.name}, this is Koya, how can I help you?`,
+            // Preserve settings from step 7
+            voice_id: savedVoiceId,
+            ai_name: savedAiName,
+            personality: savedPersonality,
+            greeting: savedGreeting,
+            spanish_enabled: savedSpanishEnabled,
+            language_mode: savedLanguageMode,
           }, { onConflict: "business_id" });
 
         // System prompt generated and saved
@@ -103,8 +119,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             // Create the agent directly via Retell SDK with advanced features
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Retell SDK types are incomplete for newer API features
             const agent = await retellClient.agent.create({
-              agent_name: `Koya - ${business.name}`,
-              voice_id: "11labs-Rachel",
+              agent_name: `${savedAiName} - ${business.name}`,
+              voice_id: savedVoiceId,
               language: "en-US",
               response_engine: {
                 type: "retell-llm",

@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
 import { queuePromptRegeneration } from "@/lib/claude/queue";
-import { updateAgentAdvancedSettings } from "@/lib/retell";
+import { updateAgentAdvancedSettings, updateAgent } from "@/lib/retell";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 import { logError } from "@/lib/logging";
 
@@ -97,21 +97,32 @@ async function handler(request: NextRequest) {
       .single();
 
     if (updateError) {
+      logError("Voice settings update", updateError);
       return NextResponse.json(
         { error: "Failed to update voice settings" },
         { status: 500 }
       );
     }
 
-    // Update Retell agent with voice settings if changed
-    const hasVoiceUpdates =
+    // Update Retell agent's main voice if changed
+    if (voiceId !== undefined && aiConfig?.retell_agent_id) {
+      try {
+        await updateAgent(aiConfig.retell_agent_id, { voiceId });
+      } catch (error) {
+        // Log but don't fail - settings are saved to DB
+        logError("Voice Update Retell Agent Voice", error);
+      }
+    }
+
+    // Update Retell agent with advanced voice settings if changed
+    const hasAdvancedVoiceUpdates =
       fallbackVoiceIds !== undefined ||
       voiceTemperature !== undefined ||
       voiceSpeed !== undefined ||
       voiceVolume !== undefined ||
       beginMessageDelayMs !== undefined;
 
-    if (hasVoiceUpdates && aiConfig?.retell_agent_id) {
+    if (hasAdvancedVoiceUpdates && aiConfig?.retell_agent_id) {
       try {
         await updateAgentAdvancedSettings(aiConfig.retell_agent_id, {
           fallbackVoices: fallbackVoiceIds !== undefined ? (fallbackVoiceIds || []) : undefined,
@@ -128,8 +139,12 @@ async function handler(request: NextRequest) {
       }
     }
 
-    // Queue prompt regeneration
-    await queuePromptRegeneration(supabase, business.id, "settings_update");
+    // Queue prompt regeneration (use admin client for permissions)
+    try {
+      await queuePromptRegeneration(adminSupabase, business.id, "settings_update");
+    } catch (_queueError) {
+      // Non-fatal - voice settings saved successfully
+    }
 
     return NextResponse.json({
       success: true,

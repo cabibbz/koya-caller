@@ -2,54 +2,52 @@
  * Koya Caller - Voice Samples
  * Static voice sample data for Step 7 (Voice & Personality)
  * Spec Reference: Part 5, Lines 396-404
- * 
- * Uses Retell AI's public voice preview URLs from their S3 bucket
+ *
+ * Uses local proxy endpoint to serve voice previews
+ * Voice IDs sourced from Retell API /list-voices
  */
 
 import type { VoiceSample } from "@/types/onboarding";
 
 /**
- * Retell's public S3 bucket for voice previews
- */
-const RETELL_VOICE_CDN = "https://retell-utils-public.s3.us-west-2.amazonaws.com";
-
-/**
  * Available voice samples for selection
  * Spec: "Play 4-6 sample voices, Male/Female options, Different styles"
+ * All voices verified against Retell API as of 2026-01
+ * Preview URLs use local proxy to avoid browser issues
  */
 export const VOICE_SAMPLES: VoiceSample[] = [
   // Female Voices
   {
-    id: "rachel-warm",
-    name: "Rachel",
+    id: "grace-warm",
+    name: "Grace",
     gender: "female",
     style: "warm",
     provider: "elevenlabs",
-    previewUrl: `${RETELL_VOICE_CDN}/rachel.mp3`,
-    retellVoiceId: "11labs-Rachel",
+    previewUrl: "/api/voices/preview?id=grace-warm",
+    retellVoiceId: "11labs-Grace",
     supportsBilingual: true,
   },
   {
-    id: "sarah-professional",
-    name: "Sarah",
+    id: "jenny-professional",
+    name: "Jenny",
     gender: "female",
     style: "professional",
     provider: "elevenlabs",
-    previewUrl: `${RETELL_VOICE_CDN}/sarah.mp3`,
-    retellVoiceId: "11labs-Sarah",
+    previewUrl: "/api/voices/preview?id=jenny-professional",
+    retellVoiceId: "11labs-Jenny",
     supportsBilingual: true,
   },
   {
-    id: "coral-energetic",
-    name: "Coral",
+    id: "hailey-energetic",
+    name: "Hailey",
     gender: "female",
     style: "energetic",
-    provider: "openai",
-    previewUrl: `${RETELL_VOICE_CDN}/coral.mp3`,
-    retellVoiceId: "openai-Coral",
-    supportsBilingual: false,
+    provider: "elevenlabs",
+    previewUrl: "/api/voices/preview?id=hailey-energetic",
+    retellVoiceId: "11labs-Hailey",
+    supportsBilingual: true,
   },
-  
+
   // Male Voices
   {
     id: "adrian-professional",
@@ -57,29 +55,29 @@ export const VOICE_SAMPLES: VoiceSample[] = [
     gender: "male",
     style: "professional",
     provider: "elevenlabs",
-    previewUrl: `${RETELL_VOICE_CDN}/adrian.mp3`,
+    previewUrl: "/api/voices/preview?id=adrian-professional",
     retellVoiceId: "11labs-Adrian",
     supportsBilingual: true,
   },
   {
-    id: "marcus-warm",
-    name: "Marcus",
+    id: "brian-warm",
+    name: "Brian",
     gender: "male",
     style: "warm",
     provider: "elevenlabs",
-    previewUrl: `${RETELL_VOICE_CDN}/marcus.mp3`,
-    retellVoiceId: "11labs-Marcus",
+    previewUrl: "/api/voices/preview?id=brian-warm",
+    retellVoiceId: "11labs-Brian",
     supportsBilingual: true,
   },
   {
-    id: "alloy-energetic",
-    name: "Alloy",
+    id: "nico-energetic",
+    name: "Nico",
     gender: "male",
     style: "energetic",
-    provider: "openai",
-    previewUrl: `${RETELL_VOICE_CDN}/alloy.mp3`,
-    retellVoiceId: "openai-Alloy",
-    supportsBilingual: false,
+    provider: "elevenlabs",
+    previewUrl: "/api/voices/preview?id=nico-energetic",
+    retellVoiceId: "11labs-Nico",
+    supportsBilingual: true,
   },
 ];
 

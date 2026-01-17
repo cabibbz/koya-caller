@@ -801,6 +801,108 @@ export async function saveStep6Data(data: Step6FormData) {
   return { success: true };
 }
 
+// ============================================
+// Step 7: Save Voice Settings
+// ============================================
+
+export async function saveStep7Data(data: {
+  voiceId: string;
+  voiceIdSpanish: string | null;
+  personality: "professional" | "friendly" | "casual";
+  aiName: string;
+  customGreeting: string;
+}) {
+  const supabase = await getWriteClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  const tenantId = user.app_metadata?.tenant_id;
+  if (!tenantId) {
+    throw new Error("No business associated with user");
+  }
+
+  // Upsert ai_config record with voice settings
+  const { error: aiConfigError } = await supabase
+    .from("ai_config")
+    .upsert(
+      {
+        business_id: tenantId,
+        voice_id: data.voiceId,
+        voice_id_spanish: data.voiceIdSpanish,
+        personality: data.personality,
+        ai_name: data.aiName,
+        greeting: data.customGreeting || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "business_id" }
+    );
+
+  if (aiConfigError) {
+    throw new Error("Failed to save voice settings");
+  }
+
+  // Update onboarding step
+  const { error: businessError } = await supabase
+    .from("businesses")
+    .update({
+      onboarding_step: 8,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", tenantId);
+
+  if (businessError) {
+    throw new Error("Failed to update progress");
+  }
+
+  revalidatePath("/onboarding");
+  return { success: true };
+}
+
+export async function loadExistingVoiceSettings() {
+  const supabase = await getWriteClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  const tenantId = user.app_metadata?.tenant_id;
+  if (!tenantId) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("ai_config")
+    .select("voice_id, voice_id_spanish, personality, ai_name, greeting")
+    .eq("business_id", tenantId)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    voiceId: data.voice_id || "",
+    voiceIdSpanish: data.voice_id_spanish || null,
+    personality: data.personality || "professional",
+    aiName: data.ai_name || "Koya",
+    customGreeting: data.greeting || "",
+  };
+}
+
 export async function loadExistingLanguageSettings(): Promise<Step6FormData | null> {
   const supabase = await getWriteClient();
   

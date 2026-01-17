@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     const configData = existingConfig as Record<string, unknown> | null;
 
     // Use provided values or fall back to database values
-    const voiceId = body.voiceId || (configData?.voice_id as string) || "11labs-Rachel";
+    const voiceId = body.voiceId || (configData?.voice_id as string) || "11labs-Grace";
     const personality = body.personality || (configData?.personality as "professional" | "friendly" | "casual") || "professional";
     const spanishEnabled = body.spanishEnabled ?? (configData?.spanish_enabled as boolean) ?? false;
     const languageMode = body.languageMode || (configData?.language_mode as "auto" | "ask" | "spanish_default") || "auto";

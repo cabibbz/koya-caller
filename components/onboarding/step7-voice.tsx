@@ -33,6 +33,7 @@ import {
   DEFAULT_STEP7_DATA,
   PERSONALITY_OPTIONS,
 } from "@/types/onboarding";
+import { saveStep7Data } from "@/lib/onboarding/actions";
 
 export function Step7VoicePersonality() {
   const router = useRouter();
@@ -145,8 +146,8 @@ export function Step7VoicePersonality() {
   const handleSelectVoice = (voice: VoiceSample) => {
     setFormData((prev) => ({
       ...prev,
-      voiceId: voice.id,
-      voiceIdSpanish: voice.supportsBilingual ? voice.id : null,
+      voiceId: voice.retellVoiceId,
+      voiceIdSpanish: voice.supportsBilingual ? voice.retellVoiceId : null,
     }));
   };
   
@@ -175,14 +176,23 @@ export function Step7VoicePersonality() {
     if (!formData.voiceId) {
       return; // Voice selection required
     }
-    
+
     setIsSaving(true);
-    
+
     try {
+      // Save to database
+      await saveStep7Data({
+        voiceId: formData.voiceId,
+        voiceIdSpanish: formData.voiceIdSpanish,
+        personality: formData.personality,
+        aiName: formData.aiName,
+        customGreeting: formData.greeting,
+      });
+
       // Save to context
       setStep7Data(formData);
       completeStep(7);
-      
+
       // Navigate to next step
       router.push("/onboarding/phone");
     } catch (_error) {
@@ -230,7 +240,7 @@ export function Step7VoicePersonality() {
             <div
               key={voice.id}
               className={`relative rounded-lg border p-4 transition-all cursor-pointer ${
-                formData.voiceId === voice.id
+                formData.voiceId === voice.retellVoiceId
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
                   : "border-muted hover:border-muted-foreground/50"
               }`}
@@ -277,7 +287,7 @@ export function Step7VoicePersonality() {
               </div>
               
               {/* Selection indicator */}
-              {formData.voiceId === voice.id && (
+              {formData.voiceId === voice.retellVoiceId && (
                 <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Volume2 className="h-3 w-3" />
                 </div>

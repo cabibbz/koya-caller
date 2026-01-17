@@ -293,7 +293,7 @@ export async function POST(request: NextRequest): Promise<Response> {
             // Create a simple test agent
             const agent = await retell.agent.create({
               agent_name: "Koya Test Agent",
-              voice_id: "11labs-Rachel",
+              voice_id: "11labs-Grace",
               response_engine: {
                 type: "retell-llm",
                 llm_id: "",
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
             const agent = await retell.agent.create({
               agent_name: demoAgentName,
-              voice_id: language === "es" ? "11labs-Charlotte" : "11labs-Rachel",
+              voice_id: language === "es" ? "11labs-Hailey" : "11labs-Grace",
               response_engine: {
                 type: "retell-llm",
                 llm_id: llm.llm_id,

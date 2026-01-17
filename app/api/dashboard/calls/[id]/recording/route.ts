@@ -30,7 +30,8 @@ export async function GET(
     }
 
     // Get the call and verify ownership
-    const { data: call, error: callError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
+    const { data: call, error: callError } = await (supabase as any)
       .from("calls")
       .select("recording_url")
       .eq("id", params.id)
@@ -41,12 +42,13 @@ export async function GET(
       return NextResponse.json({ error: "Call not found" }, { status: 404 });
     }
 
-    if (!call.recording_url) {
+    const recordingUrl = call?.recording_url as string | null;
+    if (!recordingUrl) {
       return NextResponse.json({ error: "No recording available" }, { status: 404 });
     }
 
     // Fetch the recording
-    const response = await fetch(call.recording_url);
+    const response = await fetch(recordingUrl);
     if (!response.ok) {
       return NextResponse.json({ error: "Failed to fetch recording" }, { status: 500 });
     }

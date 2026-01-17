@@ -7,42 +7,43 @@ import { NextResponse } from "next/server";
 import { getRetellClient, isRetellConfigured } from "@/lib/retell";
 
 // Fallback voices for when Retell is not configured
+// All voice IDs verified against Retell API as of 2026-01
 const FALLBACK_VOICES = [
   {
-    voice_id: "11labs-Rachel",
-    voice_name: "Rachel",
-    provider: "elevenlabs",
-    gender: "female",
-    accent: "American",
-    age: "Young",
-    preview_audio_url: null,
-  },
-  {
-    voice_id: "11labs-Sarah",
-    voice_name: "Sarah",
+    voice_id: "11labs-Grace",
+    voice_name: "Grace",
     provider: "elevenlabs",
     gender: "female",
     accent: "American",
     age: "Middle-aged",
-    preview_audio_url: null,
+    preview_audio_url: "https://retell-utils-public.s3.us-west-2.amazonaws.com/grace.mp3",
   },
   {
-    voice_id: "11labs-Adam",
-    voice_name: "Adam",
+    voice_id: "11labs-Jenny",
+    voice_name: "Jenny",
     provider: "elevenlabs",
-    gender: "male",
+    gender: "female",
     accent: "American",
-    age: "Middle-aged",
-    preview_audio_url: null,
+    age: "Young",
+    preview_audio_url: "https://retell-utils-public.s3.us-west-2.amazonaws.com/Jenny.mp3",
   },
   {
-    voice_id: "11labs-Josh",
-    voice_name: "Josh",
+    voice_id: "11labs-Adrian",
+    voice_name: "Adrian",
     provider: "elevenlabs",
     gender: "male",
     accent: "American",
     age: "Young",
-    preview_audio_url: null,
+    preview_audio_url: "https://retell-utils-public.s3.us-west-2.amazonaws.com/adrian.mp3",
+  },
+  {
+    voice_id: "11labs-Brian",
+    voice_name: "Brian",
+    provider: "elevenlabs",
+    gender: "male",
+    accent: "American",
+    age: "Young",
+    preview_audio_url: "https://retell-utils-public.s3.us-west-2.amazonaws.com/brian.mp3",
   },
 ];
 
