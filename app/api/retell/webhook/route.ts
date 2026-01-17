@@ -77,19 +77,26 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient() as any;
     const call = event.call;
 
-    // Look up business by agent_id
+    // Look up business by agent_id first
+    let businessId: string | null = null;
+
     const { data: aiConfig } = await supabase
       .from("ai_config")
       .select("business_id")
       .eq("retell_agent_id", call.agent_id)
       .single();
 
-    if (!aiConfig) {
-      // Still return 200 to acknowledge receipt
-      return NextResponse.json({ received: true, warning: "Unknown agent" });
+    if (aiConfig) {
+      businessId = aiConfig.business_id;
+    } else if (call.metadata?.businessId) {
+      // Fall back to businessId from call metadata (for test calls during onboarding)
+      businessId = call.metadata.businessId;
     }
 
-    const businessId = aiConfig.business_id;
+    if (!businessId) {
+      // Still return 200 to acknowledge receipt (demo calls without business)
+      return NextResponse.json({ received: true, warning: "Unknown agent or demo call" });
+    }
 
     switch (event.event) {
       case "call_started": {
