@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProgressPath, KoyaAvatar, CompletionCelebration } from "@/components/onboarding-v2";
 import { Phone, PhoneCall, CheckCircle, ArrowRight, Mic, MicOff, Volume2, AlertCircle } from "lucide-react";
-import { RetellWebClient } from "retell-client-js-sdk";
 import { createClient } from "@/lib/supabase/client";
 
 type TestStatus = "idle" | "connecting" | "calling" | "complete" | "error";
@@ -25,7 +24,9 @@ export default function TestPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState(0);
-  const retellClientRef = useRef<RetellWebClient | null>(null);
+  const [isSkipping, setIsSkipping] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const retellClientRef = useRef<any>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get business ID on mount
@@ -94,7 +95,8 @@ export default function TestPage() {
         throw new Error(data.error || "Failed to start test call");
       }
 
-      // Initialize Retell WebRTC client
+      // Initialize Retell WebRTC client (dynamic import to avoid webpack issues)
+      const { RetellWebClient } = await import("retell-client-js-sdk");
       const retellClient = new RetellWebClient();
       retellClientRef.current = retellClient;
 
@@ -115,11 +117,10 @@ export default function TestPage() {
         setTestStatus("error");
       });
 
-      // Start the call
+      // Start the call - don't specify captureDeviceId to use system default
       await retellClient.startCall({
         accessToken: data.accessToken,
         sampleRate: 24000,
-        captureDeviceId: "default",
       });
 
     } catch (err) {
@@ -154,10 +155,17 @@ export default function TestPage() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (skip = false) => {
     // Mark onboarding complete and redirect to dashboard
+    if (skip) {
+      setIsSkipping(true);
+    }
     try {
-      await fetch("/api/onboarding/complete", { method: "POST" });
+      await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skip }),
+      });
       router.push("/dashboard");
     } catch (_error) {
       router.push("/dashboard");
@@ -364,10 +372,11 @@ export default function TestPage() {
               className="text-center"
             >
               <button
-                onClick={handleComplete}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => handleComplete(true)}
+                disabled={isSkipping}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
-                Skip for now, go to dashboard →
+                {isSkipping ? "Redirecting to dashboard..." : "Skip for now, go to dashboard →"}
               </button>
             </motion.p>
           </>
@@ -394,7 +403,7 @@ export default function TestPage() {
               </CardContent>
             </Card>
 
-            <Button size="lg" className="w-full gap-2" onClick={handleComplete}>
+            <Button size="lg" className="w-full gap-2" onClick={() => handleComplete(false)}>
               Go to Dashboard
               <ArrowRight className="w-4 h-4" />
             </Button>

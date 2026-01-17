@@ -8,6 +8,8 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Transpile the Retell SDK to fix webpack bundling issues
+  transpilePackages: ["retell-client-js-sdk"],
   images: {
     remotePatterns: [
       {

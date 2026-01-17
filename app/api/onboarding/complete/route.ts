@@ -32,6 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Get business ID from request or user metadata
     const body = await request.json().catch(() => ({}));
     const businessId = body.businessId || user.app_metadata?.tenant_id;
+    const skipPromptGeneration = body.skip === true;
 
     if (!businessId) {
       return NextResponse.json(
@@ -57,10 +58,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // =========================================================================
-    // Step 1: Generate Retell-compatible system prompt
+    // Step 1: Generate Retell-compatible system prompt (skip if user chose to skip)
     // =========================================================================
     // Generating system prompt for business
 
+    // Only do heavy prompt generation if not skipping
+    if (!skipPromptGeneration) {
     // Fetch all business data for prompt generation
     const businessData = await fetchBusinessData(adminSupabase, businessId);
 
@@ -176,6 +179,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // Prompt generation failed - continue without it
       }
     }
+    } // end skipPromptGeneration check
 
     // =========================================================================
     // Step 3: Mark onboarding complete
