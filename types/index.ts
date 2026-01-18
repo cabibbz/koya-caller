@@ -46,6 +46,7 @@ export interface Business {
   user_id: string;
   name: string;
   business_type: string | null;
+  industry: string | null;
   address: string | null;
   website: string | null;
   service_area: string | null;
@@ -231,6 +232,9 @@ export interface CallSettings {
   denoising_mode: DenoisingMode;
   pii_redaction_enabled: boolean;
   pii_categories: PIICategory[];
+  // Responsiveness settings (migration 20250114000002)
+  interruption_sensitivity: number;
+  responsiveness: number;
   created_at: string;
   updated_at: string;
 }

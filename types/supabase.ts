@@ -92,6 +92,7 @@ export interface Database {
           user_id: string | null
           name: string
           business_type: string | null
+          industry: string | null
           address: string | null
           website: string | null
           service_area: string | null
@@ -116,6 +117,7 @@ export interface Database {
           user_id?: string | null
           name: string
           business_type?: string | null
+          industry?: string | null
           address?: string | null
           website?: string | null
           service_area?: string | null
@@ -140,6 +142,7 @@ export interface Database {
           user_id?: string | null
           name?: string
           business_type?: string | null
+          industry?: string | null
           address?: string | null
           website?: string | null
           service_area?: string | null
@@ -371,6 +374,7 @@ export interface Database {
           retell_agent_id: string | null
           retell_agent_id_spanish: string | null
           retell_agent_version: number
+          retell_synced_at: string | null
           // Enhanced prompt system (migration 20250110000001)
           prompt_config: Json | null
           // Upselling feature flags (migrations 20250111000001, 20250112000001)
@@ -378,6 +382,16 @@ export interface Database {
           bundles_enabled: boolean
           packages_enabled: boolean
           memberships_enabled: boolean
+          // Retell advanced features (migration 20250114000001)
+          boosted_keywords: string[]
+          analysis_summary_prompt: string | null
+          analysis_model: string
+          fallback_voice_ids: string[]
+          // Voice control settings (migration 20250115000001)
+          voice_temperature: number
+          voice_speed: number
+          voice_volume: number
+          begin_message_delay_ms: number
           created_at: string
           updated_at: string
         }
@@ -403,11 +417,20 @@ export interface Database {
           retell_agent_id?: string | null
           retell_agent_id_spanish?: string | null
           retell_agent_version?: number
+          retell_synced_at?: string | null
           prompt_config?: Json | null
           upsells_enabled?: boolean
           bundles_enabled?: boolean
           packages_enabled?: boolean
           memberships_enabled?: boolean
+          boosted_keywords?: string[]
+          analysis_summary_prompt?: string | null
+          analysis_model?: string
+          fallback_voice_ids?: string[]
+          voice_temperature?: number
+          voice_speed?: number
+          voice_volume?: number
+          begin_message_delay_ms?: number
           created_at?: string
           updated_at?: string
         }
@@ -433,11 +456,20 @@ export interface Database {
           retell_agent_id?: string | null
           retell_agent_id_spanish?: string | null
           retell_agent_version?: number
+          retell_synced_at?: string | null
           prompt_config?: Json | null
           upsells_enabled?: boolean
           bundles_enabled?: boolean
           packages_enabled?: boolean
           memberships_enabled?: boolean
+          boosted_keywords?: string[]
+          analysis_summary_prompt?: string | null
+          analysis_model?: string
+          fallback_voice_ids?: string[]
+          voice_temperature?: number
+          voice_speed?: number
+          voice_volume?: number
+          begin_message_delay_ms?: number
           created_at?: string
           updated_at?: string
         }
@@ -471,8 +503,26 @@ export interface Database {
           after_hours_enabled: boolean
           after_hours_can_book: boolean
           after_hours_message_only: boolean
+          after_hours_action: string
           max_call_duration_seconds: number
           recording_enabled: boolean
+          // Retell advanced features (migration 20250114000001)
+          voicemail_detection_enabled: boolean
+          voicemail_message: string | null
+          voicemail_detection_timeout_ms: number
+          reminder_trigger_ms: number
+          reminder_max_count: number
+          end_call_after_silence_ms: number
+          dtmf_enabled: boolean
+          dtmf_digit_limit: number
+          dtmf_termination_key: string
+          dtmf_timeout_ms: number
+          denoising_mode: string
+          pii_redaction_enabled: boolean
+          pii_categories: string[]
+          // Responsiveness settings (migration 20250114000002)
+          interruption_sensitivity: number
+          responsiveness: number
           created_at: string
           updated_at: string
         }
@@ -492,8 +542,24 @@ export interface Database {
           after_hours_enabled?: boolean
           after_hours_can_book?: boolean
           after_hours_message_only?: boolean
+          after_hours_action?: string
           max_call_duration_seconds?: number
           recording_enabled?: boolean
+          voicemail_detection_enabled?: boolean
+          voicemail_message?: string | null
+          voicemail_detection_timeout_ms?: number
+          reminder_trigger_ms?: number
+          reminder_max_count?: number
+          end_call_after_silence_ms?: number
+          dtmf_enabled?: boolean
+          dtmf_digit_limit?: number
+          dtmf_termination_key?: string
+          dtmf_timeout_ms?: number
+          denoising_mode?: string
+          pii_redaction_enabled?: boolean
+          pii_categories?: string[]
+          interruption_sensitivity?: number
+          responsiveness?: number
           created_at?: string
           updated_at?: string
         }
@@ -513,8 +579,24 @@ export interface Database {
           after_hours_enabled?: boolean
           after_hours_can_book?: boolean
           after_hours_message_only?: boolean
+          after_hours_action?: string
           max_call_duration_seconds?: number
           recording_enabled?: boolean
+          voicemail_detection_enabled?: boolean
+          voicemail_message?: string | null
+          voicemail_detection_timeout_ms?: number
+          reminder_trigger_ms?: number
+          reminder_max_count?: number
+          end_call_after_silence_ms?: number
+          dtmf_enabled?: boolean
+          dtmf_digit_limit?: number
+          dtmf_termination_key?: string
+          dtmf_timeout_ms?: number
+          denoising_mode?: string
+          pii_redaction_enabled?: boolean
+          pii_categories?: string[]
+          interruption_sensitivity?: number
+          responsiveness?: number
           created_at?: string
           updated_at?: string
         }

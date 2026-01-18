@@ -167,6 +167,30 @@ export async function GET(_request: NextRequest) {
       return (riskOrder[a.churn_risk] || 4) - (riskOrder[b.churn_risk] || 4);
     });
 
+    // Count calendar sync failures
+    // Includes: expired tokens and appointments with sync errors
+    let syncFailures = 0;
+
+    // Check for expired calendar tokens
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
+    const { data: expiredTokens } = await (supabase as any)
+      .from("calendar_integrations")
+      .select("id")
+      .lt("token_expires_at", now.toISOString())
+      .neq("provider", "built_in");
+
+    syncFailures += (expiredTokens || []).length;
+
+    // Check for appointments with sync errors
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
+    const { data: syncErrors } = await (supabase as any)
+      .from("appointments")
+      .select("id")
+      .not("calendar_sync_error", "is", null)
+      .eq("calendar_sync_status", "failed");
+
+    syncFailures += (syncErrors || []).length;
+
     return NextResponse.json({
       businesses: healthMetrics,
       summary: {
@@ -174,7 +198,7 @@ export async function GET(_request: NextRequest) {
         medium_risk_count: mediumRiskCount,
         upsell_opportunities: upsellOpportunities,
         failed_calls_today: failedCallsToday,
-        sync_failures: 0, // TODO: Implement calendar sync failure tracking
+        sync_failures: syncFailures,
       },
     });
   } catch (error) {

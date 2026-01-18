@@ -11,6 +11,7 @@ import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refreshGoogleToken } from "../helpers/google-refresh";
 import { refreshOutlookToken } from "../helpers/outlook-refresh";
+import { sendCalendarDisconnectEmail } from "@/lib/email";
 
 // =============================================================================
 // Check for Expiring Tokens (Scheduled Job)
@@ -89,6 +90,7 @@ export const refreshCalendarToken = inngest.createFunction(
       // The event object in onFailure contains the original event in event.data.event
       const originalEvent = (event as any).data?.event;
       const businessId = originalEvent?.data?.businessId;
+      const provider = originalEvent?.data?.provider;
 
       if (!businessId) {
         return;
@@ -107,7 +109,31 @@ export const refreshCalendarToken = inngest.createFunction(
         })
         .eq("business_id", businessId);
 
-      // TODO: Send email notification to user about re-authentication needed
+      // Fetch user email for notification
+      const { data: business } = await (supabase as any)
+        .from("businesses")
+        .select("name, user_id")
+        .eq("id", businessId)
+        .single();
+
+      if (business?.user_id) {
+        const { data: user } = await (supabase as any)
+          .from("users")
+          .select("email")
+          .eq("id", business.user_id)
+          .single();
+
+        if (user?.email) {
+          // Send email notification about calendar disconnect
+          await sendCalendarDisconnectEmail({
+            to: user.email,
+            businessName: business.name || "Your business",
+            provider: provider as "google" | "outlook",
+            reason: "token_expired",
+            reconnectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://app.koyacaller.com"}/settings?tab=calendar`,
+          });
+        }
+      }
     },
   },
   { event: "calendar/token.refresh" },

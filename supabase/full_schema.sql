@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   user_id uuid REFERENCES users(id) ON DELETE CASCADE,
   name text NOT NULL,
   business_type text,
+  industry text,
   address text,
   city text,
   state text,
@@ -142,6 +143,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   updated_at timestamptz DEFAULT NOW()
 );
 COMMENT ON TABLE businesses IS 'Business profiles with subscription and usage tracking';
+COMMENT ON COLUMN businesses.industry IS 'Business industry/type used for AI prompt customization';
 
 CREATE INDEX IF NOT EXISTS idx_businesses_user_id ON businesses(user_id);
 CREATE INDEX IF NOT EXISTS idx_businesses_subscription_status ON businesses(subscription_status);
@@ -312,6 +314,7 @@ CREATE TABLE IF NOT EXISTS call_settings (
   after_hours_enabled boolean DEFAULT true,
   after_hours_can_book boolean DEFAULT true,
   after_hours_message_only boolean DEFAULT false,
+  after_hours_action text DEFAULT 'ai',
 
   -- Call limits
   max_call_duration_seconds int DEFAULT 600,
@@ -360,6 +363,7 @@ CREATE TABLE IF NOT EXISTS call_settings (
   CONSTRAINT valid_responsiveness CHECK (responsiveness >= 0 AND responsiveness <= 1)
 );
 COMMENT ON TABLE call_settings IS 'Call handling configuration';
+COMMENT ON COLUMN call_settings.after_hours_action IS 'Action to take for after-hours calls: voicemail, ai, or transfer';
 COMMENT ON COLUMN call_settings.interruption_sensitivity IS 'How sensitive to caller interruptions (0-1). Higher = stops faster when caller speaks.';
 COMMENT ON COLUMN call_settings.responsiveness IS 'How quickly to respond after caller stops speaking (0-1). Higher = responds faster.';
 
@@ -959,6 +963,43 @@ BEGIN
 END;
 $$;
 
+-- Atomic increment function for usage minutes
+CREATE OR REPLACE FUNCTION increment_usage_minutes(
+  p_business_id uuid,
+  p_minutes integer
+)
+RETURNS TABLE (
+  id uuid,
+  name text,
+  minutes_used_this_cycle integer,
+  current_cycle_start date,
+  current_cycle_end date
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_minutes <= 0 THEN
+    RAISE EXCEPTION 'Minutes must be a positive integer';
+  END IF;
+  IF p_minutes > 1440 THEN
+    RAISE EXCEPTION 'Minutes increment exceeds maximum allowed value (1440)';
+  END IF;
+
+  RETURN QUERY
+  UPDATE businesses
+  SET minutes_used_this_cycle = COALESCE(minutes_used_this_cycle, 0) + p_minutes
+  WHERE businesses.id = p_business_id
+  RETURNING
+    businesses.id,
+    businesses.name,
+    businesses.minutes_used_this_cycle,
+    businesses.current_cycle_start,
+    businesses.current_cycle_end;
+END;
+$$;
+
 -- Admin financial summary
 CREATE OR REPLACE FUNCTION get_admin_financial_summary()
 RETURNS TABLE (
@@ -1037,7 +1078,8 @@ SELECT
     WHEN cp.call_count >= 2 THEN 'returning'
     ELSE 'new'
   END AS caller_tier,
-  (SELECT COUNT(*) FROM appointments a WHERE a.customer_phone = cp.phone_number AND a.business_id = cp.business_id) AS appointment_count
+  (SELECT COUNT(*) FROM appointments a WHERE a.customer_phone = cp.phone_number AND a.business_id = cp.business_id) AS appointment_count,
+  (SELECT a.service_name FROM appointments a WHERE a.customer_phone = cp.phone_number AND a.business_id = cp.business_id ORDER BY a.scheduled_at DESC LIMIT 1) AS last_service_booked
 FROM caller_profiles cp;
 
 -- =============================================================================
@@ -1085,6 +1127,8 @@ GRANT EXECUTE ON FUNCTION increment_caller_count TO authenticated;
 GRANT EXECUTE ON FUNCTION increment_caller_count TO service_role;
 GRANT EXECUTE ON FUNCTION update_caller_profile TO authenticated;
 GRANT EXECUTE ON FUNCTION update_caller_profile TO service_role;
+GRANT EXECUTE ON FUNCTION increment_usage_minutes(uuid, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION increment_usage_minutes(uuid, integer) TO service_role;
 GRANT SELECT ON caller_insights TO authenticated;
 GRANT SELECT ON caller_insights TO service_role;
 

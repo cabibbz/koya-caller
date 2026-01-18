@@ -404,22 +404,38 @@ export function verifyWebhookSignature(
 const DEMO_AGENT_ID = process.env.RETELL_DEMO_AGENT_ID;
 
 /**
- * Get or create the demo agent
+ * Get the demo agent ID
  * Spec Reference: Part 3, Lines 140-158
+ *
+ * The demo agent must be pre-created and configured via RETELL_DEMO_AGENT_ID.
+ * To create a demo agent:
+ * 1. Use createAgent() with a demo-specific prompt for "Sunrise Dental"
+ * 2. Set the returned agent_id as RETELL_DEMO_AGENT_ID in .env
+ *
+ * Demo agent should have:
+ * - Business: Sunrise Dental (fictional dental practice)
+ * - Services: Cleanings, Checkups, Whitening, Emergency
+ * - Personality: Friendly
+ * - No transfers enabled
  */
 export async function getDemoAgent(): Promise<string | null> {
   if (DEMO_AGENT_ID) {
     return DEMO_AGENT_ID;
   }
 
-  // In production, you'd want to create this once and store the ID
-  // For now, we'll create a mock agent
+  // Mock mode for development without Retell credentials
   if (!isRetellConfigured()) {
     return `demo_agent_mock`;
   }
 
-  // TODO: Create a dedicated demo agent with demo prompt
-  // This would be done during initial setup
+  // Production requires RETELL_DEMO_AGENT_ID to be set
+  // Log warning in development to help with debugging
+  if (process.env.NODE_ENV === "development") {
+    console.warn(
+      "[Retell] Demo agent not configured. Set RETELL_DEMO_AGENT_ID in .env to enable demo calls."
+    );
+  }
+
   return null;
 }
 

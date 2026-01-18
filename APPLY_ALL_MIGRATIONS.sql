@@ -1,8 +1,22 @@
 -- ============================================================================
--- KOYA CALLER - COMPLETE MIGRATIONS (January 9-14, 2025)
+-- KOYA CALLER - COMPLETE MIGRATIONS (January 9-16, 2025)
 -- ============================================================================
 -- Run this entire script in Supabase SQL Editor to apply all recent migrations
 -- URL: https://supabase.com/dashboard/project/jkfcipjastgqtusijbav/sql/new
+-- ============================================================================
+-- INCLUDES 12 MIGRATIONS:
+-- 1. Fix Calls and Settings (Jan 9)
+-- 2. Enhanced Prompt System (Jan 10)
+-- 3. Upsells Feature (Jan 11)
+-- 4. Advanced Upselling - Bundles, Packages, Memberships (Jan 12)
+-- 5. Appointment Reminder Columns (Jan 13)
+-- 6. Atomic Increment and Constraints (Jan 13)
+-- 7. Retell Sync Tracking (Jan 13)
+-- 8. Retell Advanced Features (Jan 14)
+-- 9. Responsiveness Settings (Jan 14)
+-- 10. Industry Column (Jan 14)
+-- 11. Voice Controls (Jan 15)
+-- 12. Cleanup Duplicate Volume Column (Jan 16)
 -- ============================================================================
 
 -- ============================================================================
@@ -658,6 +672,112 @@ CHECK (reminder_max_count >= 0 AND reminder_max_count <= 10);
 ALTER TABLE ai_config DROP CONSTRAINT IF EXISTS valid_analysis_model;
 ALTER TABLE ai_config ADD CONSTRAINT valid_analysis_model
 CHECK (analysis_model IN ('gpt-4.1-mini', 'claude-4.5-sonnet', 'gemini-2.5-flash'));
+
+
+-- ============================================================================
+-- MIGRATION 9: Add Responsiveness Settings (Jan 14, 2025)
+-- ============================================================================
+
+-- Interruption Sensitivity: How sensitive to caller interruptions (0-1)
+-- Higher values = stops faster when caller starts speaking
+ALTER TABLE call_settings
+ADD COLUMN IF NOT EXISTS interruption_sensitivity numeric(3,2) DEFAULT 0.9;
+
+-- Responsiveness: How quickly to respond after caller stops speaking (0-1)
+-- Higher values = responds faster
+ALTER TABLE call_settings
+ADD COLUMN IF NOT EXISTS responsiveness numeric(3,2) DEFAULT 0.9;
+
+-- Validate interruption sensitivity is between 0 and 1
+ALTER TABLE call_settings DROP CONSTRAINT IF EXISTS valid_interruption_sensitivity;
+ALTER TABLE call_settings ADD CONSTRAINT valid_interruption_sensitivity
+CHECK (interruption_sensitivity >= 0 AND interruption_sensitivity <= 1);
+
+-- Validate responsiveness is between 0 and 1
+ALTER TABLE call_settings DROP CONSTRAINT IF EXISTS valid_responsiveness;
+ALTER TABLE call_settings ADD CONSTRAINT valid_responsiveness
+CHECK (responsiveness >= 0 AND responsiveness <= 1);
+
+COMMENT ON COLUMN call_settings.interruption_sensitivity IS 'How sensitive to caller interruptions (0-1). Higher = stops faster when caller speaks. Default 0.9 for highly responsive behavior.';
+COMMENT ON COLUMN call_settings.responsiveness IS 'How quickly to respond after caller stops speaking (0-1). Higher = responds faster. Default 0.9 for highly responsive behavior.';
+
+
+-- ============================================================================
+-- MIGRATION 10: Add Industry Column (Jan 14, 2025)
+-- ============================================================================
+
+-- Add missing industry column to businesses table
+ALTER TABLE businesses
+ADD COLUMN IF NOT EXISTS industry TEXT;
+
+COMMENT ON COLUMN businesses.industry IS 'Business industry/type used for AI prompt customization';
+
+
+-- ============================================================================
+-- MIGRATION 11: Voice Controls (Jan 15, 2025)
+-- ============================================================================
+
+-- Voice Temperature: Controls voice stability vs expressiveness (0-2)
+-- Lower = more stable/consistent, Higher = more expressive/varied
+ALTER TABLE ai_config
+ADD COLUMN IF NOT EXISTS voice_temperature numeric(3,2) DEFAULT 1.0;
+
+-- Voice Speed: Controls speech rate (0.5-2)
+-- Lower = slower speech, Higher = faster speech
+ALTER TABLE ai_config
+ADD COLUMN IF NOT EXISTS voice_speed numeric(3,2) DEFAULT 1.0;
+
+-- Volume: Output loudness (0-2)
+-- Lower = quieter, Higher = louder
+ALTER TABLE ai_config
+ADD COLUMN IF NOT EXISTS voice_volume numeric(3,2) DEFAULT 1.0;
+
+-- Begin Message Delay: Delay before first message in ms (0-5000)
+-- Useful to let the phone ring/connect before AI speaks
+ALTER TABLE ai_config
+ADD COLUMN IF NOT EXISTS begin_message_delay_ms integer DEFAULT 0;
+
+-- Validate voice temperature is between 0 and 2
+ALTER TABLE ai_config DROP CONSTRAINT IF EXISTS valid_voice_temperature;
+ALTER TABLE ai_config ADD CONSTRAINT valid_voice_temperature
+CHECK (voice_temperature >= 0 AND voice_temperature <= 2);
+
+-- Validate voice speed is between 0.5 and 2
+ALTER TABLE ai_config DROP CONSTRAINT IF EXISTS valid_voice_speed;
+ALTER TABLE ai_config ADD CONSTRAINT valid_voice_speed
+CHECK (voice_speed >= 0.5 AND voice_speed <= 2);
+
+-- Validate volume is between 0 and 2
+ALTER TABLE ai_config DROP CONSTRAINT IF EXISTS valid_voice_volume;
+ALTER TABLE ai_config ADD CONSTRAINT valid_voice_volume
+CHECK (voice_volume >= 0 AND voice_volume <= 2);
+
+-- Validate begin message delay is between 0 and 5000ms
+ALTER TABLE ai_config DROP CONSTRAINT IF EXISTS valid_begin_message_delay;
+ALTER TABLE ai_config ADD CONSTRAINT valid_begin_message_delay
+CHECK (begin_message_delay_ms >= 0 AND begin_message_delay_ms <= 5000);
+
+COMMENT ON COLUMN ai_config.voice_temperature IS 'Voice stability vs expressiveness (0-2). Lower = more consistent, Higher = more varied/emotional. Default 1.0.';
+COMMENT ON COLUMN ai_config.voice_speed IS 'Speech rate multiplier (0.5-2). Lower = slower, Higher = faster. Default 1.0.';
+COMMENT ON COLUMN ai_config.voice_volume IS 'Output volume level (0-2). Lower = quieter, Higher = louder. Default 1.0.';
+COMMENT ON COLUMN ai_config.begin_message_delay_ms IS 'Delay before AI speaks after call connects (0-5000ms). Useful for natural call start. Default 0.';
+
+
+-- ============================================================================
+-- MIGRATION 12: Cleanup Duplicate Volume Column (Jan 16, 2025)
+-- ============================================================================
+
+-- Drop duplicate volume column if it exists (some schemas had both 'volume' and 'voice_volume')
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'ai_config' AND column_name = 'volume'
+  ) THEN
+    ALTER TABLE ai_config DROP COLUMN volume;
+    RAISE NOTICE 'Dropped duplicate volume column from ai_config';
+  END IF;
+END $$;
 
 
 -- ============================================================================
