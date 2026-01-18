@@ -267,6 +267,8 @@ export async function addCallNote(id: string, notes: string): Promise<Call> {
 /**
  * Get call stats for dashboard
  * Spec Lines 671-674: Today/week calls, appointments, outcome breakdown
+ *
+ * PERFORMANCE: All 5 queries run in parallel using Promise.all
  */
 export async function getCallStats(businessId: string): Promise<{
   todayCalls: number;
@@ -276,61 +278,65 @@ export async function getCallStats(businessId: string): Promise<{
   outcomeBreakdown: Record<string, number>;
 }> {
   const supabase = await getClient();
-  
+
   // Get current date info
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  
+
   // Calculate start of week (Sunday)
   const dayOfWeek = now.getDay();
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).toISOString();
 
-  // Get today's calls
-  const { count: todayCalls, error: todayError } = await supabase
-    .from("calls")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", todayStart);
-
-  if (todayError) throw todayError;
-
-  // Get this week's calls
-  const { count: weekCalls, error: weekError } = await supabase
-    .from("calls")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", weekStart);
-
-  if (weekError) throw weekError;
-
-  // Get today's appointments
-  const { count: todayAppointments, error: todayApptError } = await supabase
-    .from("appointments")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", todayStart);
-
-  if (todayApptError) throw todayApptError;
-
-  // Get this week's appointments
-  const { count: weekAppointments, error: weekApptError } = await supabase
-    .from("appointments")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", weekStart);
-
-  if (weekApptError) throw weekApptError;
-
-  // Get outcome breakdown for this month
+  // Get start of month for outcome breakdown
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const { data: outcomeData, error: outcomeError } = await supabase
-    .from("calls")
-    .select("outcome")
-    .eq("business_id", businessId)
-    .gte("created_at", monthStart)
-    .not("outcome", "is", null);
 
-  if (outcomeError) throw outcomeError;
+  // Run all 5 queries in parallel
+  const [
+    todayCallsResult,
+    weekCallsResult,
+    todayAppointmentsResult,
+    weekAppointmentsResult,
+    outcomeResult,
+  ] = await Promise.all([
+    // Today's calls
+    supabase
+      .from("calls")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", todayStart),
+    // This week's calls
+    supabase
+      .from("calls")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", weekStart),
+    // Today's appointments
+    supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", todayStart),
+    // This week's appointments
+    supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", weekStart),
+    // Outcome breakdown for this month
+    supabase
+      .from("calls")
+      .select("outcome")
+      .eq("business_id", businessId)
+      .gte("created_at", monthStart)
+      .not("outcome", "is", null),
+  ]);
+
+  // Check for errors
+  if (todayCallsResult.error) throw todayCallsResult.error;
+  if (weekCallsResult.error) throw weekCallsResult.error;
+  if (todayAppointmentsResult.error) throw todayAppointmentsResult.error;
+  if (weekAppointmentsResult.error) throw weekAppointmentsResult.error;
+  if (outcomeResult.error) throw outcomeResult.error;
 
   // Count outcomes
   const outcomeBreakdown: Record<string, number> = {
@@ -342,17 +348,17 @@ export async function getCallStats(businessId: string): Promise<{
     minutes_exhausted: 0,
   };
 
-  (outcomeData ?? []).forEach((call: { outcome: string }) => {
+  (outcomeResult.data ?? []).forEach((call: { outcome: string }) => {
     if (call.outcome && outcomeBreakdown.hasOwnProperty(call.outcome)) {
       outcomeBreakdown[call.outcome]++;
     }
   });
 
   return {
-    todayCalls: todayCalls ?? 0,
-    weekCalls: weekCalls ?? 0,
-    todayAppointments: todayAppointments ?? 0,
-    weekAppointments: weekAppointments ?? 0,
+    todayCalls: todayCallsResult.count ?? 0,
+    weekCalls: weekCallsResult.count ?? 0,
+    todayAppointments: todayAppointmentsResult.count ?? 0,
+    weekAppointments: weekAppointmentsResult.count ?? 0,
     outcomeBreakdown,
   };
 }
@@ -563,6 +569,8 @@ export async function markAppointmentNoShow(id: string): Promise<Appointment> {
 /**
  * Get call trends for last 7 days
  * Returns daily call counts for chart display
+ *
+ * PERFORMANCE: All 7 day queries run in parallel using Promise.all
  */
 export async function getCallTrends(businessId: string): Promise<{
   date: string;
@@ -570,34 +578,42 @@ export async function getCallTrends(businessId: string): Promise<{
   calls: number;
 }[]> {
   const supabase = await getClient();
-  const trends: { date: string; dayLabel: string; calls: number }[] = [];
-
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  // Build array of date ranges for last 7 days
+  const dateRanges: { dateStr: string; dayLabel: string; dayStart: string; dayEnd: string }[] = [];
   for (let i = 6; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split("T")[0];
-    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
-    const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).toISOString();
-
-    const { count, error } = await supabase
-      .from("calls")
-      .select("*", { count: "exact", head: true })
-      .eq("business_id", businessId)
-      .gte("created_at", dayStart)
-      .lt("created_at", dayEnd);
-
-    if (error) throw error;
-
-    trends.push({
-      date: dateStr,
+    dateRanges.push({
+      dateStr: date.toISOString().split("T")[0],
       dayLabel: dayNames[date.getDay()],
-      calls: count ?? 0,
+      dayStart: new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString(),
+      dayEnd: new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).toISOString(),
     });
   }
 
-  return trends;
+  // Run all 7 queries in parallel
+  const results = await Promise.all(
+    dateRanges.map(({ dayStart, dayEnd }) =>
+      supabase
+        .from("calls")
+        .select("*", { count: "exact", head: true })
+        .eq("business_id", businessId)
+        .gte("created_at", dayStart)
+        .lt("created_at", dayEnd)
+    )
+  );
+
+  // Check for errors and build trends array
+  return results.map((result, index) => {
+    if (result.error) throw result.error;
+    return {
+      date: dateRanges[index].dateStr,
+      dayLabel: dateRanges[index].dayLabel,
+      calls: result.count ?? 0,
+    };
+  });
 }
 
 /**
@@ -696,6 +712,8 @@ export async function getAIPerformance(businessId: string): Promise<{
 
 /**
  * Get weekly comparison stats
+ *
+ * PERFORMANCE: All 4 queries run in parallel using Promise.all
  */
 export async function getWeeklyComparison(businessId: string): Promise<{
   thisWeekCalls: number;
@@ -715,48 +733,51 @@ export async function getWeeklyComparison(businessId: string): Promise<{
   const lastWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek - 7).toISOString();
   const lastWeekEnd = thisWeekStart;
 
-  // This week calls
-  const { count: thisWeekCalls, error: twcError } = await supabase
-    .from("calls")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", thisWeekStart);
+  // Run all 4 queries in parallel
+  const [
+    thisWeekCallsResult,
+    lastWeekCallsResult,
+    thisWeekAppointmentsResult,
+    lastWeekAppointmentsResult,
+  ] = await Promise.all([
+    // This week calls
+    supabase
+      .from("calls")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", thisWeekStart),
+    // Last week calls
+    supabase
+      .from("calls")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", lastWeekStart)
+      .lt("created_at", lastWeekEnd),
+    // This week appointments
+    supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", thisWeekStart),
+    // Last week appointments
+    supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", lastWeekStart)
+      .lt("created_at", lastWeekEnd),
+  ]);
 
-  if (twcError) throw twcError;
-
-  // Last week calls
-  const { count: lastWeekCalls, error: lwcError } = await supabase
-    .from("calls")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", lastWeekStart)
-    .lt("created_at", lastWeekEnd);
-
-  if (lwcError) throw lwcError;
-
-  // This week appointments
-  const { count: thisWeekAppointments, error: twaError } = await supabase
-    .from("appointments")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", thisWeekStart);
-
-  if (twaError) throw twaError;
-
-  // Last week appointments
-  const { count: lastWeekAppointments, error: lwaError } = await supabase
-    .from("appointments")
-    .select("*", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", lastWeekStart)
-    .lt("created_at", lastWeekEnd);
-
-  if (lwaError) throw lwaError;
+  // Check for errors
+  if (thisWeekCallsResult.error) throw thisWeekCallsResult.error;
+  if (lastWeekCallsResult.error) throw lastWeekCallsResult.error;
+  if (thisWeekAppointmentsResult.error) throw thisWeekAppointmentsResult.error;
+  if (lastWeekAppointmentsResult.error) throw lastWeekAppointmentsResult.error;
 
   return {
-    thisWeekCalls: thisWeekCalls ?? 0,
-    lastWeekCalls: lastWeekCalls ?? 0,
-    thisWeekAppointments: thisWeekAppointments ?? 0,
-    lastWeekAppointments: lastWeekAppointments ?? 0,
+    thisWeekCalls: thisWeekCallsResult.count ?? 0,
+    lastWeekCalls: lastWeekCallsResult.count ?? 0,
+    thisWeekAppointments: thisWeekAppointmentsResult.count ?? 0,
+    lastWeekAppointments: lastWeekAppointmentsResult.count ?? 0,
   };
 }
