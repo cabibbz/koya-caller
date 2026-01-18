@@ -33,6 +33,7 @@ import {
   AlertCircle,
   Unlink,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import {
   Button,
@@ -56,6 +57,14 @@ import {
   Checkbox,
 } from "@/components/ui";
 import { Slider } from "@/components/ui/slider";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type {
   CallSettings,
   AIConfig,
@@ -92,6 +101,84 @@ const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   toneIntensity: 3,
   personalityAwareErrors: true,
   maxFewShotExamples: 3,
+};
+
+// Default values for reset functionality
+const DEFAULT_CALL_SETTINGS = {
+  transferNumber: "",
+  backupTransferNumber: "",
+  transferOnRequest: true,
+  transferOnEmergency: true,
+  transferOnUpset: false,
+  transferKeywords: "",
+  transferHoursType: "always" as TransferHoursType,
+  afterHoursEnabled: true,
+  afterHoursCanBook: true,
+  afterHoursMessageOnly: false,
+  maxCallDurationSeconds: 600,
+  recordingEnabled: true,
+};
+
+const DEFAULT_CALL_FEATURES = {
+  voicemailDetectionEnabled: false,
+  voicemailMessage: "",
+  voicemailDetectionTimeoutMs: 30000,
+  reminderTriggerMs: 10000,
+  reminderMaxCount: 2,
+  endCallAfterSilenceMs: 30000,
+  dtmfEnabled: false,
+  dtmfDigitLimit: 10,
+  dtmfTerminationKey: "#",
+  dtmfTimeoutMs: 5000,
+  denoisingMode: "noise-cancellation",
+  interruptionSensitivity: 0.9,
+  responsiveness: 0.9,
+};
+
+const DEFAULT_VOICE_SETTINGS = {
+  voiceId: "",
+  voiceIdSpanish: "",
+  aiName: "Koya",
+  personality: "professional" as Personality,
+  greeting: "",
+  greetingSpanish: "",
+  afterHoursGreeting: "",
+  afterHoursGreetingSpanish: "",
+  fallbackVoiceIds: [] as string[],
+  voiceTemperature: 1.0,
+  voiceSpeed: 1.0,
+  voiceVolume: 1.0,
+  beginMessageDelayMs: 0,
+};
+
+const DEFAULT_CALENDAR_SETTINGS = {
+  provider: "built_in" as const,
+  defaultDurationMinutes: 60,
+  bufferMinutes: 0,
+  advanceBookingDays: 14,
+  requireEmail: false,
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  smsAllCalls: false,
+  smsBookings: true,
+  smsMissed: true,
+  smsMessages: true,
+  smsUsageAlerts: true,
+  emailDaily: false,
+  emailWeekly: true,
+  emailMissed: true,
+  smsCustomerConfirmation: true,
+  smsCustomerReminder: "24hr" as ReminderSetting,
+};
+
+const DEFAULT_ADVANCED_RETELL = {
+  boostedKeywords: "",
+  analysisSummaryPrompt: "",
+  analysisModel: "gpt-4.1-mini",
+  piiRedactionEnabled: false,
+  piiCategories: ["ssn", "credit_card"],
+  fallbackVoiceIds: [] as string[],
 };
 
 interface InitialPromptConfig {
@@ -202,6 +289,10 @@ export function SettingsClient({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("call-handling");
   const [saving, setSaving] = useState(false);
+
+  // Reset confirmation dialog state
+  type ResetDialogType = "call-handling" | "call-features" | "voice" | "calendar" | "notifications" | "advanced-ai" | null;
+  const [resetDialogOpen, setResetDialogOpen] = useState<ResetDialogType>(null);
 
   // Audio playback state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -721,13 +812,102 @@ export function SettingsClient({
     }
   };
 
+  // Reset handlers - these reset to defaults and mark as modified so user can save
+  const handleResetCallSettings = () => {
+    setCallSettings({
+      ...DEFAULT_CALL_SETTINGS,
+      transferHoursCustom: defaultTransferSchedule,
+    });
+    setCallSettingsModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Call handling reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  const handleResetCallFeatures = () => {
+    setCallFeaturesSettings(DEFAULT_CALL_FEATURES);
+    setCallFeaturesModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Call features reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  const handleResetVoiceSettings = () => {
+    setVoiceSettings(DEFAULT_VOICE_SETTINGS);
+    setVoiceSettingsModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Voice settings reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  const handleResetCalendarSettings = () => {
+    setCalendarSettings(DEFAULT_CALENDAR_SETTINGS);
+    setCalendarSettingsModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Calendar settings reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  const handleResetNotificationSettings = () => {
+    setNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+    setNotificationSettingsModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Notification settings reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  const handleResetAdvancedAi = () => {
+    setAdvancedAiSettings(DEFAULT_PROMPT_CONFIG);
+    setAdvancedRetellSettings(DEFAULT_ADVANCED_RETELL);
+    setAdvancedAiSettingsModified(true);
+    setAdvancedRetellModified(true);
+    setResetDialogOpen(null);
+    toast({ title: "Advanced AI reset to defaults", description: "Click Save to apply changes", variant: "success" });
+  };
+
+  // Get reset dialog info based on type
+  const getResetDialogInfo = (type: ResetDialogType) => {
+    switch (type) {
+      case "call-handling":
+        return { title: "Reset Call Handling Settings", description: "This will reset all transfer settings, after-hours settings, and call duration to their default values. You will need to click Save to apply the changes.", onConfirm: handleResetCallSettings };
+      case "call-features":
+        return { title: "Reset Call Features", description: "This will reset voicemail detection, silence handling, DTMF settings, and responsiveness to their default values. You will need to click Save to apply the changes.", onConfirm: handleResetCallFeatures };
+      case "voice":
+        return { title: "Reset Voice & Personality", description: "This will reset AI name to 'Koya', personality to 'Professional', clear all custom greetings, and reset voice parameters. You will need to click Save to apply the changes.", onConfirm: handleResetVoiceSettings };
+      case "calendar":
+        return { title: "Reset Calendar Settings", description: "This will reset appointment duration, buffer time, and advance booking days to their default values. You will need to click Save to apply the changes.", onConfirm: handleResetCalendarSettings };
+      case "notifications":
+        return { title: "Reset Notification Settings", description: "This will reset all SMS and email notification preferences to their default values. You will need to click Save to apply the changes.", onConfirm: handleResetNotificationSettings };
+      case "advanced-ai":
+        return { title: "Reset Advanced AI Settings", description: "This will reset all prompt configuration, boosted keywords, and analysis settings to their default values. You will need to click Save to apply the changes.", onConfirm: handleResetAdvancedAi };
+      default:
+        return { title: "", description: "", onConfirm: () => {} };
+    }
+  };
+
   // Usage percentage
   const usagePercent = businessInfo.minutesIncluded > 0
     ? Math.round((businessInfo.minutesUsed / businessInfo.minutesIncluded) * 100)
     : 0;
 
+  const resetDialogInfo = getResetDialogInfo(resetDialogOpen);
+
   return (
     <div className="space-y-6">
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={resetDialogOpen !== null} onOpenChange={(open) => !open && setResetDialogOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{resetDialogInfo.title}</DialogTitle>
+            <DialogDescription>{resetDialogInfo.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setResetDialogOpen(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={resetDialogInfo.onConfirm}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset to Defaults
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1059,8 +1239,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("call-handling")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveCallSettings} disabled={saving || !callSettingsModified}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1422,8 +1606,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("call-features")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveCallFeaturesSettings} disabled={saving || !callFeaturesModified}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1793,8 +1981,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("voice")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveVoiceSettings} disabled={saving || !voiceSettingsModified}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2128,8 +2320,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("calendar")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveCalendarSettings} disabled={saving || !calendarSettingsModified}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2330,8 +2526,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("notifications")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveNotificationSettings} disabled={saving || !notificationSettingsModified}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -2891,8 +3091,12 @@ export function SettingsClient({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Save/Reset Buttons */}
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" onClick={() => setResetDialogOpen("advanced-ai")} disabled={saving}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </Button>
               <Button onClick={saveAdvancedAiSettings} disabled={saving || (!advancedAiSettingsModified && !advancedRetellModified)}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
