@@ -3,15 +3,15 @@
 /**
  * Step 1: Business Type Selector
  * Spec Reference: Part 5, Lines 216-220
- * - Dropdown with 20+ business types
- * - "Other" option with text field
+ * - Searchable dropdown with 20+ business types
+ * - "Other" option with text field for custom business types
  * - On selection: "Loading Koya's template for [type]..."
  * - Template pre-fills next screens
  */
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ChevronDown, Check } from "lucide-react";
+import { Loader2, ChevronDown, Check, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,50 @@ export function Step1BusinessType({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sort and filter business types based on search query
+  const filteredBusinessTypes = useMemo(() => {
+    const sorted = [...businessTypes].sort((a, b) =>
+      a.type_name.localeCompare(b.type_name)
+    );
+
+    if (!searchQuery.trim()) {
+      return sorted;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return sorted.filter(
+      (t) =>
+        t.type_name.toLowerCase().includes(query) ||
+        t.type_slug.toLowerCase().includes(query)
+    );
+  }, [businessTypes, searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (isDropdownOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isDropdownOpen]);
 
   // Load business types on mount if not provided
   useEffect(() => {
@@ -184,7 +228,7 @@ export function Step1BusinessType({
       <div className="space-y-4">
         <Label htmlFor="business-type">Business Type</Label>
 
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             id="business-type"
@@ -219,137 +263,74 @@ export function Step1BusinessType({
 
           {/* Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute z-50 mt-2 max-h-80 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
-              {/* Grouped by category */}
-              <div className="p-2">
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Home Services
+            <div className="absolute z-50 mt-2 w-full rounded-lg border border-border bg-card shadow-lg">
+              {/* Search Input */}
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search business types..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-8 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                {businessTypes
-                  .filter((t) =>
-                    [
-                      "hvac",
-                      "plumbing",
-                      "electrical",
-                      "roofing",
-                      "landscaping",
-                      "cleaning",
-                      "pest_control",
-                    ].includes(t.type_slug)
-                  )
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
+              </div>
 
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Automotive
+              {/* Scrollable Business Types List */}
+              <div className="max-h-64 overflow-auto p-2">
+                {filteredBusinessTypes.length > 0 ? (
+                  <>
+                    <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {searchQuery
+                        ? `${filteredBusinessTypes.length} result${filteredBusinessTypes.length === 1 ? "" : "s"}`
+                        : `${businessTypes.length} business types`}
+                    </div>
+                    {filteredBusinessTypes.map((type) => (
+                      <DropdownItem
+                        key={type.type_slug}
+                        label={type.type_name}
+                        selected={selectedType === type.type_slug}
+                        onClick={() => {
+                          handleTypeSelect(type.type_slug, type.type_name);
+                          setSearchQuery("");
+                        }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                    No matching business types found.
+                    <br />
+                    <span className="text-primary">
+                      Select &quot;Other&quot; below to describe your business.
+                    </span>
+                  </div>
+                )}
+
+                {/* Other option - always visible at the bottom */}
+                <div className="border-t border-border mt-2 pt-2">
+                  <DropdownItem
+                    label="Other - I'll describe my business"
+                    selected={selectedType === "other"}
+                    onClick={() => {
+                      handleTypeSelect("other", "Other");
+                      setSearchQuery("");
+                    }}
+                    highlight
+                  />
                 </div>
-                {businessTypes
-                  .filter((t) =>
-                    ["auto_repair", "auto_detailing"].includes(t.type_slug)
-                  )
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
-
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Medical & Wellness
-                </div>
-                {businessTypes
-                  .filter((t) =>
-                    [
-                      "dental",
-                      "chiropractic",
-                      "med_spa",
-                      "massage",
-                      "salon",
-                    ].includes(t.type_slug)
-                  )
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
-
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Professional Services
-                </div>
-                {businessTypes
-                  .filter((t) =>
-                    ["legal", "accounting", "real_estate", "insurance"].includes(
-                      t.type_slug
-                    )
-                  )
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
-
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Food & Hospitality
-                </div>
-                {businessTypes
-                  .filter((t) => ["restaurant"].includes(t.type_slug))
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
-
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Creative & Pet Services
-                </div>
-                {businessTypes
-                  .filter((t) =>
-                    ["photography", "pet_care"].includes(t.type_slug)
-                  )
-                  .map((type) => (
-                    <DropdownItem
-                      key={type.type_slug}
-                      label={type.type_name}
-                      selected={selectedType === type.type_slug}
-                      onClick={() =>
-                        handleTypeSelect(type.type_slug, type.type_name)
-                      }
-                    />
-                  ))}
-
-                <div className="border-t border-border my-2" />
-                <DropdownItem
-                  label="Other (I'll describe it)"
-                  selected={selectedType === "other"}
-                  onClick={() => handleTypeSelect("other", "Other")}
-                />
               </div>
             </div>
           )}
@@ -414,10 +395,12 @@ function DropdownItem({
   label,
   selected,
   onClick,
+  highlight,
 }: {
   label: string;
   selected: boolean;
   onClick: () => void;
+  highlight?: boolean;
 }) {
   return (
     <button
@@ -427,7 +410,9 @@ function DropdownItem({
         "flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors",
         selected
           ? "bg-primary/10 text-primary"
-          : "text-foreground hover:bg-muted"
+          : highlight
+            ? "text-primary/80 hover:bg-primary/5 hover:text-primary font-medium"
+            : "text-foreground hover:bg-muted"
       )}
     >
       {label}
