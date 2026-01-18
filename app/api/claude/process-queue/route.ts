@@ -258,7 +258,6 @@ async function processQueueItem(
 
   try {
     // Mark as processing
-    // @ts-ignore - Supabase type inference issue
     await supabase
       .from("prompt_regeneration_queue")
       .update({ status: "processing" })
@@ -300,7 +299,6 @@ async function processQueueItem(
     }
 
     // Mark as completed
-    // @ts-ignore - Supabase type inference issue
     await supabase
       .from("prompt_regeneration_queue")
       .update({
@@ -326,7 +324,6 @@ async function markQueueFailed(
   queueId: string,
   errorMessage: string
 ): Promise<void> {
-  // @ts-ignore - Supabase type inference issue
   await supabase
     .from("prompt_regeneration_queue")
     .update({
@@ -551,7 +548,6 @@ async function savePrompts(
 
     const newVersion = (current?.system_prompt_version || 0) + 1;
 
-    // @ts-ignore - Supabase type inference issue
     const { error } = await supabase
       .from("ai_config")
       .update({

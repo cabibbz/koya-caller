@@ -285,7 +285,6 @@ async function savePrompts(
     const newVersion = (current?.system_prompt_version || 0) + 1;
 
     // Update ai_config with new prompts
-    // @ts-ignore - Supabase type inference issue
     const { error } = await supabase
       .from("ai_config")
       .update({

@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user owns this business
-    const { data: business, error: bizError } = await (supabase as any)
+    const { data: business, error: bizError } = await supabase
       .from("businesses")
       .select("id, user_id")
       .eq("id", businessId)
-      .single() as { data: { id: string; user_id: string } | null; error: any };
+      .single() as { data: { id: string; user_id: string | null } | null; error: unknown };
 
     if (bizError || !business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
@@ -80,9 +80,7 @@ export async function POST(request: NextRequest) {
 
     // If Twilio credentials aren't set, use mock mode
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-      const { error: dbError } = await supabase
-        .from("businesses")
-        // @ts-expect-error - Supabase generated types issue
+      const { error: dbError } = await (supabase.from("businesses") as any)
         .update({
           phone_number: TWILIO_PHONE_NUMBER,
           twilio_phone_sid: "mock_existing_number",
@@ -144,9 +142,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Save to database (reuse existing client)
-    const { error: dbError } = await supabase
-      .from("businesses")
-      // @ts-expect-error - Supabase generated types issue
+    const { error: dbError } = await (supabase.from("businesses") as any)
       .update({
         phone_number: TWILIO_PHONE_NUMBER,
         twilio_phone_sid: phoneNumberResource.sid,

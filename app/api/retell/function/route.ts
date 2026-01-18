@@ -700,9 +700,7 @@ async function handleBookAppointment(
     // Only include call_id if it's a valid UUID (not empty or Retell's format)
     const callId = body.call_id && body.call_id.length === 36 ? body.call_id : null;
 
-    const { data: appointment, error: aptError } = await supabase
-      .from("appointments")
-      // @ts-expect-error - Supabase generated types issue
+    const { data: appointment, error: aptError } = await (supabase.from("appointments") as any)
       .insert({
         business_id: body.business_id,
         call_id: callId,
@@ -743,8 +741,7 @@ async function handleBookAppointment(
 
       // Store external event ID for future sync/updates
       if (externalEventId) {
-        await supabase.from("appointments")
-          // @ts-expect-error - Supabase generated types issue
+        await (supabase.from("appointments") as any)
           .update({ external_event_id: externalEventId })
           .eq("id", aptData.id);
       }
@@ -781,8 +778,7 @@ async function handleBookAppointment(
 
     // Update call outcome
     if (body.call_id) {
-      await supabase.from("calls")
-        // @ts-expect-error - Supabase generated types issue
+      await (supabase.from("calls") as any)
         .update({ outcome: "booked" }).eq("id", body.call_id);
     }
 
@@ -877,8 +873,7 @@ async function handleTakeMessage(
   try {
     // Update call record with message
     if (body.call_id) {
-      await supabase.from("calls")
-        // @ts-expect-error - Supabase generated types issue
+      await (supabase.from("calls") as any)
         .update({
           outcome: "message",
           message_taken: message,
@@ -1019,8 +1014,7 @@ async function handleEndCall(
       const callData = call as { outcome: string | null } | null;
       // Only update if no outcome set yet
       if (!callData?.outcome) {
-        await supabase.from("calls")
-          // @ts-expect-error - Supabase generated types issue
+        await (supabase.from("calls") as any)
           .update({ outcome: "info" }).eq("id", body.call_id);
       }
     }

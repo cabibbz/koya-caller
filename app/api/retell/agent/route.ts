@@ -118,10 +118,8 @@ export async function POST(request: NextRequest) {
 
     if (!isRetellConfigured()) {
       const mockAgentId = `agent_mock_${Date.now()}`;
-      
-      await adminSupabase
-        .from("ai_config")
-        // @ts-expect-error - Supabase generated types issue with ai_config table
+
+      await (adminSupabase.from("ai_config") as any)
         .upsert({
           business_id: body.businessId,
           voice_id: voiceId,
@@ -129,7 +127,7 @@ export async function POST(request: NextRequest) {
           spanish_enabled: spanishEnabled,
           language_mode: languageMode,
           greeting: body.customGreeting || (configData?.greeting as string) || DEFAULT_GREETINGS.english[personality],
-          greeting_spanish: spanishEnabled 
+          greeting_spanish: spanishEnabled
             ? body.customGreetingSpanish || (configData?.greeting_spanish as string) || DEFAULT_GREETINGS.spanish[personality]
             : null,
           retell_agent_id: mockAgentId,
@@ -231,9 +229,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await adminSupabase
-      .from("ai_config")
-      // @ts-expect-error - Supabase generated types issue with ai_config table
+    await (adminSupabase.from("ai_config") as any)
       .upsert({
         business_id: body.businessId,
         voice_id: voiceId,
@@ -350,9 +346,7 @@ export async function PATCH(request: NextRequest) {
     updates.retell_agent_version = ((configData.retell_agent_version as number) || 0) + 1;
     updates.updated_at = new Date().toISOString();
 
-    await adminSupabase
-      .from("ai_config")
-      // @ts-expect-error - Supabase generated types issue
+    await (adminSupabase.from("ai_config") as any)
       .update(updates)
       .eq("business_id", body.businessId);
 
@@ -421,9 +415,7 @@ export async function DELETE(request: NextRequest) {
       await deleteAgent(configData.retell_agent_id);
     }
 
-    await adminSupabase
-      .from("ai_config")
-      // @ts-expect-error - Supabase generated types issue
+    await (adminSupabase.from("ai_config") as any)
       .update({
         retell_agent_id: null,
         retell_agent_id_spanish: null,

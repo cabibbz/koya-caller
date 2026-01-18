@@ -111,6 +111,9 @@ export interface Database {
           minutes_used_this_cycle: number
           minutes_included: number
           last_usage_alert_percent: number
+          // Phone columns (migration 20241222000001)
+          phone_number: string | null
+          twilio_phone_sid: string | null
         }
         Insert: {
           id?: string
@@ -136,6 +139,8 @@ export interface Database {
           minutes_used_this_cycle?: number
           minutes_included?: number
           last_usage_alert_percent?: number
+          phone_number?: string | null
+          twilio_phone_sid?: string | null
         }
         Update: {
           id?: string
@@ -161,6 +166,8 @@ export interface Database {
           minutes_used_this_cycle?: number
           minutes_included?: number
           last_usage_alert_percent?: number
+          phone_number?: string | null
+          twilio_phone_sid?: string | null
         }
         Relationships: [
           {
@@ -1718,6 +1725,120 @@ export interface Database {
         }
         Relationships: []
       }
+
+      // ============================================
+      // Admin Audit Logs (admin actions tracking)
+      // ============================================
+      admin_audit_logs: {
+        Row: {
+          id: string
+          admin_user_id: string | null
+          admin_email: string | null
+          action: string
+          target_type: string | null
+          target_id: string | null
+          previous_value: string | null
+          new_value: string | null
+          ip_address: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id?: string | null
+          admin_email?: string | null
+          action: string
+          target_type?: string | null
+          target_id?: string | null
+          previous_value?: string | null
+          new_value?: string | null
+          ip_address?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string | null
+          admin_email?: string | null
+          action?: string
+          target_type?: string | null
+          target_id?: string | null
+          previous_value?: string | null
+          new_value?: string | null
+          ip_address?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+
+      // ============================================
+      // Announcements (system announcements)
+      // ============================================
+      announcements: {
+        Row: {
+          id: string
+          title: string
+          content: string
+          type: string
+          is_active: boolean
+          starts_at: string
+          ends_at: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          content: string
+          type?: string
+          is_active?: boolean
+          starts_at?: string
+          ends_at?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          content?: string
+          type?: string
+          is_active?: boolean
+          starts_at?: string
+          ends_at?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: []
+      }
+
+      // ============================================
+      // System Logs (application logging)
+      // ============================================
+      system_logs: {
+        Row: {
+          id: string
+          level: string
+          category: string | null
+          message: string
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          level: string
+          category?: string | null
+          message: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          level?: string
+          category?: string | null
+          message?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1726,6 +1847,35 @@ export interface Database {
       tenant_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      increment_usage_minutes: {
+        Args: {
+          p_business_id: string
+          p_minutes: number
+        }
+        Returns: {
+          id: string
+          minutes_used_this_cycle: number
+          minutes_included: number
+        }[]
+      }
+      increment_caller_count: {
+        Args: {
+          p_business_id: string
+          p_phone_number: string
+        }
+        Returns: void
+      }
+      update_caller_profile: {
+        Args: {
+          p_business_id: string
+          p_phone_number: string
+          p_name?: string | null
+          p_email?: string | null
+          p_outcome?: string | null
+          p_preferences?: Json
+        }
+        Returns: void
       }
     }
     Enums: {
@@ -1772,6 +1922,10 @@ export type SiteSettingRow = Database['public']['Tables']['site_settings']['Row'
 export type BlogPostRow = Database['public']['Tables']['blog_posts']['Row']
 export type BlogGenerationQueueRow = Database['public']['Tables']['blog_generation_queue']['Row']
 export type BlogPresetRow = Database['public']['Tables']['blog_presets']['Row']
+// Admin tables
+export type AdminAuditLogRow = Database['public']['Tables']['admin_audit_logs']['Row']
+export type AnnouncementRow = Database['public']['Tables']['announcements']['Row']
+export type SystemLogRow = Database['public']['Tables']['system_logs']['Row']
 
 // Extract Insert types
 export type UserInsert = Database['public']['Tables']['users']['Insert']
@@ -1804,6 +1958,10 @@ export type SiteSettingInsert = Database['public']['Tables']['site_settings']['I
 export type BlogPostInsert = Database['public']['Tables']['blog_posts']['Insert']
 export type BlogGenerationQueueInsert = Database['public']['Tables']['blog_generation_queue']['Insert']
 export type BlogPresetInsert = Database['public']['Tables']['blog_presets']['Insert']
+// Admin tables
+export type AdminAuditLogInsert = Database['public']['Tables']['admin_audit_logs']['Insert']
+export type AnnouncementInsert = Database['public']['Tables']['announcements']['Insert']
+export type SystemLogInsert = Database['public']['Tables']['system_logs']['Insert']
 
 // Extract Update types
 export type UserUpdate = Database['public']['Tables']['users']['Update']
@@ -1836,3 +1994,7 @@ export type SiteSettingUpdate = Database['public']['Tables']['site_settings']['U
 export type BlogPostUpdate = Database['public']['Tables']['blog_posts']['Update']
 export type BlogGenerationQueueUpdate = Database['public']['Tables']['blog_generation_queue']['Update']
 export type BlogPresetUpdate = Database['public']['Tables']['blog_presets']['Update']
+// Admin tables
+export type AdminAuditLogUpdate = Database['public']['Tables']['admin_audit_logs']['Update']
+export type AnnouncementUpdate = Database['public']['Tables']['announcements']['Update']
+export type SystemLogUpdate = Database['public']['Tables']['system_logs']['Update']

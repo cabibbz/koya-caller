@@ -219,10 +219,7 @@ export async function updateCallerProfile(
 
   try {
     // Try to upsert caller profile
-    // Note: caller_profiles table is added by migration - type errors expected until then
-    const { error } = await supabase
-      .from("caller_profiles")
-      // @ts-expect-error - Table schema added by migration 20250110000001
+    const { error } = await (supabase.from("caller_profiles") as any)
       .upsert(
         {
           business_id: businessId,
@@ -260,8 +257,7 @@ export async function incrementCallerCallCount(
 
   try {
     // Try to increment call count
-    // @ts-expect-error - increment_caller_count function added by migration
-    await supabase.rpc("increment_caller_count", {
+    await (supabase as any).rpc("increment_caller_count", {
       p_business_id: businessId,
       p_phone_number: normalizedNumber
     });
