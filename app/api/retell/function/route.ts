@@ -17,7 +17,8 @@ import {
 } from "@/lib/claude/error-templates";
 import { createCalendarClient, createAppointmentEvent } from "@/lib/calendar";
 import { DateTime } from "luxon";
-import { logError } from "@/lib/logging";
+import { logError, logWarning } from "@/lib/logging";
+import { sanitizeSqlPattern } from "@/lib/security";
 
 // =============================================================================
 // Types
@@ -210,7 +211,7 @@ async function handleFindNextAvailable(
         .from("services")
         .select("duration_minutes")
         .eq("business_id", body.business_id)
-        .ilike("name", `%${service}%`)
+        .ilike("name", `%${sanitizeSqlPattern(String(service))}%`)
         .single();
 
       const serviceInfo = serviceData as { duration_minutes: number } | null;
@@ -417,7 +418,7 @@ async function handleCheckAvailability(
         .from("services")
         .select("duration_minutes")
         .eq("business_id", body.business_id)
-        .ilike("name", `%${service}%`)
+        .ilike("name", `%${sanitizeSqlPattern(String(service))}%`)
         .single();
 
       const serviceInfo = serviceData as { duration_minutes: number } | null;
@@ -568,7 +569,7 @@ async function handleBookAppointment(
       .from("services")
       .select("id, name, duration_minutes")
       .eq("business_id", body.business_id)
-      .ilike("name", `%${service}%`)
+      .ilike("name", `%${sanitizeSqlPattern(String(service))}%`)
       .single();
 
     const serviceInfo = serviceData as { id: string; name: string; duration_minutes: number } | null;
@@ -770,8 +771,12 @@ async function handleBookAppointment(
         body: `Your appointment at ${businessData?.name || "our office"} is confirmed for ${formattedDate} at ${formattedTime}. Service: ${aptData.service_name}. Reply CANCEL to cancel.`,
         messageType: "booking_confirmation",
       });
-    } catch (_smsError) {
-      // Error handled silently
+    } catch (smsError) {
+      // Log SMS failure but don't fail the booking
+      logWarning(
+        "Booking SMS",
+        `Failed to send confirmation to ***${customer_phone.slice(-4)} for business ${body.business_id}: ${smsError instanceof Error ? smsError.message : "Unknown error"}`
+      );
     }
 
     // Update call outcome
@@ -910,8 +915,12 @@ async function handleTakeMessage(
             body: `${urgencyEmoji} Message from ${caller_name} (${caller_phone}): "${message.substring(0, 100)}${message.length > 100 ? "..." : ""}"`,
             messageType: "message_alert",
           });
-        } catch (_smsError) {
-          // Error handled silently
+        } catch (smsError) {
+          // Log SMS failure - this is important as it's a message alert to business owner
+          logWarning(
+            "Message Alert SMS",
+            `Failed to send ${urgency} message alert to business owner for ${body.business_id}: ${smsError instanceof Error ? smsError.message : "Unknown error"}`
+          );
         }
       }
     }

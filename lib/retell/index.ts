@@ -30,6 +30,14 @@ import { logError } from "@/lib/logging";
 const RETELL_API_KEY = process.env.RETELL_API_KEY;
 
 /**
+ * Get base URL without trailing slash for consistent URL construction
+ */
+function getBaseUrl(): string {
+  const url = process.env.NEXT_PUBLIC_SITE_URL || 'https://koya-caller.com';
+  return url.replace(/\/$/, ''); // Remove trailing slash if present
+}
+
+/**
  * Get Retell client instance
  * Returns null if API key is not configured (for mock mode)
  */
@@ -82,7 +90,7 @@ export async function createRetellLLM(options: {
         description: fn.description,
         parameters: fn.parameters,
         speak_after_execution: true,
-        url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://koya-caller.com'}/api/retell/function`,
+        url: `${getBaseUrl()}/api/retell/function`,
       }));
     }
 
@@ -142,7 +150,7 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       // Enable call recording for replay functionality
       enable_recording: true,
       // Set webhook URL for call events
-      webhook_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://koya-caller.com'}/api/retell/webhook`,
+      webhook_url: `${getBaseUrl()}/api/retell/webhook`,
       // Enable post-call analysis for summary generation
       post_call_analysis_data: [
         {

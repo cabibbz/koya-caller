@@ -181,13 +181,7 @@ export async function POST(request: NextRequest) {
         // Detect language from transcript or metadata
         const language = metadata.language || "en";
 
-        // Update or insert call record
-        const { data: existingCall } = await supabase
-          .from("calls")
-          .select("id")
-          .eq("retell_call_id", call.call_id)
-          .single();
-
+        // Upsert call record (prevents race condition if multiple webhooks arrive simultaneously)
         const callData = {
           business_id: businessId,
           retell_call_id: call.call_id,
@@ -207,19 +201,15 @@ export async function POST(request: NextRequest) {
           outcome: outcome,
         };
 
-        if (existingCall) {
-          const { error: updateError } = await supabase
-            .from("calls")
-            .update(callData)
-            .eq("id", existingCall.id);
-          if (updateError) {
-            logError("Retell Webhook", updateError);
-          }
-        } else {
-          const { error: insertError } = await supabase.from("calls").insert(callData);
-          if (insertError) {
-            logError("Retell Webhook", insertError);
-          }
+        const { error: upsertError } = await supabase
+          .from("calls")
+          .upsert(callData, {
+            onConflict: "retell_call_id",
+            ignoreDuplicates: false
+          });
+
+        if (upsertError) {
+          logError("Retell Webhook call upsert", upsertError);
         }
 
         // Update business minutes usage
@@ -237,7 +227,7 @@ export async function POST(request: NextRequest) {
           .eq("retell_call_id", call.call_id)
           .single();
 
-        const callId = callRecord?.id || existingCall?.id;
+        const callId = callRecord?.id;
 
         // Trigger missed call alert if applicable
         if (outcome === "missed" && call.from_number && callId) {
