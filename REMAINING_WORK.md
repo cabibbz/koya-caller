@@ -20,28 +20,29 @@
 
 ## Critical Issues
 
-### 1. Notifications Disabled in Production
+### 1. ~~Notifications Disabled in Production~~ ✅ FIXED
 
-**File:** `app/api/twilio/status/route.ts` line 159
+**Status:** Fixed on January 18, 2025 (commit ec6fc05)
 
-**Problem:** Missed call notifications are hardcoded as disabled with `return;`
+**Original Problem:** The description was misleading. The actual issues were:
+1. Inngest function queried non-existent columns (`sms_missed_call` instead of `sms_missed`, `email_missed_call` instead of `email_missed`)
+2. Missing `email_missed` column and feature entirely
 
-**Current Code:**
-```typescript
-return; // Notifications disabled
-```
+**Fix Applied:**
+- Fixed Inngest function column names in `lib/inngest/functions/missed-call-alerts.ts`
+- Added `email_missed` column via migration `20250118000001_add_email_missed.sql`
+- Added email missed call toggle to Settings UI
+- Updated Twilio status route to support both SMS and email notifications
+- Updated TypeScript types
 
-**Impact:** Users will NOT receive alerts when calls are missed
-
-**Fix Required:**
-- Remove the early return
-- Ensure notification logic is properly connected to email/SMS service
-- Test with actual missed calls
-
-**Related Files:**
-- `lib/email/index.ts` - Email sending functions
-- `lib/twilio/index.ts` - SMS sending functions
-- `lib/inngest/functions/missed-call-alerts.ts` - Background job for alerts
+**Files Changed:**
+- `lib/inngest/functions/missed-call-alerts.ts` - Fixed column name queries
+- `app/api/twilio/status/route.ts` - Added email notification support
+- `app/(dashboard)/settings/settings-client.tsx` - Added UI toggle
+- `app/api/dashboard/settings/notifications/route.ts` - Handle emailMissed field
+- `types/index.ts`, `types/supabase.ts` - Added email_missed type
+- `supabase/full_schema.sql` - Added email_missed column
+- `supabase/migrations/20250118000001_add_email_missed.sql` - Migration
 
 ---
 
@@ -593,7 +594,7 @@ Use this section to track completion:
 
 | # | Item | Status | Date | Notes |
 |---|------|--------|------|-------|
-| 1 | Enable notifications | ⬜ Not Started | | |
+| 1 | Enable notifications | ✅ Complete | Jan 18, 2025 | Fixed column names, added email_missed |
 | 2 | Error reporting | ⬜ Not Started | | |
 | 3 | TypeScript fixes | ⬜ Not Started | | |
 | 4 | Mock mode handling | ⬜ Not Started | | |
@@ -621,4 +622,4 @@ Use this section to track completion:
 ---
 
 *Document created: January 18, 2025*
-*Last updated: January 18, 2025*
+*Last updated: January 18, 2025 - Fixed #1 (Missed call notifications)*
