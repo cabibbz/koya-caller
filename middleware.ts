@@ -78,6 +78,9 @@ const PROTECTED_ROUTES = ["/dashboard", "/onboarding", "/admin"];
 // Routes only for unauthenticated users
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
+// Public routes that should redirect authenticated users to dashboard
+const PUBLIC_REDIRECT_ROUTES = ["/"];
+
 // Routes that require completed onboarding (subscription active)
 const SUBSCRIPTION_REQUIRED_ROUTES = ["/dashboard"];
 
@@ -114,6 +117,19 @@ export async function middleware(request: NextRequest) {
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone();
     // Check if user has completed onboarding (has tenant_id)
+    const tenantId = user.app_metadata?.tenant_id;
+    if (tenantId) {
+      url.pathname = "/dashboard";
+    } else {
+      url.pathname = "/onboarding";
+    }
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect authenticated users away from public marketing pages (landing page)
+  const isPublicRedirectRoute = PUBLIC_REDIRECT_ROUTES.includes(pathname);
+  if (isPublicRedirectRoute && user) {
+    const url = request.nextUrl.clone();
     const tenantId = user.app_metadata?.tenant_id;
     if (tenantId) {
       url.pathname = "/dashboard";
