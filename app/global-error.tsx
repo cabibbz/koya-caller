@@ -3,18 +3,32 @@
 /**
  * Global Error Page
  * Handles errors in the root layout
+ * Reports errors to Sentry for production monitoring
  */
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function GlobalError({
-  error: _error,
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Report critical error to Sentry
+    Sentry.captureException(error, {
+      tags: {
+        errorBoundary: "global",
+        digest: error.digest,
+        critical: "true",
+      },
+    });
+  }, [error]);
+
   return (
     <html>
       <body>

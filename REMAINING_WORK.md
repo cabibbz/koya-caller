@@ -46,32 +46,50 @@
 
 ---
 
-### 2. Error Reporting Not Implemented
+### 2. ~~Error Reporting Not Implemented~~ ✅ FIXED
 
-**File:** `app/error.tsx` line 21
+**Status:** Fixed on January 18, 2025
 
-**Problem:** No centralized error tracking for production issues
+**Fix Applied:**
+- Installed `@sentry/nextjs` SDK
+- Created Sentry configuration files for client, server, and edge runtimes
+- Updated `next.config.js` to integrate Sentry with source map upload support
+- Updated `lib/logging/index.ts` to automatically report errors to Sentry
+- Updated `app/error.tsx` to capture errors in Sentry
+- Updated `app/global-error.tsx` to capture critical errors in Sentry
+- Updated CSP headers to allow Sentry connections
 
-**Current Code:**
-```typescript
-// Error logged to error reporting service (implementation pending)
+**Files Created:**
+- `sentry.client.config.ts` - Client-side Sentry configuration
+- `sentry.server.config.ts` - Server-side Sentry configuration
+- `sentry.edge.config.ts` - Edge runtime Sentry configuration
+
+**Files Modified:**
+- `next.config.js` - Added withSentryConfig wrapper and CSP updates
+- `lib/logging/index.ts` - logError and logErrorWithMeta now report to Sentry
+- `app/error.tsx` - Reports errors to Sentry with error boundary context
+- `app/global-error.tsx` - Reports critical errors to Sentry
+
+**Environment Variables Required:**
+```env
+# Required for Sentry to work
+NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
+SENTRY_DSN=your-sentry-dsn
+
+# Optional: for source map uploads
+SENTRY_AUTH_TOKEN=your-auth-token
+SENTRY_ORG=your-org
+SENTRY_PROJECT=your-project
+
+# Optional: enable in development
+SENTRY_ENABLED=true
 ```
 
-**Impact:** Production errors won't be tracked, debugging issues will be difficult
-
-**Fix Required:**
-- Choose error reporting service (Sentry recommended)
-- Install SDK: `npm install @sentry/nextjs`
-- Configure Sentry DSN in environment variables
-- Wrap app with error boundary
-- Add source maps for better stack traces
-
-**Implementation Steps:**
+**Setup Instructions:**
 1. Create Sentry account at https://sentry.io
-2. Run `npx @sentry/wizard@latest -i nextjs`
-3. Add `SENTRY_DSN` to `.env`
-4. Update `app/error.tsx` to report errors
-5. Test by throwing intentional error
+2. Create a new Next.js project in Sentry
+3. Copy the DSN and add to environment variables
+4. Deploy - errors will automatically be reported
 
 ---
 
@@ -528,8 +546,12 @@ INNGEST_SIGNING_KEY=
 # Demo
 RETELL_DEMO_AGENT_ID=
 
-# Error Reporting (after implementing)
+# Error Reporting (Sentry)
+NEXT_PUBLIC_SENTRY_DSN=
 SENTRY_DSN=
+SENTRY_AUTH_TOKEN=          # Optional: for source map uploads
+SENTRY_ORG=                 # Optional: for source map uploads
+SENTRY_PROJECT=             # Optional: for source map uploads
 ```
 
 ---
@@ -552,7 +574,7 @@ SENTRY_DSN=
 - [ ] Spanish language support (selector works, agent not created)
 - [ ] Calendar sync (one-way only)
 - [ ] Appointment reminders (schema only)
-- [ ] Error reporting (pending)
+- [x] Error reporting (Sentry integrated)
 - [ ] Advanced analytics (basic metrics only)
 
 ### Not Implemented
@@ -595,7 +617,7 @@ Use this section to track completion:
 | # | Item | Status | Date | Notes |
 |---|------|--------|------|-------|
 | 1 | Enable notifications | ✅ Complete | Jan 18, 2025 | Fixed column names, added email_missed |
-| 2 | Error reporting | ⬜ Not Started | | |
+| 2 | Error reporting | ✅ Complete | Jan 18, 2025 | Sentry SDK integrated |
 | 3 | TypeScript fixes | ⬜ Not Started | | |
 | 4 | Mock mode handling | ⬜ Not Started | | |
 | 5 | Spanish support | ⬜ Not Started | | |
@@ -622,4 +644,4 @@ Use this section to track completion:
 ---
 
 *Document created: January 18, 2025*
-*Last updated: January 18, 2025 - Fixed #1 (Missed call notifications)*
+*Last updated: January 18, 2025 - Fixed #1 (Missed call notifications), #2 (Sentry error reporting)*

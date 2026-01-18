@@ -3,9 +3,11 @@
 /**
  * Error Page
  * Handles runtime errors in the application
+ * Reports errors to Sentry for production monitoring
  */
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import Link from "next/link";
@@ -18,7 +20,13 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Error logged to error reporting service (implementation pending)
+    // Report error to Sentry
+    Sentry.captureException(error, {
+      tags: {
+        errorBoundary: "app",
+        digest: error.digest,
+      },
+    });
   }, [error]);
 
   return (

@@ -1,3 +1,4 @@
+const { withSentryConfig } = require("@sentry/nextjs");
 const withBundleAnalyzer = require("@next/bundle-analyzer")({
   enabled: process.env.ANALYZE === "true",
 });
@@ -65,7 +66,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co https://api.retellai.com",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.retellai.com wss://api.retellai.com https://api.stripe.com https://api.twilio.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.retellai.com wss://api.retellai.com https://api.stripe.com https://api.twilio.com https://*.sentry.io https://*.ingest.sentry.io",
               "frame-src 'self' https://js.stripe.com",
               "media-src 'self' https://*.supabase.co blob:",
               "worker-src 'self' blob:",
@@ -77,4 +78,24 @@ const nextConfig = {
   },
 };
 
-module.exports = withBundleAnalyzer(nextConfig);
+// Sentry configuration options
+const sentryWebpackPluginOptions = {
+  // Suppresses source map uploading logs during build
+  silent: true,
+  // Upload source maps to Sentry for better stack traces
+  // Requires SENTRY_AUTH_TOKEN environment variable
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  // Only upload source maps in production builds
+  dryRun: process.env.NODE_ENV !== "production",
+  // Hide source maps from browser devtools in production
+  hideSourceMaps: true,
+  // Automatically tree-shake Sentry logger statements
+  disableLogger: true,
+};
+
+// Chain the config wrappers: Sentry -> BundleAnalyzer -> nextConfig
+module.exports = withSentryConfig(
+  withBundleAnalyzer(nextConfig),
+  sentryWebpackPluginOptions
+);
