@@ -394,6 +394,7 @@ export interface NotificationSettings {
   sms_usage_alerts: boolean;
   email_daily: boolean;
   email_weekly: boolean;
+  email_missed: boolean;
   sms_customer_confirmation: boolean;
   sms_customer_reminder: ReminderSetting;
 }

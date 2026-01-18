@@ -286,6 +286,7 @@ export function SettingsClient({
     smsUsageAlerts: initialNotificationSettings?.sms_usage_alerts ?? true,
     emailDaily: initialNotificationSettings?.email_daily ?? false,
     emailWeekly: initialNotificationSettings?.email_weekly ?? true,
+    emailMissed: initialNotificationSettings?.email_missed ?? true,
     smsCustomerConfirmation: initialNotificationSettings?.sms_customer_confirmation ?? true,
     smsCustomerReminder: (initialNotificationSettings?.sms_customer_reminder || "24hr") as ReminderSetting,
   });
@@ -2261,6 +2262,22 @@ export function SettingsClient({
                     checked={notificationSettings.emailWeekly}
                     onCheckedChange={(checked) => {
                       setNotificationSettings({ ...notificationSettings, emailWeekly: checked });
+                      setNotificationSettingsModified(true);
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Missed call alerts</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Email when a call goes unanswered
+                    </p>
+                  </div>
+                  <Switch
+                    checked={notificationSettings.emailMissed}
+                    onCheckedChange={(checked) => {
+                      setNotificationSettings({ ...notificationSettings, emailMissed: checked });
                       setNotificationSettingsModified(true);
                     }}
                   />

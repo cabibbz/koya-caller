@@ -48,8 +48,8 @@ export const sendMissedCallAlertEvent = inngest.createFunction(
             number
           ),
           notification_settings (
-            sms_missed_call,
-            email_missed_call
+            sms_missed,
+            email_missed
           )
         `)
         .eq("id", businessId)
@@ -75,7 +75,7 @@ export const sendMissedCallAlertEvent = inngest.createFunction(
     const results: { sms?: boolean; email?: boolean } = {};
 
     // Send SMS alert if enabled
-    if (settings.sms_missed_call !== false && ownerPhone) {
+    if (settings.sms_missed !== false && ownerPhone) {
       await step.run("send-sms-alert", async () => {
         const result = await sendMissedCallAlert({
           to: ownerPhone,
@@ -89,7 +89,7 @@ export const sendMissedCallAlertEvent = inngest.createFunction(
     }
 
     // Send email alert if enabled
-    if (settings.email_missed_call !== false && ownerEmail) {
+    if (settings.email_missed !== false && ownerEmail) {
       await step.run("send-email-alert", async () => {
         const dashboardUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://app.koyacaller.com"}/calls?id=${callId}`;
 

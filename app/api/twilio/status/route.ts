@@ -130,7 +130,7 @@ async function handleMissedCall(params: {
   timestamp: string;
 }) {
   const { supabase, businessId, fromNumber, toNumber, callStatus, timestamp } = params;
-  
+
   // Create a call record for the missed call
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any)
@@ -146,68 +146,81 @@ async function handleMissedCall(params: {
       outcome: "missed",
       summary: `Missed call (${callStatus})`,
     });
-  
+
   // Check notification settings
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: notificationSettings } = await (supabase as any)
     .from("notification_settings")
-    .select("sms_missed")
+    .select("sms_missed, email_missed")
     .eq("business_id", businessId)
-    .single() as { data: { sms_missed: boolean } | null };
-  
-  if (!notificationSettings?.sms_missed) {
-    return; // Notifications disabled
+    .single() as { data: { sms_missed: boolean; email_missed: boolean } | null };
+
+  // Return early if both notifications are disabled
+  if (!notificationSettings?.sms_missed && !notificationSettings?.email_missed) {
+    return;
   }
-  
-  // Get owner's phone number
+
+  // Get business details and owner info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: business } = await (supabase as any)
     .from("businesses")
-    .select("user_id")
+    .select("user_id, name")
     .eq("id", businessId)
-    .single() as { data: { user_id: string } | null };
-  
+    .single() as { data: { user_id: string; name: string } | null };
+
   if (!business?.user_id) return;
-  
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: user } = await (supabase as any)
     .from("users")
-    .select("phone")
+    .select("phone, email")
     .eq("id", business.user_id)
-    .single() as { data: { phone: string | null } | null };
-  
-  if (!user?.phone) return;
-  
+    .single() as { data: { phone: string | null; email: string | null } | null };
+
   // Format time for display
   const callTime = new Date(timestamp).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   });
-  
-  // Send missed call alert
-  const result = await sendMissedCallAlert({
-    to: user.phone,
-    from: toNumber,
-    callerPhone: fromNumber,
-    callTime,
-  });
-  
-  if (result.success && result.sid) {
-    // Record the SMS in database
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("sms_messages")
-      .insert({
-        business_id: businessId,
-        direction: "outbound",
-        message_type: "message_alert",
-        from_number: toNumber,
-        to_number: user.phone,
-        body: `Missed call from ${formatPhoneDisplay(fromNumber)}`,
-        twilio_sid: result.sid,
-        status: "sent",
-      });
+
+  // Send SMS alert if enabled and phone is available
+  if (notificationSettings?.sms_missed && user?.phone) {
+    const result = await sendMissedCallAlert({
+      to: user.phone,
+      from: toNumber,
+      callerPhone: fromNumber,
+      callTime,
+    });
+
+    if (result.success && result.sid) {
+      // Record the SMS in database
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("sms_messages")
+        .insert({
+          business_id: businessId,
+          direction: "outbound",
+          message_type: "message_alert",
+          from_number: toNumber,
+          to_number: user.phone,
+          body: `Missed call from ${formatPhoneDisplay(fromNumber)}`,
+          twilio_sid: result.sid,
+          status: "sent",
+        });
+    }
+  }
+
+  // Send email alert if enabled and email is available
+  if (notificationSettings?.email_missed && user?.email) {
+    const { sendMissedCallEmail } = await import("@/lib/email");
+    await sendMissedCallEmail({
+      to: user.email,
+      businessName: business.name,
+      callerPhone: formatPhoneDisplay(fromNumber),
+      callTime,
+      dashboardUrl: `${process.env.NEXT_PUBLIC_SITE_URL || "https://app.koyacaller.com"}/calls`,
+    });
   }
 }
 

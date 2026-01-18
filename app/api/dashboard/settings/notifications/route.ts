@@ -47,6 +47,7 @@ async function handler(request: NextRequest) {
       // Owner email notifications
       emailDaily,
       emailWeekly,
+      emailMissed,
       // Customer notifications
       smsCustomerConfirmation,
       smsCustomerReminder,
@@ -75,6 +76,7 @@ async function handler(request: NextRequest) {
     // Owner email notifications
     if (emailDaily !== undefined) updateData.email_daily = emailDaily;
     if (emailWeekly !== undefined) updateData.email_weekly = emailWeekly;
+    if (emailMissed !== undefined) updateData.email_missed = emailMissed;
 
     // Customer notifications
     if (smsCustomerConfirmation !== undefined) {

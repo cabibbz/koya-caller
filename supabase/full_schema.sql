@@ -382,6 +382,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
   -- Owner email
   email_daily boolean DEFAULT false,
   email_weekly boolean DEFAULT true,
+  email_missed boolean DEFAULT true,
 
   -- Customer notifications
   sms_customer_confirmation boolean DEFAULT true,
