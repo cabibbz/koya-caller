@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBusinessByUserId } from "@/lib/db/core";
-import { queuePromptRegeneration } from "@/lib/claude/queue";
+import { triggerImmediateRegeneration } from "@/lib/claude/queue";
 import { withDashboardRateLimit } from "@/lib/rate-limit/middleware";
 import { logError } from "@/lib/logging";
 
@@ -64,8 +64,11 @@ async function handler(request: NextRequest) {
       );
     }
 
-    // Queue prompt regeneration since offer settings affect AI behavior
-    await queuePromptRegeneration(supabase, business.id, "offer_settings_update");
+    // Trigger immediate prompt regeneration and Retell sync
+    // (Don't await - let it run in background, settings are already saved)
+    triggerImmediateRegeneration(business.id).catch((error) => {
+      logError("Offer Settings - Retell Sync", error);
+    });
 
     return NextResponse.json({
       success: true,
