@@ -278,6 +278,8 @@ export function OutboundClient() {
 
   // Import contacts
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importText, setImportText] = useState("");
   const [importingContacts, setImportingContacts] = useState(false);
 
   // Settings state
@@ -547,20 +549,58 @@ export function OutboundClient() {
     }
   };
 
-  const handleImportContacts = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file upload - loads content into text box
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    try {
+      const text = await file.text();
+      setImportText(text);
+      toast({ title: "File loaded", description: "Review the contacts and click Import to add them" });
+    } catch {
+      toast({ title: "Error", description: "Could not read the file", variant: "destructive" });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Handle drag and drop
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (!file.name.match(/\.(txt|csv|tsv)$/i)) {
+      toast({ title: "Invalid file", description: "Please upload a .txt, .csv, or .tsv file", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      setImportText(text);
+      toast({ title: "File loaded", description: "Review the contacts and click Import to add them" });
+    } catch {
+      toast({ title: "Error", description: "Could not read the file", variant: "destructive" });
+    }
+  };
+
+  // Process the text box content and create contacts
+  const processImportText = async () => {
+    if (!importText.trim()) {
+      toast({ title: "No data", description: "Enter contacts or upload a file first", variant: "destructive" });
+      return;
+    }
 
     setImportingContacts(true);
 
     try {
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).filter(line => line.trim());
+      const lines = importText.split(/\r?\n/).filter(line => line.trim());
 
-      // Parse contacts from file
-      // Supports formats:
-      // - CSV: name,phone,email (with or without header)
-      // - TXT: One entry per line - can be "name, phone, email" or just phone numbers
+      // Parse contacts from text
       const contacts: Array<{ name?: string; phone: string; email?: string }> = [];
 
       // Phone regex - matches various formats
@@ -611,7 +651,7 @@ export function OutboundClient() {
       }
 
       if (contacts.length === 0) {
-        toast({ title: "No contacts found", description: "Could not parse any valid phone numbers from the file", variant: "destructive" });
+        toast({ title: "No contacts found", description: "Could not parse any valid phone numbers", variant: "destructive" });
         return;
       }
 
@@ -649,15 +689,13 @@ export function OutboundClient() {
 
       if (created > 0) {
         fetchContacts();
+        setImportDialogOpen(false);
+        setImportText("");
       }
-    } catch (error) {
-      toast({ title: "Import failed", description: "Could not read the file", variant: "destructive" });
+    } catch {
+      toast({ title: "Import failed", description: "Could not process the contacts", variant: "destructive" });
     } finally {
       setImportingContacts(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
@@ -1167,28 +1205,15 @@ export function OutboundClient() {
               )}
               <Button
                 variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importingContacts}
+                onClick={() => setImportDialogOpen(true)}
               >
-                {importingContacts ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4 mr-2" />
-                )}
+                <Upload className="h-4 w-4 mr-2" />
                 Import
               </Button>
               <Button variant="outline" onClick={() => setCreateContactOpen(true)}>
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add Contact
               </Button>
-              {/* Hidden file input for import */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt,.csv,.tsv"
-                onChange={handleImportContacts}
-                className="hidden"
-              />
             </div>
           </div>
 
@@ -1571,6 +1596,81 @@ export function OutboundClient() {
                 <UserPlus className="h-4 w-4 mr-2" />
               )}
               Add Contact
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Contacts Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import Contacts
+            </DialogTitle>
+            <DialogDescription>
+              Paste contacts or upload a file. Format: <code className="bg-muted px-1 rounded">name, phone, email</code> (one per line)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Drag and drop area */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors"
+            >
+              <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">
+                Drag and drop a file here, or click to browse
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Supports .txt, .csv, .tsv
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.tsv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* Text area for contacts */}
+            <div className="space-y-2">
+              <Label>Contact List</Label>
+              <Textarea
+                placeholder={"John Doe, (555) 123-4567, john@example.com\nJane Smith, 555-987-6543, jane@example.com\n(555) 111-2222"}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                rows={8}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                {importText.split(/\r?\n/).filter(l => l.trim()).length} lines
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImportDialogOpen(false);
+                setImportText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={processImportText} disabled={importingContacts || !importText.trim()}>
+              {importingContacts ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
+              Import Contacts
             </Button>
           </DialogFooter>
         </DialogContent>
