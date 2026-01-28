@@ -28,6 +28,16 @@ export const POST = withAuth(async (request: NextRequest, { business }) => {
       );
     }
 
+    // Validate email addresses
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = to.filter((r: any) => !r.email || !emailRegex.test(r.email));
+    if (invalidEmails.length > 0) {
+      return NextResponse.json(
+        { error: "Invalid email address in recipients" },
+        { status: 400 }
+      );
+    }
+
     const result = await sendMessage(grant.grantId, {
       to,
       cc,

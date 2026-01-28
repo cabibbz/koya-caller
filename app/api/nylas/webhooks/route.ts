@@ -38,12 +38,15 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const signature = request.headers.get("x-nylas-signature") || "";
 
-    // Verify signature if secret is configured
-    if (process.env.NYLAS_WEBHOOK_SECRET) {
-      if (!verifyNylasWebhook(rawBody, signature)) {
-        logError("Nylas Webhook", "Invalid webhook signature");
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
+    // Verify webhook signature — reject if secret is not configured
+    if (!process.env.NYLAS_WEBHOOK_SECRET) {
+      logError("Nylas Webhook", "NYLAS_WEBHOOK_SECRET not configured — rejecting webhook");
+      return NextResponse.json({ error: "Webhook verification not configured" }, { status: 500 });
+    }
+
+    if (!verifyNylasWebhook(rawBody, signature)) {
+      logError("Nylas Webhook", "Invalid webhook signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const payload = parseNylasWebhook(JSON.parse(rawBody));

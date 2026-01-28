@@ -78,8 +78,12 @@ export function ConnectionsClient() {
         }),
       });
       const json = await res.json();
-      if (json.authUrl) {
-        window.location.href = json.authUrl;
+      // success() wraps in { data: { authUrl } }
+      const authUrl = json.data?.authUrl || json.authUrl;
+      if (authUrl) {
+        window.location.href = authUrl;
+      } else {
+        setConnecting(null);
       }
     } catch {
       setConnecting(null);

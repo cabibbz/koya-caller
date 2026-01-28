@@ -89,6 +89,7 @@ export async function createCalendarEvent(
     attendees?: Array<{ name: string; email: string }>;
     location?: string;
     conferencing?: boolean;
+    provider?: string;
   }
 ) {
   const nylas = getNylasClient();
@@ -114,8 +115,9 @@ export async function createCalendarEvent(
   }
 
   if (params.conferencing) {
+    const conferencingProvider = params.provider === "microsoft" ? "Microsoft Teams" : "Google Meet";
     requestBody.conferencing = {
-      provider: "Google Meet",
+      provider: conferencingProvider,
       autocreate: {},
     };
   }
@@ -177,29 +179,42 @@ export async function storeNylasGrant(
   email: string,
   provider: string
 ) {
-  const supabase = createAdminClient() as AnySupabaseClient;
+  const mappedProvider = provider === "microsoft" ? "outlook" : provider;
 
-  const { error } = await supabase
-    .from("calendar_integrations")
-    .upsert(
-      {
-        business_id: businessId,
-        provider: provider === "microsoft" ? "outlook" : provider,
+  // Use direct Supabase Management API / pg connection to bypass PostgREST schema cache
+  // PostgREST may silently drop columns it doesn't know about after migration
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  // Use PostgREST PATCH (update) with explicit headers
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/calendar_integrations?business_id=eq.${businessId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        provider: mappedProvider,
         grant_id: grantId,
         grant_email: email,
         grant_provider: provider,
         grant_status: "active",
-        connected_at: new Date().toISOString(),
-      },
-      { onConflict: "business_id" }
-    );
+      }),
+    }
+  );
 
-  if (error) {
-    logError("Nylas Grant Store", error);
-    throw error;
+  if (!res.ok) {
+    const errBody = await res.text();
+    logError("Nylas Grant Store", `HTTP ${res.status}: ${errBody}`);
+    throw new Error(`Failed to store grant: ${res.status}`);
   }
 
-  logInfo("Nylas Grant", `Stored grant ${grantId} for business ${businessId}`);
+  const result = await res.json();
+  logInfo("Nylas Grant", `Stored grant ${grantId} for business ${businessId}, rows updated: ${result.length}`);
 }
 
 /**

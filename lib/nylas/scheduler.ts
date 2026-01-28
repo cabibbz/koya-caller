@@ -79,7 +79,12 @@ export async function createSchedulerConfig(
     },
   };
 
-  const response = await (nylas as any).schedulers?.configurations?.create({
+  const schedulers = (nylas as any).schedulers?.configurations;
+  if (!schedulers?.create) {
+    throw new Error("Nylas SDK does not support scheduler configurations — check SDK version");
+  }
+
+  const response = await schedulers.create({
     identifier: grantId,
     requestBody,
   });
@@ -105,7 +110,12 @@ export async function deleteSchedulerConfig(
 ): Promise<void> {
   const nylas = getNylasClient();
 
-  await (nylas as any).schedulers?.configurations?.destroy({
+  const schedulers = (nylas as any).schedulers?.configurations;
+  if (!schedulers?.destroy) {
+    throw new Error("Nylas SDK does not support scheduler configurations — check SDK version");
+  }
+
+  await schedulers.destroy({
     identifier: grantId,
     configurationId: configId,
   });

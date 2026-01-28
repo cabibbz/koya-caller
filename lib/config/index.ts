@@ -135,11 +135,9 @@ export const FEATURES = {
   industryPrompts: true,
 
   // Integrations
-  googleCalendar: !!process.env.NYLAS_API_KEY,
-  outlookCalendar: !!process.env.NYLAS_API_KEY,
+  nylasIntegration: !!process.env.NYLAS_API_KEY,
   stripePayments: !!process.env.STRIPE_SECRET_KEY,
   twilioSms: !!process.env.TWILIO_MESSAGING_SERVICE_SID,
-  emailNotifications: !!process.env.NYLAS_API_KEY,
 
   // Background jobs
   inngestJobs: !!process.env.INNGEST_EVENT_KEY,
@@ -309,13 +307,6 @@ export function getIconUrl(): string {
  */
 export function isFeatureEnabled(feature: keyof typeof FEATURES): boolean {
   return FEATURES[feature];
-}
-
-/**
- * Get callback URL for OAuth flows
- */
-export function getOAuthCallbackUrl(provider: "google" | "outlook"): string {
-  return buildUrl(`/api/calendar/${provider}/callback`);
 }
 
 /**

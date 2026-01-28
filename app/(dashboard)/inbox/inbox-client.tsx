@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,10 +18,21 @@ import {
   RefreshCw,
   Star,
   Paperclip,
-  X,
   Inbox,
   Plus,
 } from "lucide-react";
+
+const PURIFY_CONFIG = {
+  ALLOWED_TAGS: [
+    "p", "br", "b", "i", "u", "strong", "em", "a", "ul", "ol", "li",
+    "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code",
+    "table", "thead", "tbody", "tr", "th", "td", "div", "span", "img", "hr",
+  ],
+  ALLOWED_ATTR: ["href", "src", "alt", "class", "style", "target", "rel", "width", "height"],
+  ALLOW_DATA_ATTR: false,
+  ADD_ATTR: ["target"],
+  FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "textarea", "select"],
+};
 
 interface EmailMessage {
   id: string;
@@ -294,7 +306,9 @@ export function InboxClient() {
               <CardContent>
                 <div
                   className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: selectedMessage.body }}
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(selectedMessage.body, PURIFY_CONFIG),
+                  }}
                 />
                 <div className="mt-6 pt-4 border-t flex gap-2">
                   <Button size="sm" onClick={() => handleReply(selectedMessage)}>

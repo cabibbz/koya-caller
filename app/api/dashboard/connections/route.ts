@@ -28,7 +28,7 @@ export const GET = withAuth(async (_request, { business }) => {
   const { data: integration, error: dbError } = await (supabase as any)
     .from("calendar_integrations")
     .select(
-      "provider, grant_id, grant_email, grant_provider, grant_status, nylas_calendar_id, connected_at"
+      "provider, grant_id, grant_email, grant_provider, grant_status, nylas_calendar_id, updated_at"
     )
     .eq("business_id", business.id)
     .maybeSingle();
@@ -37,6 +37,8 @@ export const GET = withAuth(async (_request, { business }) => {
     logError("Connections API DB", dbError);
     return NextResponse.json(NOT_CONNECTED);
   }
+
+  console.log("[Connections API] integration row:", JSON.stringify(integration));
 
   if (!integration?.grant_id || integration.grant_status !== "active") {
     return NextResponse.json(NOT_CONNECTED);
@@ -73,7 +75,7 @@ export const GET = withAuth(async (_request, { business }) => {
     connected: true,
     provider: integration.grant_provider,
     email: integration.grant_email,
-    connectedAt: integration.connected_at,
+    connectedAt: integration.updated_at,
     calendarId: integration.nylas_calendar_id,
     features: {
       calendar: true,

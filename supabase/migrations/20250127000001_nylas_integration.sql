@@ -13,6 +13,11 @@ ALTER TABLE calendar_integrations
   ADD COLUMN IF NOT EXISTS scheduler_config_id TEXT,
   ADD COLUMN IF NOT EXISTS nylas_calendar_id TEXT;
 
+-- Relax provider constraint to allow Nylas-managed providers
+ALTER TABLE calendar_integrations DROP CONSTRAINT IF EXISTS valid_provider;
+ALTER TABLE calendar_integrations ADD CONSTRAINT valid_provider
+  CHECK (provider IN ('google', 'outlook', 'built_in', 'microsoft'));
+
 -- Index for grant lookups
 CREATE INDEX IF NOT EXISTS idx_calendar_integrations_grant_id
   ON calendar_integrations(grant_id) WHERE grant_id IS NOT NULL;

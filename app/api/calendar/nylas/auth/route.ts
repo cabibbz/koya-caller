@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/auth-middleware";
 import { getNylasClient, NYLAS_CLIENT_ID, NYLAS_REDIRECT_URI } from "@/lib/nylas/client";
 import { logError } from "@/lib/logging";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,18 @@ async function handlePost(
     const returnUrl = body.returnUrl || "/settings?tab=calendar";
     const providerHint = body.provider; // optional: "google" or "microsoft"
 
-    // Encode state with business ID and return URL
+    // Encode state with business ID, return URL, timestamp, and HMAC signature
+    const stateSecret = process.env.NYLAS_WEBHOOK_SECRET || process.env.NEXTAUTH_SECRET || "fallback-state-secret";
+    const statePayload = {
+      businessId: business.id,
+      returnUrl,
+      timestamp: Date.now(),
+      nonce: crypto.randomBytes(8).toString("hex"),
+    };
+    const payloadStr = JSON.stringify(statePayload);
+    const hmac = crypto.createHmac("sha256", stateSecret).update(payloadStr).digest("hex");
     const state = Buffer.from(
-      JSON.stringify({
-        businessId: business.id,
-        returnUrl,
-      })
+      JSON.stringify({ ...statePayload, hmac })
     ).toString("base64url");
 
     const nylas = getNylasClient();
