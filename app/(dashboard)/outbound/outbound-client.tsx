@@ -57,10 +57,6 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
   Sheet,
   SheetContent,
   SheetHeader,
@@ -674,25 +670,46 @@ export function OutboundClient() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-3 bg-muted">
-          <TabsTrigger value="campaigns" className="gap-2">
-            <Phone className="h-4 w-4" />
-            Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="calls" className="gap-2">
-            <History className="h-4 w-4" />
-            Call Log
-          </TabsTrigger>
-          <TabsTrigger value="contacts" className="gap-2">
-            <Users className="h-4 w-4" />
-            Contacts
-          </TabsTrigger>
-        </TabsList>
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+        <button
+          onClick={() => setActiveTab("campaigns")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === "campaigns"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <Phone className="h-4 w-4" />
+          Campaigns
+        </button>
+        <button
+          onClick={() => setActiveTab("calls")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === "calls"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <History className="h-4 w-4" />
+          Call Log
+        </button>
+        <button
+          onClick={() => setActiveTab("contacts")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === "contacts"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          Contacts
+        </button>
+      </div>
 
-        {/* Campaigns Tab */}
-        <TabsContent value="campaigns" className="space-y-4">
+      {/* Campaigns Tab */}
+      {activeTab === "campaigns" && (
+        <div className="space-y-4">
           {campaignsLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -883,10 +900,12 @@ export function OutboundClient() {
               ))}
             </div>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Call Log Tab */}
-        <TabsContent value="calls" className="space-y-4">
+      {/* Call Log Tab */}
+      {activeTab === "calls" && (
+        <div className="space-y-4">
           {callsLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -997,10 +1016,12 @@ export function OutboundClient() {
               )}
             </>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Contacts Tab */}
-        <TabsContent value="contacts" className="space-y-4">
+      {/* Contacts Tab */}
+      {activeTab === "contacts" && (
+        <div className="space-y-4">
           {/* Search and actions bar */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 flex gap-2">
@@ -1152,8 +1173,8 @@ export function OutboundClient() {
               )}
             </>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {/* Settings Sheet */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
