@@ -5,7 +5,7 @@
  * Unified interface for campaigns, contacts, call history, and settings
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Phone,
@@ -38,6 +38,8 @@ import {
   ChevronRight,
   Filter,
   PlayCircle,
+  Upload,
+  FileText,
 } from "lucide-react";
 import {
   Button,
@@ -273,6 +275,10 @@ export function OutboundClient() {
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [newContact, setNewContact] = useState({ name: "", phone: "", email: "", notes: "" });
   const [creatingContact, setCreatingContact] = useState(false);
+
+  // Import contacts
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importingContacts, setImportingContacts] = useState(false);
 
   // Settings state
   const [settings, setSettings] = useState<OutboundSettings>(DEFAULT_SETTINGS);
@@ -538,6 +544,120 @@ export function OutboundClient() {
       toast({ title: "Error", description: "Failed to create contact", variant: "destructive" });
     } finally {
       setCreatingContact(false);
+    }
+  };
+
+  const handleImportContacts = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingContacts(true);
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+
+      // Parse contacts from file
+      // Supports formats:
+      // - CSV: name,phone,email (with or without header)
+      // - TXT: One entry per line - can be "name, phone, email" or just phone numbers
+      const contacts: Array<{ name?: string; phone: string; email?: string }> = [];
+
+      // Phone regex - matches various formats
+      const phoneRegex = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g;
+      // Email regex
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
+      // Check if first line looks like a header
+      const firstLine = lines[0]?.toLowerCase() || "";
+      const hasHeader = firstLine.includes("name") || firstLine.includes("phone") || firstLine.includes("email");
+      const startIndex = hasHeader ? 1 : 0;
+
+      for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Try CSV parsing first
+        const parts = line.split(/[,\t]/).map(p => p.trim().replace(/^["']|["']$/g, ""));
+
+        // Extract phone numbers from the line
+        const phones = line.match(phoneRegex);
+        const emails = line.match(emailRegex);
+
+        if (phones && phones.length > 0) {
+          // Clean the phone number
+          let phone = phones[0].replace(/\D/g, "");
+          if (phone.length === 10) phone = "1" + phone;
+          if (phone.length === 11 && phone.startsWith("1")) {
+            phone = "+" + phone;
+          }
+
+          // Try to extract name (anything that's not a phone or email)
+          let name: string | undefined;
+          if (parts.length >= 2) {
+            // If CSV format, first column is likely name
+            const potentialName = parts[0];
+            if (!potentialName.match(phoneRegex) && !potentialName.match(emailRegex)) {
+              name = potentialName;
+            }
+          }
+
+          contacts.push({
+            name: name || undefined,
+            phone,
+            email: emails?.[0] || undefined,
+          });
+        }
+      }
+
+      if (contacts.length === 0) {
+        toast({ title: "No contacts found", description: "Could not parse any valid phone numbers from the file", variant: "destructive" });
+        return;
+      }
+
+      // Create contacts via API
+      let created = 0;
+      let failed = 0;
+
+      for (const contact of contacts) {
+        try {
+          const res = await fetch("/api/dashboard/contacts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: contact.name || null,
+              phone_number: contact.phone,
+              email: contact.email || null,
+            }),
+          });
+
+          if (res.ok) {
+            created++;
+          } else {
+            failed++;
+          }
+        } catch {
+          failed++;
+        }
+      }
+
+      toast({
+        title: "Import complete",
+        description: `Created ${created} contacts${failed > 0 ? `, ${failed} failed (duplicates or invalid)` : ""}`,
+        variant: created > 0 ? "success" : "destructive",
+      });
+
+      if (created > 0) {
+        fetchContacts();
+      }
+    } catch (error) {
+      toast({ title: "Import failed", description: "Could not read the file", variant: "destructive" });
+    } finally {
+      setImportingContacts(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -1045,10 +1165,30 @@ export function OutboundClient() {
                   </Button>
                 </Link>
               )}
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importingContacts}
+              >
+                {importingContacts ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Import
+              </Button>
               <Button variant="outline" onClick={() => setCreateContactOpen(true)}>
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add Contact
               </Button>
+              {/* Hidden file input for import */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.tsv"
+                onChange={handleImportContacts}
+                className="hidden"
+              />
             </div>
           </div>
 
