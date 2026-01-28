@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getNylasAvailability } from "@/lib/nylas/availability";
 import { createCalendarClient, createAppointmentEvent } from "@/lib/calendar";
+import { sendBookingConfirmationEmail } from "@/lib/email";
 import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
     // Look up business
     const { data: business } = await (supabase as any)
       .from("businesses")
-      .select("id, name, timezone")
+      .select("id, name, timezone, phone")
       .eq("slug", slug)
       .single();
 
@@ -224,6 +225,20 @@ export async function POST(request: NextRequest) {
       }
     } catch {
       // Calendar sync failure shouldn't block booking
+    }
+
+    // Send confirmation email (non-blocking)
+    if (customerEmail) {
+      sendBookingConfirmationEmail({
+        to: customerEmail,
+        businessName: business.name,
+        customerName,
+        serviceName: service.name,
+        appointmentDate: start.toLocaleDateString(),
+        appointmentTime: start.toLocaleTimeString(),
+        businessPhone: business.phone || "",
+        businessId: business.id,
+      }).catch((err) => logError("Public Booking Email", err));
     }
 
     return NextResponse.json({

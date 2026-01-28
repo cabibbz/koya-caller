@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getNylasClient, NYLAS_CLIENT_ID, NYLAS_REDIRECT_URI } from "@/lib/nylas/client";
-import { storeNylasGrant } from "@/lib/nylas/calendar";
+import { storeNylasGrant, listCalendars } from "@/lib/nylas/calendar";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logError, logInfo } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       clientId: NYLAS_CLIENT_ID,
       redirectUri: NYLAS_REDIRECT_URI,
       code,
-      codeVerifier: "nylas",
+      codeVerifier: "",
     });
 
     const grantId = response.grantId;
@@ -69,6 +70,21 @@ export async function GET(request: NextRequest) {
 
     // Store the grant in our database
     await storeNylasGrant(businessId, grantId, email, provider);
+
+    // Fetch and store primary calendar ID
+    try {
+      const calendars = await listCalendars(grantId);
+      const primaryCal = calendars.find((c: any) => c.isPrimary) || calendars[0];
+      if (primaryCal) {
+        const supabase = createAdminClient();
+        await (supabase as any)
+          .from("calendar_integrations")
+          .update({ nylas_calendar_id: primaryCal.id })
+          .eq("business_id", businessId);
+      }
+    } catch (calErr) {
+      logError("Nylas Callback", `Failed to fetch calendars: ${calErr}`);
+    }
 
     logInfo("Nylas Callback", `Connected ${provider} calendar for business ${businessId}`);
 

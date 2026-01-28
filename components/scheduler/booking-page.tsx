@@ -398,7 +398,7 @@ export function BookingPage({ slug }: BookingPageProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="email">
-                    <Mail className="w-3 h-3 inline mr-1" /> Email
+                    <Mail className="w-3 h-3 inline mr-1" /> Email *
                   </Label>
                   <Input
                     id="email"
@@ -406,6 +406,7 @@ export function BookingPage({ slug }: BookingPageProps) {
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
                     placeholder="your@email.com"
+                    required
                   />
                 </div>
 
@@ -423,7 +424,7 @@ export function BookingPage({ slug }: BookingPageProps) {
 
               <Button
                 className="w-full"
-                disabled={!customerName || !customerPhone || submitting}
+                disabled={!customerName || !customerPhone || !customerEmail || submitting}
                 onClick={handleSubmit}
               >
                 {submitting ? (

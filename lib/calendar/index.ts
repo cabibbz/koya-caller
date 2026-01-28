@@ -84,7 +84,8 @@ export function parseOAuthState(state: string): {
 function createNylasCalendarAdapter(
   grantId: string,
   grantEmail: string,
-  calendarId: string
+  calendarId: string,
+  timezone?: string
 ): CalendarClient {
   return {
     async getFreeBusy(request): Promise<FreeBusyResponse> {
@@ -117,7 +118,7 @@ function createNylasCalendarAdapter(
         description: event.description,
         startTime: Math.floor(event.start.getTime() / 1000),
         endTime: Math.floor(event.end.getTime() / 1000),
-        timezone: "America/New_York",
+        timezone: timezone || "UTC",
         attendees: event.attendees?.map(a => ({ email: a.email, name: a.name || "" })),
         location: event.location,
         conferencing: true,
@@ -181,7 +182,20 @@ export async function createCalendarClient(
 ): Promise<CalendarClient | null> {
   const grant = await getNylasGrant(businessId);
   if (grant) {
-    return createNylasCalendarAdapter(grant.grantId, grant.grantEmail, grant.calendarId);
+    // Fetch business timezone for calendar events
+    let timezone: string | undefined;
+    try {
+      const supabase = createAdminClient();
+      const { data } = await (supabase as any)
+        .from("businesses")
+        .select("timezone")
+        .eq("id", businessId)
+        .single();
+      timezone = data?.timezone || undefined;
+    } catch {
+      // Fall back to UTC
+    }
+    return createNylasCalendarAdapter(grant.grantId, grant.grantEmail, grant.calendarId, timezone);
   }
 
   // No Nylas grant connected

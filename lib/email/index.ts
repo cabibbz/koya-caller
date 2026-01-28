@@ -40,6 +40,7 @@ export async function sendEmail(params: {
 }): Promise<EmailResult> {
   if (!NYLAS_API_KEY) {
     // Mock mode - Nylas not configured
+    logError("Email", "NYLAS_API_KEY not configured — email not sent");
     return { success: true, id: `mock_${Date.now()}` };
   }
 
@@ -273,6 +274,7 @@ export async function sendBookingConfirmationEmail(params: {
   appointmentTime: string;
   businessPhone: string;
   businessAddress?: string;
+  businessId?: string;
 }): Promise<EmailResult> {
   const {
     to,
@@ -283,6 +285,7 @@ export async function sendBookingConfirmationEmail(params: {
     appointmentTime,
     businessPhone,
     businessAddress,
+    businessId,
   } = params;
 
   const subject = `Appointment Confirmed - ${businessName}`;
@@ -367,7 +370,7 @@ See you soon!
 ${businessName}
   `.trim();
 
-  return sendEmail({ to, subject, html, text });
+  return sendEmail({ to, subject, html, text, businessId });
 }
 
 export async function sendAppointmentReminderEmail(params: {

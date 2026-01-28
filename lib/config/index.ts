@@ -69,26 +69,6 @@ export const APP_CONFIG = {
 // =============================================================================
 
 export const EXTERNAL_URLS = {
-  // Google OAuth & APIs
-  google: {
-    auth: "https://accounts.google.com/o/oauth2/v2/auth",
-    token: "https://oauth2.googleapis.com/token",
-    calendar: "https://www.googleapis.com/calendar/v3",
-    scopes: {
-      calendarReadonly: "https://www.googleapis.com/auth/calendar.readonly",
-      calendarEvents: "https://www.googleapis.com/auth/calendar.events",
-    },
-  },
-
-  // Microsoft/Azure OAuth & APIs
-  microsoft: {
-    getAuthUrl: (tenantId: string) =>
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
-    getTokenUrl: (tenantId: string) =>
-      `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-    graph: "https://graph.microsoft.com/v1.0",
-  },
-
   // Retell AI
   retell: {
     api: "https://api.retellai.com",
@@ -155,8 +135,8 @@ export const FEATURES = {
   industryPrompts: true,
 
   // Integrations
-  googleCalendar: !!process.env.GOOGLE_CLIENT_ID,
-  outlookCalendar: !!process.env.AZURE_CLIENT_ID,
+  googleCalendar: !!process.env.NYLAS_API_KEY,
+  outlookCalendar: !!process.env.NYLAS_API_KEY,
   stripePayments: !!process.env.STRIPE_SECRET_KEY,
   twilioSms: !!process.env.TWILIO_MESSAGING_SERVICE_SID,
   emailNotifications: !!process.env.NYLAS_API_KEY,
@@ -201,15 +181,10 @@ export const SERVICES = {
     apiVersion: "2025-02-24.acacia" as const,
   },
 
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  },
-
-  azure: {
-    clientId: process.env.AZURE_CLIENT_ID,
-    clientSecret: process.env.AZURE_CLIENT_SECRET,
-    tenantId: process.env.AZURE_TENANT_ID || "common",
+  nylas: {
+    apiKey: process.env.NYLAS_API_KEY,
+    clientId: process.env.NYLAS_CLIENT_ID,
+    webhookSecret: process.env.NYLAS_WEBHOOK_SECRET,
   },
 
   redis: {
