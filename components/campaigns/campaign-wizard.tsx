@@ -289,7 +289,7 @@ export function CampaignWizard() {
         variant: "success",
       });
 
-      router.push("/campaigns");
+      router.push("/outbound");
     } catch (error) {
       toast({
         title: "Error",
@@ -747,7 +747,7 @@ export function CampaignWizard() {
       <div className="mb-8">
         <Button type="button" variant="ghost" onClick={() => router.push("/campaigns")} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Campaigns
+          Back to Outbound
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Create Campaign</h1>
         <p className="text-muted-foreground">
