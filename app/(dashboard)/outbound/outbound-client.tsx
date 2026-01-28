@@ -282,6 +282,10 @@ export function OutboundClient() {
   const [importText, setImportText] = useState("");
   const [importingContacts, setImportingContacts] = useState(false);
 
+  // Delete contacts
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingContacts, setDeletingContacts] = useState(false);
+
   // Settings state
   const [settings, setSettings] = useState<OutboundSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<OutboundSettings>(DEFAULT_SETTINGS);
@@ -717,6 +721,38 @@ export function OutboundClient() {
     } else {
       setSelectedContacts(new Set(contacts.map(c => c.id)));
     }
+  };
+
+  const handleDeleteSelectedContacts = async () => {
+    setDeletingContacts(true);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const contactId of selectedContacts) {
+      try {
+        const res = await fetch(`/api/dashboard/contacts/${contactId}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          deleted++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    toast({
+      title: "Contacts deleted",
+      description: `Deleted ${deleted} contacts${failed > 0 ? `, ${failed} failed` : ""}`,
+      variant: deleted > 0 ? "success" : "destructive",
+    });
+
+    setSelectedContacts(new Set());
+    setDeleteDialogOpen(false);
+    setDeletingContacts(false);
+    fetchContacts();
   };
 
   // =============================================================================
@@ -1196,12 +1232,21 @@ export function OutboundClient() {
             </div>
             <div className="flex gap-2">
               {selectedContacts.size > 0 && (
-                <Link href={`/campaigns/create?contacts=${Array.from(selectedContacts).join(",")}`}>
-                  <Button variant="secondary">
-                    <Phone className="h-4 w-4 mr-2" />
-                    Create Campaign ({selectedContacts.size})
+                <>
+                  <Link href={`/campaigns/create?contacts=${Array.from(selectedContacts).join(",")}`}>
+                    <Button variant="secondary">
+                      <Phone className="h-4 w-4 mr-2" />
+                      Create Campaign ({selectedContacts.size})
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete ({selectedContacts.size})
                   </Button>
-                </Link>
+                </>
               )}
               <Button
                 variant="outline"
@@ -1671,6 +1716,39 @@ export function OutboundClient() {
                 <Upload className="h-4 w-4 mr-2" />
               )}
               Import Contacts
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Contacts Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Contacts
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedContacts.size} contact{selectedContacts.size !== 1 ? "s" : ""}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSelectedContacts}
+              disabled={deletingContacts}
+            >
+              {deletingContacts ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete {selectedContacts.size} Contact{selectedContacts.size !== 1 ? "s" : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
