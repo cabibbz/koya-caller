@@ -579,11 +579,14 @@ export function prepareDynamicVariables(options: {
   if (options.isOutbound) {
     baseVars.is_outbound = "true";
     baseVars.outbound_purpose = options.outboundPurpose || "custom";
+
+    // Store custom instructions separately - these are BEHAVIORAL instructions, not spoken
     if (options.customMessage) {
-      baseVars.outbound_message = options.customMessage;
+      baseVars.outbound_instructions = options.customMessage;
     }
 
     // Build the greeting for begin_message dynamic variable
+    // Note: The greeting is what the AI SAYS, NOT the instructions
     const name = options.aiName || "Koya";
     const biz = options.businessName || "our office";
     const purpose = options.outboundPurpose || "custom";
@@ -591,9 +594,8 @@ export function prepareDynamicVariables(options: {
       baseVars.greeting = `Hi, this is ${name} calling from ${biz}. I'm calling to remind you about your upcoming appointment.`;
     } else if (purpose === "followup") {
       baseVars.greeting = `Hi, this is ${name} calling from ${biz}. I'm following up with you regarding your recent visit.`;
-    } else if (options.customMessage) {
-      baseVars.greeting = `Hi, this is ${name} calling from ${biz}. ${options.customMessage}`;
     } else {
+      // For custom purpose, use a generic greeting - the instructions guide behavior, not speech
       baseVars.greeting = `Hi, this is ${name} calling from ${biz}. How are you doing today?`;
     }
   } else {

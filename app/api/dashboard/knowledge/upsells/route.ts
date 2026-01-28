@@ -20,10 +20,7 @@ import { logError } from "@/lib/logging";
 import {
   isValidUUID,
   validateStringLength,
-  validateDiscountPercent,
   validateBoolean,
-  validateEnum,
-  TRIGGER_TIMINGS,
   LIMITS,
 } from "@/lib/validation";
 
@@ -38,21 +35,20 @@ async function handleGet(
   { business, supabase }: BusinessAuthContext
 ) {
   try {
-    // Fetch upsells
+    // Fetch upsells - using actual database schema
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: upsells, error } = await (supabase as any)
       .from("upsells")
       .select(`
         id,
-        source_service_id,
-        target_service_id,
-        discount_percent,
-        pitch_message,
-        trigger_timing,
+        name,
+        description,
+        trigger_keywords,
+        trigger_services,
+        price_cents,
         is_active,
-        suggest_when_unavailable,
-        times_offered,
-        times_accepted
+        created_at,
+        updated_at
       `)
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
@@ -62,33 +58,7 @@ async function handleGet(
       return errors.internalError("Failed to fetch upsells");
     }
 
-    // Fetch services to map names
-    const serviceIds = new Set<string>();
-    (upsells || []).forEach((u: { source_service_id: string; target_service_id: string }) => {
-      if (u.source_service_id) serviceIds.add(u.source_service_id);
-      if (u.target_service_id) serviceIds.add(u.target_service_id);
-    });
-
-    let servicesMap: Record<string, { id: string; name: string }> = {};
-    if (serviceIds.size > 0) {
-      const { data: services } = await supabase
-        .from("services")
-        .select("id, name")
-        .in("id", Array.from(serviceIds));
-
-      if (services) {
-        servicesMap = Object.fromEntries(services.map((s: { id: string; name: string }) => [s.id, s]));
-      }
-    }
-
-    // Add service names to upsells
-    const upsellsWithServices = (upsells || []).map((u: Record<string, unknown>) => ({
-      ...u,
-      source_service: servicesMap[u.source_service_id as string] || null,
-      target_service: servicesMap[u.target_service_id as string] || null,
-    }));
-
-    return success({ upsells: upsellsWithServices });
+    return success({ upsells: upsells || [] });
   } catch (error) {
     logError("Upsells GET", error);
     return errors.internalError("Failed to fetch upsells");
@@ -107,68 +77,37 @@ async function handlePost(
     const body = await request.json();
 
     const {
-      source_service_id,
-      target_service_id,
-      discount_percent = 0,
-      pitch_message,
-      trigger_timing = "before_booking",
+      name,
+      description,
+      trigger_keywords = [],
+      trigger_services = [],
+      price_cents = 0,
       is_active = true,
-      suggest_when_unavailable = false,
     } = body;
 
     // Validate required fields
-    if (!source_service_id || !target_service_id) {
-      return errors.badRequest("Source and target services are required");
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return errors.badRequest("Name is required");
     }
 
-    // Validate UUID format for service IDs
-    if (!isValidUUID(source_service_id) || !isValidUUID(target_service_id)) {
-      return errors.badRequest("Invalid service ID format");
+    // Validate name length
+    const nameError = validateStringLength(name, 100, "Name");
+    if (nameError) {
+      return errors.badRequest(nameError);
     }
 
-    if (source_service_id === target_service_id) {
-      return errors.badRequest("Source and target services must be different");
-    }
-
-    // Validate trigger_timing
-    const triggerTimingError = validateEnum(trigger_timing, TRIGGER_TIMINGS, "Trigger timing");
-    if (triggerTimingError) {
-      return errors.badRequest(triggerTimingError);
-    }
-
-    // Validate discount_percent (reject invalid values instead of clamping)
-    const discountError = validateDiscountPercent(discount_percent);
-    if (discountError) {
-      return errors.badRequest(discountError);
-    }
-
-    // Validate pitch_message length
-    const pitchError = validateStringLength(pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
-    if (pitchError) {
-      return errors.badRequest(pitchError);
+    // Validate description length if provided
+    if (description) {
+      const descError = validateStringLength(description, 500, "Description");
+      if (descError) {
+        return errors.badRequest(descError);
+      }
     }
 
     // Validate is_active is boolean
     const isActiveError = validateBoolean(is_active, "is_active");
     if (isActiveError) {
       return errors.badRequest(isActiveError);
-    }
-
-    // Validate suggest_when_unavailable is boolean
-    const suggestError = validateBoolean(suggest_when_unavailable, "suggest_when_unavailable");
-    if (suggestError) {
-      return errors.badRequest(suggestError);
-    }
-
-    // Validate services belong to this business
-    const { data: services } = await supabase
-      .from("services")
-      .select("id")
-      .eq("business_id", business.id)
-      .in("id", [source_service_id, target_service_id]);
-
-    if (!services || services.length !== 2) {
-      return errors.badRequest("One or more services not found or do not belong to your business");
     }
 
     // Check upsell count limit
@@ -182,33 +121,18 @@ async function handlePost(
       return errors.badRequest(`Maximum of ${LIMITS.MAX_UPSELLS_PER_BUSINESS} upsells allowed. Delete some before creating new ones.`);
     }
 
-    // Check for existing upsell with same service pair
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingUpsell } = await (supabase as any)
-      .from("upsells")
-      .select("id")
-      .eq("business_id", business.id)
-      .eq("source_service_id", source_service_id)
-      .eq("target_service_id", target_service_id)
-      .maybeSingle();
-
-    if (existingUpsell) {
-      return errors.conflict("An upsell for this service combination already exists");
-    }
-
     // Create upsell
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: upsell, error } = await (supabase as any)
       .from("upsells")
       .insert({
         business_id: business.id,
-        source_service_id,
-        target_service_id,
-        discount_percent: discount_percent || 0,
-        pitch_message: pitch_message?.trim() || null,
-        trigger_timing,
+        name: name.trim(),
+        description: description?.trim() || null,
+        trigger_keywords: Array.isArray(trigger_keywords) ? trigger_keywords : [],
+        trigger_services: Array.isArray(trigger_services) ? trigger_services : [],
+        price_cents: typeof price_cents === "number" ? price_cents : 0,
         is_active: is_active ?? true,
-        suggest_when_unavailable: suggest_when_unavailable ?? false,
       })
       .select()
       .single();
@@ -259,53 +183,35 @@ async function handlePut(
       return errors.badRequest("Invalid upsell ID format");
     }
 
-    // Validate service IDs if provided
-    if (upsell.source_service_id !== undefined && !isValidUUID(upsell.source_service_id)) {
-      return errors.badRequest("Invalid source service ID format");
-    }
-    if (upsell.target_service_id !== undefined && !isValidUUID(upsell.target_service_id)) {
-      return errors.badRequest("Invalid target service ID format");
-    }
-
-    // Validate trigger_timing if provided
-    if (upsell.trigger_timing !== undefined) {
-      const triggerError = validateEnum(upsell.trigger_timing, TRIGGER_TIMINGS, "Trigger timing");
-      if (triggerError) {
-        return errors.badRequest(triggerError);
+    // Validate name length if provided
+    if (upsell.name !== undefined) {
+      const nameError = validateStringLength(upsell.name, 100, "Name");
+      if (nameError) {
+        return errors.badRequest(nameError);
       }
     }
 
-    // Validate discount_percent if provided (reject invalid values instead of clamping)
-    if (upsell.discount_percent !== undefined) {
-      const discountError = validateDiscountPercent(upsell.discount_percent);
-      if (discountError) {
-        return errors.badRequest(discountError);
+    // Validate description length if provided
+    if (upsell.description !== undefined) {
+      const descError = validateStringLength(upsell.description, 500, "Description");
+      if (descError) {
+        return errors.badRequest(descError);
       }
     }
 
-    // Validate pitch_message length if provided
-    if (upsell.pitch_message !== undefined) {
-      const pitchError = validateStringLength(upsell.pitch_message, LIMITS.MAX_PITCH_LENGTH, "Pitch message");
-      if (pitchError) {
-        return errors.badRequest(pitchError);
+    // Validate boolean fields if provided
+    if (upsell.is_active !== undefined) {
+      const isActiveError = validateBoolean(upsell.is_active, "is_active");
+      if (isActiveError) {
+        return errors.badRequest(isActiveError);
       }
     }
 
-    // Validate boolean fields
-    const isActiveError = validateBoolean(upsell.is_active, "is_active");
-    if (isActiveError) {
-      return errors.badRequest(isActiveError);
-    }
-    const suggestError = validateBoolean(upsell.suggest_when_unavailable, "suggest_when_unavailable");
-    if (suggestError) {
-      return errors.badRequest(suggestError);
-    }
-
-    // Fetch the existing upsell to get current values
+    // Fetch the existing upsell to verify ownership
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingUpsell, error: fetchError } = await (supabase as any)
       .from("upsells")
-      .select("source_service_id, target_service_id")
+      .select("id")
       .eq("id", upsell.id)
       .eq("business_id", business.id)
       .single();
@@ -314,50 +220,14 @@ async function handlePut(
       return errors.notFound("Upsell");
     }
 
-    // Determine final values after update
-    const finalSourceId = upsell.source_service_id || existingUpsell.source_service_id;
-    const finalTargetId = upsell.target_service_id || existingUpsell.target_service_id;
-
-    // Validate both final service IDs belong to this business
-    const { data: services } = await supabase
-      .from("services")
-      .select("id")
-      .eq("business_id", business.id)
-      .in("id", [finalSourceId, finalTargetId]);
-
-    if (!services || services.length !== 2) {
-      return errors.badRequest("One or more services not found or do not belong to your business");
-    }
-
-    // Ensure source and target are different
-    if (finalSourceId === finalTargetId) {
-      return errors.badRequest("Source and target services must be different");
-    }
-
-    // Check for duplicate (excluding current upsell)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: duplicateUpsell } = await (supabase as any)
-      .from("upsells")
-      .select("id")
-      .eq("business_id", business.id)
-      .eq("source_service_id", finalSourceId)
-      .eq("target_service_id", finalTargetId)
-      .neq("id", upsell.id)
-      .maybeSingle();
-
-    if (duplicateUpsell) {
-      return errors.conflict("An upsell for this service combination already exists");
-    }
-
     // Build update object with only provided fields
     const updateData: Record<string, unknown> = {};
-    if (upsell.source_service_id !== undefined) updateData.source_service_id = upsell.source_service_id;
-    if (upsell.target_service_id !== undefined) updateData.target_service_id = upsell.target_service_id;
-    if (upsell.discount_percent !== undefined) updateData.discount_percent = upsell.discount_percent;
-    if (upsell.pitch_message !== undefined) updateData.pitch_message = upsell.pitch_message?.trim() || null;
-    if (upsell.trigger_timing !== undefined) updateData.trigger_timing = upsell.trigger_timing;
+    if (upsell.name !== undefined) updateData.name = upsell.name?.trim();
+    if (upsell.description !== undefined) updateData.description = upsell.description?.trim() || null;
+    if (upsell.trigger_keywords !== undefined) updateData.trigger_keywords = Array.isArray(upsell.trigger_keywords) ? upsell.trigger_keywords : [];
+    if (upsell.trigger_services !== undefined) updateData.trigger_services = Array.isArray(upsell.trigger_services) ? upsell.trigger_services : [];
+    if (upsell.price_cents !== undefined) updateData.price_cents = typeof upsell.price_cents === "number" ? upsell.price_cents : 0;
     if (upsell.is_active !== undefined) updateData.is_active = upsell.is_active;
-    if (upsell.suggest_when_unavailable !== undefined) updateData.suggest_when_unavailable = upsell.suggest_when_unavailable;
 
     // Update the upsell
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

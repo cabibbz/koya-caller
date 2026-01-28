@@ -59,6 +59,7 @@ interface CampaignData {
   scheduled_start: string;
   scheduled_end: string;
   custom_message: string;
+  ai_traits: string[];
   contact_ids: string[];
   settings: {
     daily_limit: number;
@@ -66,6 +67,46 @@ interface CampaignData {
     max_retries: number;
   };
 }
+
+// AI personality traits that get added to the prompt
+const AI_TRAITS = [
+  {
+    id: "persistent",
+    name: "Persistent",
+    description: "Keeps trying to close the sale, handles objections confidently",
+    prompt: "Be persistent and confident. When the customer raises objections, acknowledge them but redirect to the value proposition. Don't give up easily - try at least 2-3 different approaches before accepting a 'no'. Use phrases like 'I understand, but consider this...' and 'Many customers felt the same way until they saw the benefits.'",
+  },
+  {
+    id: "friendly",
+    name: "Friendly",
+    description: "Warm, casual, and builds rapport quickly",
+    prompt: "Be warm and friendly. Use casual language and build rapport quickly. Smile through your voice. Use the customer's name naturally. Share brief relatable comments and show genuine interest in them as a person, not just a sale.",
+  },
+  {
+    id: "professional",
+    name: "Professional",
+    description: "Business-like, formal, and to the point",
+    prompt: "Maintain a professional and business-like tone throughout the call. Be concise and respect the customer's time. Stick to the facts and value proposition. Avoid overly casual language or jokes.",
+  },
+  {
+    id: "empathetic",
+    name: "Empathetic",
+    description: "Understanding, patient, and listens actively",
+    prompt: "Be highly empathetic and patient. Listen actively to customer concerns and acknowledge their feelings. Use phrases like 'I completely understand' and 'That makes sense.' Take your time and never rush the customer.",
+  },
+  {
+    id: "urgent",
+    name: "Creates Urgency",
+    description: "Emphasizes limited time offers and scarcity",
+    prompt: "Create a sense of urgency without being pushy. Mention limited-time offers, availability constraints, or upcoming price changes when relevant. Use phrases like 'This offer is only available until...' and 'Spots are filling up quickly.'",
+  },
+  {
+    id: "consultative",
+    name: "Consultative",
+    description: "Asks questions and provides tailored solutions",
+    prompt: "Take a consultative approach. Ask questions to understand the customer's specific needs and pain points before presenting solutions. Tailor your pitch based on what they share. Position yourself as a helpful advisor, not a salesperson.",
+  },
+];
 
 const STEPS = [
   { id: 1, title: "Basics", icon: Settings, description: "Name and type" },
@@ -82,6 +123,7 @@ const INITIAL_DATA: CampaignData = {
   scheduled_start: "",
   scheduled_end: "",
   custom_message: "",
+  ai_traits: [],
   contact_ids: [],
   settings: {
     daily_limit: 100,
@@ -196,6 +238,16 @@ export function CampaignWizard() {
   const handleSave = async (startImmediately: boolean = false) => {
     setSaving(true);
     try {
+      // Build the full AI instructions from traits + custom message
+      const traitInstructions = data.ai_traits
+        .map((traitId) => AI_TRAITS.find((t) => t.id === traitId)?.prompt)
+        .filter(Boolean)
+        .join("\n\n");
+
+      const fullInstructions = [traitInstructions, data.custom_message]
+        .filter(Boolean)
+        .join("\n\n---\n\n");
+
       const response = await fetch("/api/dashboard/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -205,8 +257,11 @@ export function CampaignWizard() {
           type: data.type,
           scheduled_start: data.scheduled_start || null,
           scheduled_end: data.scheduled_end || null,
-          custom_message: data.custom_message || null,
-          settings: data.settings,
+          custom_message: fullInstructions || null,
+          settings: {
+            ...data.settings,
+            ai_traits: data.ai_traits,
+          },
           contact_ids: data.contact_ids,
         }),
       });
@@ -426,25 +481,64 @@ export function CampaignWizard() {
       case 3:
         return (
           <div className="space-y-6">
+            {/* AI Personality Traits */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-base font-medium">AI Personality Traits</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Select traits to shape how the AI interacts with customers
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {AI_TRAITS.map((trait) => (
+                  <label
+                    key={trait.id}
+                    className={cn(
+                      "flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
+                      data.ai_traits.includes(trait.id)
+                        ? "border-primary bg-primary/5"
+                        : "hover:border-primary/50"
+                    )}
+                  >
+                    <Checkbox
+                      checked={data.ai_traits.includes(trait.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          updateData("ai_traits", [...data.ai_traits, trait.id]);
+                        } else {
+                          updateData("ai_traits", data.ai_traits.filter((t) => t !== trait.id));
+                        }
+                      }}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{trait.name}</p>
+                      <p className="text-xs text-muted-foreground">{trait.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Instructions */}
             <div className="space-y-2">
-              <Label htmlFor="message">Custom Message</Label>
+              <Label htmlFor="message">Additional Instructions</Label>
               <Textarea
                 id="message"
-                placeholder="Enter a custom message for the AI to use during calls. Leave blank to use the default message for your campaign type."
+                placeholder="Give specific instructions for your AI. For example: 'Mention our 20% discount for new customers' or 'Ask if they need help with scheduling a follow-up appointment'."
                 value={data.custom_message}
                 onChange={(e) => updateData("custom_message", e.target.value)}
-                rows={6}
+                rows={5}
               />
               <p className="text-sm text-muted-foreground">
-                This message will guide the AI&apos;s conversation. Include key points you want mentioned.
+                Add specific talking points, offers to mention, or questions to ask. The AI will incorporate these into the conversation naturally.
               </p>
             </div>
 
             <Alert>
               <MessageSquare className="h-4 w-4" />
               <AlertDescription>
-                <strong>Tip:</strong> For {data.type} campaigns, the AI will automatically
-                include relevant details like appointment times or service information.
+                <strong>Tip:</strong> For {data.type === "appointment_reminder" ? "reminder" : data.type === "follow_up" ? "follow-up" : data.type} campaigns, the AI already knows to {data.type === "appointment_reminder" ? "confirm appointment details and handle rescheduling" : data.type === "follow_up" ? "check on customer satisfaction and offer additional services" : data.type === "marketing" ? "present your offer and handle objections" : "follow your instructions"}. Add anything extra here.
               </AlertDescription>
             </Alert>
           </div>
@@ -578,9 +672,28 @@ export function CampaignWizard() {
                 </p>
               </div>
 
+              {data.ai_traits.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">AI Personality</p>
+                  <div className="flex flex-wrap gap-2">
+                    {data.ai_traits.map((traitId) => {
+                      const trait = AI_TRAITS.find((t) => t.id === traitId);
+                      return trait ? (
+                        <span
+                          key={traitId}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary"
+                        >
+                          {trait.name}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+
               {data.custom_message && (
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Custom Message</p>
+                  <p className="text-sm text-muted-foreground">Additional Instructions</p>
                   <p className="text-sm bg-muted p-3 rounded">{data.custom_message}</p>
                 </div>
               )}

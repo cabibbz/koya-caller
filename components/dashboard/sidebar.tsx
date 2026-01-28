@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Phone,
+  PhoneOutgoing,
   Calendar,
   Brain,
   Settings,
@@ -27,8 +28,6 @@ import {
   X,
   BarChart3,
   HelpCircle,
-  Users,
-  Megaphone,
   Mail,
   Plug,
 } from "lucide-react";
@@ -53,19 +52,14 @@ const navItems = [
     icon: Phone,
   },
   {
+    labelKey: "outbound",
+    href: "/outbound",
+    icon: PhoneOutgoing,
+  },
+  {
     labelKey: "appointments",
     href: "/appointments",
     icon: Calendar,
-  },
-  {
-    labelKey: "contacts",
-    href: "/contacts",
-    icon: Users,
-  },
-  {
-    labelKey: "campaigns",
-    href: "/campaigns",
-    icon: Megaphone,
   },
   {
     labelKey: "inbox",
