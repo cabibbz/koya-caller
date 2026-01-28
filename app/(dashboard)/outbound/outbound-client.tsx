@@ -676,7 +676,7 @@ export function OutboundClient() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-md grid-cols-3 bg-muted">
           <TabsTrigger value="campaigns" className="gap-2">
             <Phone className="h-4 w-4" />
             Campaigns
