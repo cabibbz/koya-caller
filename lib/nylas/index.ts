@@ -20,3 +20,4 @@ export {
   type NylasWebhookEvent,
   type NylasWebhookPayload,
 } from "./webhooks";
+export { sendNylasEmail } from "./email";

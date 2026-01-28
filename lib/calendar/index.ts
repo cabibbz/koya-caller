@@ -9,8 +9,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CalendarClient, CalendarProvider, OAuthTokens, FreeBusyResponse, CalendarEvent, CreateEventInput, CalendarInfo } from "./types";
 import { CalendarAuthError } from "./types";
-import { createGoogleClient } from "./google";
-import { createOutlookClient } from "./outlook";
 import {
   getNylasGrant,
   getFreeBusy as nylasGetFreeBusy,
@@ -21,10 +19,8 @@ import {
   disconnectNylasGrant,
 } from "@/lib/nylas/calendar";
 
-// Re-export everything
+// Re-export types
 export * from "./types";
-export * from "./google";
-export * from "./outlook";
 
 // ============================================
 // State Token Management
@@ -178,78 +174,17 @@ function createNylasCalendarAdapter(
 
 /**
  * Create a calendar client for a business
- * Uses Nylas if a grant exists, otherwise falls back to legacy Google/Outlook
+ * Uses Nylas grant for calendar operations
  */
 export async function createCalendarClient(
   businessId: string
 ): Promise<CalendarClient | null> {
-  // Try Nylas first
   const grant = await getNylasGrant(businessId);
   if (grant) {
     return createNylasCalendarAdapter(grant.grantId, grant.grantEmail, grant.calendarId);
   }
 
-  // Fall back to legacy direct OAuth
-  const supabase = createAdminClient();
-
-  const { data: integration, error } = await (supabase as any)
-    .from("calendar_integrations")
-    .select("*")
-    .eq("business_id", businessId)
-    .single();
-
-  if (error || !integration) {
-    return null;
-  }
-
-  const provider = integration.provider as CalendarProvider;
-
-  if (provider === "built_in") {
-    return null;
-  }
-
-  if (!integration.access_token || !integration.refresh_token) {
-    return null;
-  }
-
-  const onTokenRefresh = async (tokens: OAuthTokens) => {
-    await (supabase as any)
-      .from("calendar_integrations")
-      .update({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-        token_expires_at: tokens.expiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("business_id", businessId);
-  };
-
-  const expiresAt = integration.token_expires_at
-    ? new Date(integration.token_expires_at)
-    : new Date(0);
-
-  const calendarId = integration.calendar_id || "primary";
-
-  if (provider === "google") {
-    return createGoogleClient(
-      integration.access_token,
-      integration.refresh_token,
-      expiresAt,
-      calendarId,
-      onTokenRefresh
-    );
-  }
-
-  if (provider === "outlook") {
-    return createOutlookClient(
-      integration.access_token,
-      integration.refresh_token,
-      expiresAt,
-      calendarId,
-      onTokenRefresh
-    );
-  }
-
+  // No Nylas grant connected
   return null;
 }
 
