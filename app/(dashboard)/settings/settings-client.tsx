@@ -224,6 +224,7 @@ interface SettingsClientProps {
     cycleEnd: string | null;
     stripeCustomerId: string | null;
     userEmail: string;
+    slug?: string | null;
   };
   initialCallSettings: CallSettings | null;
   initialAiConfig: AIConfig | null;
@@ -2625,6 +2626,33 @@ export function SettingsClient({
                 />
               </div>
             </div>
+
+            {/* Online Booking Link */}
+            {businessInfo.slug && (
+              <div className="space-y-3 pt-4 border-t">
+                <h3 className="text-lg font-medium">Online Booking Page</h3>
+                <p className="text-sm text-muted-foreground">
+                  Share this link with your customers so they can book online.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/book/${businessInfo.slug}`}
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/book/${businessInfo.slug}`);
+                      toast({ title: "Link copied!" });
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Save/Reset Buttons */}
             <div className="flex justify-between pt-4 border-t">
