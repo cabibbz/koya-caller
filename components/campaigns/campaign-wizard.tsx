@@ -239,7 +239,7 @@ export function CampaignWizard() {
     setSaving(true);
     try {
       // Build the full AI instructions from traits + custom message
-      const traitInstructions = data.ai_traits
+      const traitInstructions = (data.ai_traits || [])
         .map((traitId) => AI_TRAITS.find((t) => t.id === traitId)?.prompt)
         .filter(Boolean)
         .join("\n\n");
@@ -260,7 +260,7 @@ export function CampaignWizard() {
           custom_message: fullInstructions || null,
           settings: {
             ...data.settings,
-            ai_traits: data.ai_traits,
+            ai_traits: data.ai_traits || [],
           },
           contact_ids: data.contact_ids,
         }),
@@ -495,18 +495,18 @@ export function CampaignWizard() {
                     key={trait.id}
                     className={cn(
                       "flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors",
-                      data.ai_traits.includes(trait.id)
+                      (data.ai_traits || []).includes(trait.id)
                         ? "border-primary bg-primary/5"
                         : "hover:border-primary/50"
                     )}
                   >
                     <Checkbox
-                      checked={data.ai_traits.includes(trait.id)}
+                      checked={(data.ai_traits || []).includes(trait.id)}
                       onCheckedChange={(checked) => {
                         if (checked) {
-                          updateData("ai_traits", [...data.ai_traits, trait.id]);
+                          updateData("ai_traits", [...(data.ai_traits || []), trait.id]);
                         } else {
-                          updateData("ai_traits", data.ai_traits.filter((t) => t !== trait.id));
+                          updateData("ai_traits", (data.ai_traits || []).filter((t) => t !== trait.id));
                         }
                       }}
                       className="mt-0.5"
@@ -672,11 +672,11 @@ export function CampaignWizard() {
                 </p>
               </div>
 
-              {data.ai_traits.length > 0 && (
+              {(data.ai_traits || []).length > 0 && (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">AI Personality</p>
                   <div className="flex flex-wrap gap-2">
-                    {data.ai_traits.map((traitId) => {
+                    {(data.ai_traits || []).map((traitId) => {
                       const trait = AI_TRAITS.find((t) => t.id === traitId);
                       return trait ? (
                         <span
