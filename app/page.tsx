@@ -17,6 +17,7 @@ import {
   DemoSection,
   ComparisonSection,
   CTASection,
+  IntegrationsCarousel,
 } from "@/components/landing-v2";
 
 export default function LandingPage() {
@@ -27,6 +28,7 @@ export default function LandingPage() {
       <LiveStatsSection />
       <DemoSection />
       <VoicePreviewWidget />
+      <IntegrationsCarousel />
       <HowItWorksV2 />
       <ComparisonSection />
       <TestimonialsV2 />

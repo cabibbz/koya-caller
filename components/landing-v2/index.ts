@@ -20,3 +20,4 @@ export { FloatingCTA } from "./floating-cta";
 export { DemoSection } from "./demo-section";
 export { ComparisonSection } from "./comparison-section";
 export { CTASection } from "./cta-section";
+export { IntegrationsCarousel } from "./integrations-carousel";
