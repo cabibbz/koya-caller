@@ -1,24 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DOMPurify from "dompurify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader2,
   Mail,
-  MailOpen,
   Send,
-  ArrowLeft,
   Search,
   RefreshCw,
   Star,
   Paperclip,
   Inbox,
+  X,
+  Reply,
+  ChevronLeft,
   Plus,
 } from "lucide-react";
 
@@ -48,10 +48,32 @@ interface EmailMessage {
   hasAttachments: boolean;
 }
 
-type View = "list" | "detail" | "compose";
+// Get initials for avatar
+const getInitials = (name: string, email: string) => {
+  if (name && name.trim()) {
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name[0].toUpperCase();
+  }
+  return email[0]?.toUpperCase() || "?";
+};
+
+// Generate consistent color from string
+const getAvatarColor = (str: string) => {
+  const colors = [
+    "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-pink-500",
+    "bg-indigo-500", "bg-teal-500", "bg-orange-500", "bg-cyan-500",
+  ];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 export function InboxClient() {
-  const [view, setView] = useState<View>("list");
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<EmailMessage | null>(null);
@@ -59,6 +81,8 @@ export function InboxClient() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
+  const [showCompose, setShowCompose] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
 
   // Compose state
   const [composeTo, setComposeTo] = useState("");
@@ -67,11 +91,12 @@ export function InboxClient() {
   const [sending, setSending] = useState(false);
   const [replyToId, setReplyToId] = useState<string | undefined>(undefined);
 
+  // Fetch messages
   const fetchMessages = useCallback(async (searchQuery?: string, newOffset = 0) => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ limit: "25", offset: String(newOffset) });
+      const params = new URLSearchParams({ limit: "50", offset: String(newOffset) });
       if (searchQuery) params.set("search", searchQuery);
 
       const res = await fetch(`/api/dashboard/inbox?${params}`);
@@ -102,7 +127,8 @@ export function InboxClient() {
 
   const openMessage = async (msg: EmailMessage) => {
     setLoadingMessage(true);
-    setView("detail");
+    setSelectedMessage(msg);
+    setMobileView("detail");
     try {
       const res = await fetch(`/api/dashboard/inbox/${msg.id}`);
       const json = await res.json();
@@ -113,27 +139,26 @@ export function InboxClient() {
         prev.map((m) => (m.id === msg.id ? { ...m, unread: false } : m))
       );
     } catch {
-      setSelectedMessage(msg);
+      // Keep the preview version
     } finally {
       setLoadingMessage(false);
     }
   };
 
-  const handleCompose = () => {
-    setComposeTo("");
-    setComposeSubject("");
-    setComposeBody("");
-    setReplyToId(undefined);
-    setView("compose");
-  };
-
-  const handleReply = (msg: EmailMessage) => {
-    const fromAddr = msg.from[0];
-    setComposeTo(fromAddr?.email || "");
-    setComposeSubject(`Re: ${msg.subject}`);
-    setComposeBody("");
-    setReplyToId(msg.id);
-    setView("compose");
+  const handleCompose = (replyTo?: EmailMessage) => {
+    if (replyTo) {
+      const fromAddr = replyTo.from[0];
+      setComposeTo(fromAddr?.email || "");
+      setComposeSubject(`Re: ${replyTo.subject}`);
+      setComposeBody("");
+      setReplyToId(replyTo.id);
+    } else {
+      setComposeTo("");
+      setComposeSubject("");
+      setComposeBody("");
+      setReplyToId(undefined);
+    }
+    setShowCompose(true);
   };
 
   const handleSend = async () => {
@@ -152,8 +177,8 @@ export function InboxClient() {
       });
 
       if (res.ok) {
-        setView("list");
-        fetchMessages();
+        setShowCompose(false);
+        fetchMessages(search, 0);
       }
     } finally {
       setSending(false);
@@ -171,6 +196,9 @@ export function InboxClient() {
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, starred: !m.starred } : m))
       );
+      if (selectedMessage?.id === msg.id) {
+        setSelectedMessage({ ...selectedMessage, starred: !msg.starred });
+      }
     } catch {
       // Ignore
     }
@@ -182,67 +210,67 @@ export function InboxClient() {
     if (d.toDateString() === now.toDateString()) {
       return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     }
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   const formatFullDate = (unix: number) => {
     return new Date(unix * 1000).toLocaleString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
+      weekday: "short",
+      month: "short",
       day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
     });
   };
 
-  // Compose View
-  if (view === "compose") {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setView("list")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
-          <h2 className="text-lg font-semibold">
-            {replyToId ? "Reply" : "New Email"}
-          </h2>
-        </div>
-
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="to">To</Label>
-              <Input
-                id="to"
-                type="email"
-                placeholder="recipient@example.com"
-                value={composeTo}
-                onChange={(e) => setComposeTo(e.target.value)}
-              />
+  return (
+    <div className="h-[calc(100vh-8rem)] flex flex-col">
+      {/* Compose Modal */}
+      {showCompose && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="font-semibold">{replyToId ? "Reply" : "New Message"}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowCompose(false)}>
+                <X className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
-              <Input
-                id="subject"
-                placeholder="Subject"
-                value={composeSubject}
-                onChange={(e) => setComposeSubject(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="body">Message</Label>
+            <div className="flex-1 overflow-auto p-4 space-y-4">
+              <div>
+                <Label htmlFor="to" className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  id="to"
+                  type="email"
+                  placeholder="recipient@example.com"
+                  value={composeTo}
+                  onChange={(e) => setComposeTo(e.target.value)}
+                  className="border-0 border-b rounded-none px-0 focus-visible:ring-0"
+                />
+              </div>
+              <div>
+                <Label htmlFor="subject" className="text-xs text-muted-foreground">Subject</Label>
+                <Input
+                  id="subject"
+                  placeholder="Subject"
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  className="border-0 border-b rounded-none px-0 focus-visible:ring-0"
+                />
+              </div>
               <Textarea
-                id="body"
                 placeholder="Write your message..."
                 value={composeBody}
                 onChange={(e) => setComposeBody(e.target.value)}
-                rows={12}
+                className="min-h-[200px] border-0 resize-none focus-visible:ring-0"
               />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setView("list")}>
-                Cancel
+            <div className="flex justify-between items-center p-4 border-t">
+              <Button variant="ghost" onClick={() => setShowCompose(false)}>
+                Discard
               </Button>
               <Button
                 onClick={handleSend}
@@ -256,220 +284,251 @@ export function InboxClient() {
                 Send
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Detail View
-  if (view === "detail" && selectedMessage) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setView("list")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
+          </div>
         </div>
+      )}
 
-        <Card>
-          {loadingMessage ? (
-            <CardContent className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </CardContent>
-          ) : (
-            <>
-              <CardHeader>
-                <CardTitle className="text-lg">{selectedMessage.subject}</CardTitle>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <div>
-                    <span className="font-medium text-foreground">From: </span>
-                    {selectedMessage.from
-                      .map((f) => (f.name ? `${f.name} <${f.email}>` : f.email))
-                      .join(", ")}
-                  </div>
-                  <div>
-                    <span className="font-medium text-foreground">To: </span>
-                    {selectedMessage.to
-                      .map((t) => (t.name ? `${t.name} <${t.email}>` : t.email))
-                      .join(", ")}
-                  </div>
-                  {selectedMessage.cc && selectedMessage.cc.length > 0 && (
-                    <div>
-                      <span className="font-medium text-foreground">CC: </span>
-                      {selectedMessage.cc.map((c) => c.email).join(", ")}
-                    </div>
-                  )}
-                  <div>{formatFullDate(selectedMessage.date)}</div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(selectedMessage.body, PURIFY_CONFIG),
-                  }}
-                />
-                <div className="mt-6 pt-4 border-t flex gap-2">
-                  <Button size="sm" onClick={() => handleReply(selectedMessage)}>
-                    <Mail className="w-4 h-4 mr-1" /> Reply
-                  </Button>
-                </div>
-              </CardContent>
-            </>
-          )}
-        </Card>
-      </div>
-    );
-  }
-
-  // List View
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Inbox</h1>
-          <p className="text-muted-foreground text-sm">
-            Read and send emails from your connected account.
-          </p>
-        </div>
-        <Button onClick={handleCompose}>
-          <Plus className="w-4 h-4 mr-2" /> Compose
-        </Button>
-      </div>
-
-      {/* Search & Refresh */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search emails..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="pl-9"
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => fetchMessages(search, 0)}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
-
-      {error && (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">{error}</p>
-            <Button variant="link" className="mt-2" onClick={() => window.location.href = "/connections"}>
-              Go to Connections
+      {/* Main Layout */}
+      <div className="flex-1 flex overflow-hidden rounded-lg border bg-background">
+        {/* Message List */}
+        <div className={`w-80 border-r flex-shrink-0 flex flex-col ${
+          mobileView !== "list" ? "hidden md:flex" : "flex flex-1 md:flex-none"
+        }`}>
+          {/* Search Bar */}
+          <div className="p-3 border-b space-y-2">
+            <Button className="w-full" onClick={() => handleCompose()}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Message
             </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {!error && loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {!error && !loading && messages.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Inbox className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">No messages found.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {!error && !loading && messages.length > 0 && (
-        <Card>
-          <CardContent className="p-0 divide-y">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors ${
-                  msg.unread ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
-                }`}
-                onClick={() => openMessage(msg)}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="pl-9 h-9"
+                />
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={() => fetchMessages(search, 0)}
+                disabled={loading}
               >
-                <button
-                  className="shrink-0"
-                  onClick={(e) => toggleStar(msg, e)}
-                >
-                  <Star
-                    className={`w-4 h-4 ${
-                      msg.starred
-                        ? "fill-yellow-400 text-yellow-400"
-                        : "text-muted-foreground"
-                    }`}
-                  />
-                </button>
-                <div className="shrink-0">
-                  {msg.unread ? (
-                    <Mail className="w-4 h-4 text-blue-500" />
-                  ) : (
-                    <MailOpen className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-sm truncate ${
-                        msg.unread ? "font-semibold" : ""
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <ScrollArea className="flex-1">
+            {error && (
+              <div className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">{error}</p>
+                <Button variant="link" size="sm" onClick={() => window.location.href = "/connections"}>
+                  Go to Connections
+                </Button>
+              </div>
+            )}
+
+            {!error && loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
+            {!error && !loading && messages.length === 0 && (
+              <div className="p-8 text-center">
+                <Inbox className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No messages</p>
+              </div>
+            )}
+
+            {!error && !loading && messages.length > 0 && (
+              <div className="divide-y">
+                {messages.map((msg) => {
+                  const sender = msg.from[0];
+                  const senderName = sender?.name || sender?.email || "Unknown";
+                  const senderEmail = sender?.email || "";
+
+                  return (
+                    <div
+                      key={msg.id}
+                      onClick={() => openMessage(msg)}
+                      className={`p-3 cursor-pointer transition-colors ${
+                        selectedMessage?.id === msg.id
+                          ? "bg-primary/10 border-l-2 border-l-primary"
+                          : msg.unread
+                          ? "bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                          : "hover:bg-muted/50"
                       }`}
                     >
-                      {msg.from[0]?.name || msg.from[0]?.email || "Unknown"}
-                    </span>
-                    {msg.hasAttachments && (
-                      <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
-                    )}
-                  </div>
-                  <div
-                    className={`text-sm truncate ${
-                      msg.unread ? "font-medium text-foreground" : "text-muted-foreground"
-                    }`}
-                  >
-                    {msg.subject}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {msg.snippet}
-                  </div>
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                  {formatDate(msg.date)}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+                      <div className="flex gap-3">
+                        {/* Avatar */}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${getAvatarColor(senderEmail)}`}>
+                          {getInitials(senderName, senderEmail)}
+                        </div>
 
-      {/* Pagination */}
-      {!error && messages.length > 0 && (
-        <div className="flex justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset === 0}
-            onClick={() => fetchMessages(search, Math.max(0, offset - 25))}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={messages.length < 25}
-            onClick={() => fetchMessages(search, offset + 25)}
-          >
-            Next
-          </Button>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`text-sm truncate ${msg.unread ? "font-semibold" : ""}`}>
+                              {senderName}
+                            </span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDate(msg.date)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-sm truncate ${msg.unread ? "font-medium" : "text-muted-foreground"}`}>
+                              {msg.subject || "(no subject)"}
+                            </span>
+                            {msg.hasAttachments && (
+                              <Paperclip className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {msg.snippet}
+                          </p>
+                        </div>
+
+                        {/* Star */}
+                        <button
+                          className="flex-shrink-0 self-start mt-1"
+                          onClick={(e) => toggleStar(msg, e)}
+                        >
+                          <Star
+                            className={`w-4 h-4 ${
+                              msg.starred
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-muted-foreground/50 hover:text-muted-foreground"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+
+          {/* Pagination */}
+          {!error && messages.length > 0 && (
+            <div className="p-2 border-t flex justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={offset === 0}
+                onClick={() => fetchMessages(search, Math.max(0, offset - 50))}
+              >
+                Newer
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={messages.length < 50}
+                onClick={() => fetchMessages(search, offset + 50)}
+              >
+                Older
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Reading Pane */}
+        <div className={`flex-1 flex flex-col ${
+          mobileView !== "detail" ? "hidden md:flex" : "flex"
+        }`}>
+          {selectedMessage ? (
+            <>
+              {/* Mobile back button */}
+              <div className="md:hidden p-2 border-b">
+                <Button variant="ghost" size="sm" onClick={() => setMobileView("list")}>
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Back
+                </Button>
+              </div>
+
+              {loadingMessage ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {/* Email Header */}
+                  <div className="p-4 border-b">
+                    <h2 className="text-lg font-semibold mb-3">{selectedMessage.subject || "(no subject)"}</h2>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 ${getAvatarColor(selectedMessage.from[0]?.email || "")}`}>
+                        {getInitials(selectedMessage.from[0]?.name || "", selectedMessage.from[0]?.email || "")}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {selectedMessage.from[0]?.name || selectedMessage.from[0]?.email}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            &lt;{selectedMessage.from[0]?.email}&gt;
+                          </span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          To: {selectedMessage.to.map(t => t.name || t.email).join(", ")}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {formatFullDate(selectedMessage.date)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => toggleStar(selectedMessage, e)}
+                        >
+                          <Star className={`w-4 h-4 ${selectedMessage.starred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleCompose(selectedMessage)}
+                        >
+                          <Reply className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email Body */}
+                  <ScrollArea className="flex-1 p-4">
+                    <div
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(selectedMessage.body || selectedMessage.snippet, PURIFY_CONFIG),
+                      }}
+                    />
+                  </ScrollArea>
+
+                  {/* Quick Reply */}
+                  <div className="p-4 border-t">
+                    <Button variant="outline" className="w-full justify-start text-muted-foreground" onClick={() => handleCompose(selectedMessage)}>
+                      <Reply className="w-4 h-4 mr-2" />
+                      Reply to this message...
+                    </Button>
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <Mail className="w-16 h-16 mb-4 opacity-20" />
+              <p>Select a message to read</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
