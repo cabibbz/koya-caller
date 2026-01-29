@@ -83,7 +83,7 @@ const PROTECTED_ROUTES = ["/dashboard", "/onboarding", "/admin"];
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
 // Public routes that should redirect authenticated users to dashboard
-const PUBLIC_REDIRECT_ROUTES = ["/"];
+const PUBLIC_REDIRECT_ROUTES: string[] = [];
 
 // Routes that require completed onboarding (subscription active)
 const _SUBSCRIPTION_REQUIRED_ROUTES = ["/dashboard"];

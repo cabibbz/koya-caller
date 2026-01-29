@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Loader2,
   Plug,
@@ -14,6 +15,9 @@ import {
   XCircle,
   LogOut,
   ExternalLink,
+  Link2,
+  Save,
+  MessageSquare,
 } from "lucide-react";
 
 interface ConnectionData {
@@ -38,6 +42,8 @@ interface ConnectionData {
     name: string;
     unreadCount?: number;
   }>;
+  bookingPageUrl: string | null;
+  bookingLinkDelivery: "sms" | "email" | "both";
 }
 
 export function ConnectionsClient() {
@@ -45,6 +51,10 @@ export function ConnectionsClient() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [data, setData] = useState<ConnectionData | null>(null);
+  const [bookingUrl, setBookingUrl] = useState("");
+  const [bookingDelivery, setBookingDelivery] = useState<"sms" | "email" | "both">("sms");
+  const [savingBookingUrl, setSavingBookingUrl] = useState(false);
+  const [bookingUrlSaved, setBookingUrlSaved] = useState(false);
 
   const fetchConnection = async () => {
     try {
@@ -55,6 +65,8 @@ export function ConnectionsClient() {
       }
       const json = await res.json();
       setData(json);
+      setBookingUrl(json.bookingPageUrl || "");
+      setBookingDelivery(json.bookingLinkDelivery || "sms");
     } catch {
       setData(null);
     } finally {
@@ -65,6 +77,27 @@ export function ConnectionsClient() {
   useEffect(() => {
     fetchConnection();
   }, []);
+
+  const handleSaveBookingSettings = async () => {
+    setSavingBookingUrl(true);
+    setBookingUrlSaved(false);
+    try {
+      const res = await fetch("/api/dashboard/connections", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingPageUrl: bookingUrl,
+          bookingLinkDelivery: bookingDelivery,
+        }),
+      });
+      if (res.ok) {
+        setBookingUrlSaved(true);
+        setTimeout(() => setBookingUrlSaved(false), 3000);
+      }
+    } finally {
+      setSavingBookingUrl(false);
+    }
+  };
 
   const handleConnect = async (provider?: "google" | "microsoft") => {
     setConnecting(provider || "google");
@@ -304,6 +337,108 @@ export function ConnectionsClient() {
           </CardContent>
         </Card>
       )}
+
+      {/* External Booking Page */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <Link2 className="w-5 h-5" />
+            <div>
+              <CardTitle>External Booking Page</CardTitle>
+              <CardDescription>
+                If you use an external booking system (Vagaro, Square, Calendly, Fresha, etc.),
+                add your booking page URL here. Koya will send this link to callers who want to book.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <Input
+                type="url"
+                placeholder="https://your-booking-page.com"
+                value={bookingUrl}
+                onChange={(e) => setBookingUrl(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleSaveBookingSettings}
+                disabled={savingBookingUrl}
+              >
+                {savingBookingUrl ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : bookingUrlSaved ? (
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                {bookingUrlSaved ? "Saved!" : "Save"}
+              </Button>
+            </div>
+
+            {/* Delivery Method Toggle */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Send booking link via:</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBookingDelivery("sms")}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    bookingDelivery === "sms"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border border-border"
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  SMS
+                </button>
+                <button
+                  onClick={() => setBookingDelivery("email")}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    bookingDelivery === "email"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border border-border"
+                  }`}
+                >
+                  <Mail className="w-4 h-4" />
+                  Email
+                </button>
+                <button
+                  onClick={() => setBookingDelivery("both")}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    bookingDelivery === "both"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border border-border"
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  +
+                  <Mail className="w-4 h-4" />
+                  Both
+                </button>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              When a caller asks to book an appointment or check availability, Koya will offer
+              to send them this link via {bookingDelivery === "both" ? "SMS and email" : bookingDelivery.toUpperCase()}.
+            </p>
+            {bookingUrl && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                <ExternalLink className="w-4 h-4 text-blue-500" />
+                <a
+                  href={bookingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-500 hover:underline truncate"
+                >
+                  {bookingUrl}
+                </a>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

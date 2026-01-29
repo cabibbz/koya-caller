@@ -104,9 +104,9 @@ export async function POST(request: NextRequest) {
     // Fetch business knowledge to pass to Retell as dynamic variables
     const { data: business } = await supabase
       .from("businesses")
-      .select("name, business_type, timezone, address, service_area, differentiator")
+      .select("name, business_type, timezone, address, service_area, differentiator, booking_page_url, booking_link_delivery")
       .eq("id", businessId)
-      .single() as { data: { name: string; business_type: string | null; timezone: string | null; address: string | null; service_area: string | null; differentiator: string | null } | null };
+      .single() as { data: { name: string; business_type: string | null; timezone: string | null; address: string | null; service_area: string | null; differentiator: string | null; booking_page_url: string | null; booking_link_delivery: string | null } | null };
 
     // Fetch FAQs
     const { data: faqs } = await supabase
@@ -244,6 +244,10 @@ export async function POST(request: NextRequest) {
 
           // Additional knowledge
           additional_knowledge: knowledge?.content || "",
+
+          // External booking page URL (for businesses using Vagaro, Square, Calendly, etc.)
+          booking_page_url: business?.booking_page_url || "",
+          booking_link_delivery: business?.booking_link_delivery || "sms",
         },
       });
       

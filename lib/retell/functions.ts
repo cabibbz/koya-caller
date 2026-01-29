@@ -540,6 +540,8 @@ export function prepareDynamicVariables(options: {
   services?: { name: string; duration_minutes: number }[];
   faqs?: { question: string; answer: string }[];
   businessHours?: string;
+  // External booking page
+  bookingPageUrl?: string;
   // Outbound call specific
   isOutbound?: boolean;
   outboundPurpose?: "reminder" | "followup" | "custom";
@@ -567,6 +569,7 @@ export function prepareDynamicVariables(options: {
       }))
     ),
     business_hours: options.businessHours || "",
+    booking_page_url: options.bookingPageUrl || "",
     today_date: now.toISOString().split("T")[0],
     current_time: now.toLocaleTimeString("en-US", {
       hour: "2-digit",
@@ -609,7 +612,7 @@ export function prepareDynamicVariables(options: {
   const knownKeys = [
     "businessName", "aiName", "minutesExhausted", "afterHours", "canBook",
     "transferEnabled", "spanishEnabled", "languageMode", "services", "faqs",
-    "businessHours", "isOutbound", "outboundPurpose", "customMessage"
+    "businessHours", "bookingPageUrl", "isOutbound", "outboundPurpose", "customMessage"
   ];
 
   for (const [key, value] of Object.entries(options)) {
