@@ -246,6 +246,25 @@ export const SendSmsSchema = z.object({
 export type SendSmsInput = z.infer<typeof SendSmsSchema>;
 
 /**
+ * Schema for send_email function arguments
+ */
+export const SendEmailSchema = z.object({
+  to_email: z
+    .string()
+    .email("Please provide a valid email address"),
+  subject: z
+    .string()
+    .min(1, "Subject is required")
+    .max(200, "Subject must be 200 characters or less"),
+  body: z
+    .string()
+    .min(1, "Email body is required")
+    .max(10000, "Email body must be 10000 characters or less"),
+});
+
+export type SendEmailInput = z.infer<typeof SendEmailSchema>;
+
+/**
  * Optional interest validation
  * Accepts string, null, or undefined; outputs string | undefined
  */
@@ -621,6 +640,15 @@ export function validateSendSms(
   input: unknown
 ): ValidationResult<SendSmsInput> {
   return validateInput(SendSmsSchema, input, "Send SMS");
+}
+
+/**
+ * Validate send_email inputs
+ */
+export function validateSendEmail(
+  input: unknown
+): ValidationResult<SendEmailInput> {
+  return validateInput(SendEmailSchema, input, "Send Email");
 }
 
 /**

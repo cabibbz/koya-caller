@@ -33,6 +33,7 @@ import {
   validateCheckAvailability,
   validateTakeMessage,
   validateSendSms,
+  validateSendEmail,
   validateCreateLead,
   validateCheckReservation,
   validateServiceExists,
@@ -218,6 +219,10 @@ export async function POST(request: NextRequest) {
 
       case "send_sms":
         result = await handleSendSMS(adminSupabase, body);
+        break;
+
+      case "send_email":
+        result = await handleSendEmail(adminSupabase, body);
         break;
 
       case "end_call":
@@ -1125,6 +1130,67 @@ async function handleSendSMS(
     return {
       success: false,
       message: getErrorMessage("sms_failed", personality),
+    };
+  }
+}
+
+/**
+ * Send email via Nylas (connected business email account)
+ */
+async function handleSendEmail(
+  supabase: ReturnType<typeof createAdminClient>,
+  body: FunctionCallRequest
+): Promise<FunctionResult> {
+  // Validate inputs with Zod schema
+  const validation = validateSendEmail(body.arguments);
+
+  if (!validation.success) {
+    return {
+      success: false,
+      message: validation.error,
+    };
+  }
+
+  const { to_email, subject, body: emailBody } = validation.data;
+
+  try {
+    // Get the business's Nylas grant_id from calendar_integrations
+    const { data: integration } = await supabase
+      .from("calendar_integrations")
+      .select("grant_id, grant_email, grant_status")
+      .eq("business_id", body.business_id)
+      .single();
+
+    const integrationData = integration as { grant_id: string | null; grant_email: string | null; grant_status: string | null } | null;
+
+    if (!integrationData?.grant_id || integrationData.grant_status !== "active") {
+      return {
+        success: false,
+        message: "I'm not able to send emails right now. Would you like me to send a text message instead?",
+      };
+    }
+
+    // Import and use Nylas sendMessage
+    const { sendMessage } = await import("@/lib/nylas/messages");
+
+    await sendMessage(integrationData.grant_id, {
+      to: [{ email: to_email }],
+      subject,
+      body: emailBody,
+    });
+
+    return {
+      success: true,
+      message: `I've sent that email to ${to_email}. Is there anything else I can help you with?`,
+      data: { sent: true, to: to_email },
+    };
+
+  } catch (error) {
+    logError("Send Email", error);
+    const personality = await getBusinessPersonality(supabase, body.business_id);
+    return {
+      success: false,
+      message: "I wasn't able to send that email. Would you like me to send a text message instead?",
     };
   }
 }

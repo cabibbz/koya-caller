@@ -114,7 +114,7 @@ export async function getMessage(
 }
 
 /**
- * Send a message
+ * Send a message using direct REST API (SDK has auth issues)
  */
 export async function sendMessage(
   grantId: string,
@@ -127,7 +127,12 @@ export async function sendMessage(
     replyToMessageId?: string;
   }
 ): Promise<{ id: string }> {
-  const nylas = getNylasClient();
+  const apiKey = process.env.NYLAS_API_KEY;
+  if (!apiKey) {
+    throw new Error("NYLAS_API_KEY environment variable is not set");
+  }
+
+  const apiUri = (process.env.NYLAS_API_URI || "https://api.us.nylas.com").replace(/\/$/, "");
 
   const requestBody: any = {
     to: params.to.map((r) => ({ name: r.name || "", email: r.email })),
@@ -142,15 +147,25 @@ export async function sendMessage(
     requestBody.bcc = params.bcc.map((r) => ({ name: r.name || "", email: r.email }));
   }
   if (params.replyToMessageId) {
-    requestBody.replyToMessageId = params.replyToMessageId;
+    requestBody.reply_to_message_id = params.replyToMessageId;
   }
 
-  const response = await nylas.messages.send({
-    identifier: grantId,
-    requestBody,
+  const response = await fetch(`${apiUri}/v3/grants/${grantId}/messages/send`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
   });
 
-  return { id: (response.data as any).id };
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Nylas API error: HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return { id: data.data?.id || data.id };
 }
 
 /**
