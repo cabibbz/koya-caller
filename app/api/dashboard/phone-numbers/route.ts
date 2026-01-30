@@ -22,10 +22,11 @@ async function handleGet(
 ) {
   try {
     // Query phone numbers from phone_numbers table
+    // Column is "number" not "phone_number" in the database
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
     const { data: phoneNumbers, error } = await (supabase as any)
       .from("phone_numbers")
-      .select("id, phone_number, is_active, setup_type")
+      .select("id, number, is_active, setup_type")
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
 
@@ -33,15 +34,15 @@ async function handleGet(
       throw error;
     }
 
-    // Map to expected format
+    // Map to expected format (keep 'number' as is since that's the column name)
     const formattedNumbers = (phoneNumbers || []).map((phone: {
       id: string;
-      phone_number: string;
+      number: string;
       is_active: boolean;
       setup_type: string;
     }) => ({
       id: phone.id,
-      number: phone.phone_number,
+      number: phone.number,
       is_active: phone.is_active,
       setup_type: phone.setup_type
     }));

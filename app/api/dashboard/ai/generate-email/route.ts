@@ -19,7 +19,6 @@ interface GenerateEmailRequest {
   tone?: "professional" | "friendly" | "casual" | "urgent";
   purpose?: "marketing" | "follow_up" | "reminder" | "announcement" | "thank_you" | "general";
   businessName?: string;
-  businessType?: string;
   includeCallToAction?: boolean;
 }
 
@@ -51,35 +50,57 @@ export const POST = withAuth(async (request: NextRequest, { business }) => {
     const tone = body.tone || "professional";
     const purpose = body.purpose || "general";
     const businessName = body.businessName || business.name || "Our Business";
-    const businessType = body.businessType || business.business_type || "business";
     const includeCallToAction = body.includeCallToAction !== false;
 
     // Build the meta-prompt for email generation
-    const systemPrompt = `You are an expert email copywriter for small businesses. Generate professional, engaging email content that drives action while maintaining authenticity.
+    const toneDescriptions: Record<string, string> = {
+      professional: "formal and business-like, respectful and polished",
+      friendly: "warm and personable, conversational but still professional",
+      casual: "relaxed and informal, like writing to a friend",
+      urgent: "time-sensitive and action-oriented, emphasizing importance",
+    };
 
-Guidelines:
-- Write in a ${tone} tone
-- Keep emails concise but complete (150-300 words ideal)
-- Use short paragraphs for readability
-- Include a clear subject line
-- ${includeCallToAction ? "Include a clear call-to-action" : "Do not include a call-to-action"}
-- Do not use placeholder text like [Name] - write naturally
-- Do not include sender signatures - the system will add those
-- Make it feel personal, not like a template
-- For ${businessType} businesses, use appropriate terminology
+    const purposeGuidance: Record<string, string> = {
+      marketing: "promoting a product, service, or offer",
+      follow_up: "checking in after a previous interaction or visit",
+      reminder: "reminding about an upcoming appointment, event, or deadline",
+      announcement: "sharing news or an update",
+      thank_you: "expressing gratitude",
+      general: "general communication",
+    };
 
-Respond in this exact JSON format:
-{
-  "subject": "The email subject line",
-  "body": "The email body content with natural line breaks"
-}`;
+    const systemPrompt = `You are an email writer. Your job is to write an email based ONLY on what the user tells you.
 
-    const userPrompt = `Generate an email for ${businessName} (a ${businessType}).
+CRITICAL RULES - YOU MUST FOLLOW THESE:
+1. ONLY include information the user explicitly provides. Do NOT invent or assume:
+   - Specific percentages or discounts (unless user mentions them)
+   - Dates, times, or deadlines (unless user mentions them)
+   - Product names, service names, or prices (unless user mentions them)
+   - Event names or locations (unless user mentions them)
+   - Any specific details not in the user's description
 
-Purpose: ${purpose.replace(/_/g, " ")}
-User's description: ${body.prompt}
+2. If the user says something vague like "announce a sale", write about a sale in general terms WITHOUT making up a specific percentage or end date.
 
-Remember to return valid JSON with "subject" and "body" fields only.`;
+3. Keep it simple and short (100-200 words max). Don't over-elaborate.
+
+4. Write in a ${tone} tone (${toneDescriptions[tone]}).
+
+5. The email purpose is: ${purposeGuidance[purpose]}.
+
+6. Do NOT use placeholder brackets like [Name] or [Date]. Either use real info from the user's description or write generically.
+
+7. Do NOT add a signature - just the email body.
+
+8. ${includeCallToAction ? "End with a simple call-to-action relevant to what the user described." : "Do not include a call-to-action."}
+
+Return your response as JSON:
+{"subject": "subject line here", "body": "email body here"}`;
+
+    const userPrompt = `Write an email for "${businessName}".
+
+The user wants to say: "${body.prompt}"
+
+Remember: ONLY use details from what the user wrote above. Do not make up any specifics they didn't mention. Return valid JSON only.`;
 
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 

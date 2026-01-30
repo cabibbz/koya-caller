@@ -46,6 +46,7 @@ import {
   UserPlus,
   CalendarClock,
   Plus,
+  CalendarSync,
 } from "lucide-react";
 import {
   Button,
@@ -102,7 +103,9 @@ export function AppointmentsClient({
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "all">("all");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calendarConnected, setCalendarConnected] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -132,11 +135,12 @@ export function AppointmentsClient({
       try {
         const params = new URLSearchParams();
 
+        // Calculate date range for fetching
+        let rangeStart: Date;
+        let rangeEnd: Date;
+
         // For calendar view, filter by visible date range for performance
         if (viewMode === "calendar") {
-          let rangeStart: Date;
-          let rangeEnd: Date;
-
           if (calendarView === "month") {
             rangeStart = startOfWeek(startOfMonth(currentDate));
             rangeEnd = endOfWeek(endOfMonth(currentDate));
@@ -153,17 +157,44 @@ export function AppointmentsClient({
           params.set("to", rangeEnd.toISOString());
         } else {
           // List view uses upcoming/past filters
-          if (listFilter === "upcoming") params.set("upcoming", "true");
-          if (listFilter === "past") params.set("past", "true");
+          if (listFilter === "upcoming") {
+            params.set("upcoming", "true");
+            rangeStart = new Date();
+            rangeEnd = addDays(new Date(), 30); // Next 30 days for calendar events
+          } else if (listFilter === "past") {
+            params.set("past", "true");
+            rangeStart = addDays(new Date(), -30); // Past 30 days
+            rangeEnd = new Date();
+          } else {
+            // All - get a wide range
+            rangeStart = addDays(new Date(), -30);
+            rangeEnd = addDays(new Date(), 30);
+          }
         }
 
         if (statusFilter !== "all") params.set("status", statusFilter);
 
-        const res = await fetch(`/api/dashboard/appointments?${params.toString()}`, {
+        // Fetch Koya appointments
+        const appointmentsPromise = fetch(`/api/dashboard/appointments?${params.toString()}`, {
           signal: abortController.signal,
         });
-        if (res.ok) {
-          const data = await res.json();
+
+        // Also fetch Google Calendar events
+        const calendarParams = new URLSearchParams();
+        calendarParams.set("start", Math.floor(rangeStart.getTime() / 1000).toString());
+        calendarParams.set("end", Math.floor(rangeEnd.getTime() / 1000).toString());
+
+        const calendarEventsPromise = fetch(`/api/dashboard/calendar/events?${calendarParams.toString()}`, {
+          signal: abortController.signal,
+        });
+
+        const [appointmentsRes, calendarRes] = await Promise.all([
+          appointmentsPromise,
+          calendarEventsPromise.catch(() => null), // Calendar might not be connected
+        ]);
+
+        if (appointmentsRes.ok) {
+          const data = await appointmentsRes.json();
           setAppointments(data.appointments || []);
         } else {
           toast({
@@ -171,6 +202,34 @@ export function AppointmentsClient({
             description: "Please try again",
             variant: "destructive",
           });
+        }
+
+        // Process calendar events if available
+        if (calendarRes && calendarRes.ok) {
+          const calendarData = await calendarRes.json();
+          setCalendarConnected(true);
+
+          // Convert calendar events to appointment-like format for display
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const calEvents = (calendarData.events || []).map((event: any) => ({
+            id: `cal-${event.id}`,
+            customer_name: event.title || "Calendar Event",
+            service_name: event.location || "External Calendar",
+            scheduled_at: event.start ? new Date(event.start).toISOString() : null,
+            duration_minutes: event.start && event.end
+              ? Math.round((event.end - event.start) / 60000)
+              : 60,
+            status: event.status === "cancelled" ? "cancelled" : "confirmed" as const,
+            notes: event.description || null,
+            customer_phone: null,
+            customer_email: event.participants?.[0]?.email || null,
+            call_id: null,
+            is_external_event: true, // Flag to identify external calendar events
+          }));
+          setCalendarEvents(calEvents);
+        } else {
+          setCalendarConnected(false);
+          setCalendarEvents([]);
         }
       } catch (error) {
         // Ignore aborted requests (expected during cleanup)
@@ -474,9 +533,26 @@ export function AppointmentsClient({
     }
   };
 
+  // Merge appointments and calendar events, removing duplicates
+  const allAppointments = [...appointments];
+  // Add calendar events that don't have a matching appointment (by title + time)
+  calendarEvents.forEach((calEvent) => {
+    const isDuplicate = appointments.some((apt) => {
+      if (!apt.scheduled_at || !calEvent.scheduled_at) return false;
+      // Check if same time (within 1 minute) and similar name
+      const timeDiff = Math.abs(
+        parseISO(apt.scheduled_at).getTime() - parseISO(calEvent.scheduled_at).getTime()
+      );
+      return timeDiff < 60000; // Within 1 minute = likely same event
+    });
+    if (!isDuplicate) {
+      allAppointments.push(calEvent);
+    }
+  });
+
   // Get appointments for a specific day
   const getAppointmentsForDay = (date: Date) => {
-    return appointments.filter((apt) => {
+    return allAppointments.filter((apt) => {
       if (!apt.scheduled_at) return false;
       return isSameDay(parseISO(apt.scheduled_at), date);
     });
@@ -781,7 +857,7 @@ export function AppointmentsClient({
   const renderListView = () => {
     // Note: Status filtering is already done in the API call
     // No need for additional client-side filtering
-    
+
     if (loading) {
       return (
         <div className="space-y-3">
@@ -792,7 +868,7 @@ export function AppointmentsClient({
       );
     }
 
-    if (appointments.length === 0) {
+    if (allAppointments.length === 0) {
       return (
         <Card>
           <CardContent className="p-0">
@@ -802,14 +878,23 @@ export function AppointmentsClient({
       );
     }
 
+    // Sort by scheduled_at
+    const sortedAppointments = [...allAppointments].sort((a, b) => {
+      if (!a.scheduled_at) return 1;
+      if (!b.scheduled_at) return -1;
+      return parseISO(a.scheduled_at).getTime() - parseISO(b.scheduled_at).getTime();
+    });
+
     return (
       <div className="space-y-3">
-        {appointments.map((apt) => {
+        {sortedAppointments.map((apt) => {
           const statusBadge = getStatusBadge(apt.status);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const isExternalEvent = (apt as any).is_external_event;
           return (
             <Card
               key={apt.id}
-              className="cursor-pointer hover:border-primary/50 transition-colors"
+              className={`cursor-pointer hover:border-primary/50 transition-colors ${isExternalEvent ? "border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/30" : ""}`}
               onClick={() => {
                 setSelectedAppointment(apt);
                 setSheetOpen(true);
@@ -840,7 +925,12 @@ export function AppointmentsClient({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {apt.call_id ? (
+                    {isExternalEvent ? (
+                      <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                        <CalendarSync className="w-3 h-3 mr-1" />
+                        Google Calendar
+                      </Badge>
+                    ) : apt.call_id ? (
                       <Badge variant="outline" className="text-xs">
                         <Bot className="w-3 h-3 mr-1" />
                         Koya
@@ -867,7 +957,15 @@ export function AppointmentsClient({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{t("title")}</h1>
-          <p className="text-muted-foreground">{t("subtitle")}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-muted-foreground">{t("subtitle")}</p>
+            {calendarConnected && (
+              <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                <CalendarSync className="w-3 h-3 mr-1" />
+                Calendar synced
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <ExportButton
@@ -1076,10 +1174,15 @@ export function AppointmentsClient({
               {/* How Booked - Line 714 */}
               <div className="space-y-2">
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                  Booked By
+                  Source
                 </h3>
-                <Badge variant="outline">
-                  {selectedAppointment.call_id ? (
+                <Badge variant="outline" className={(selectedAppointment as any).is_external_event ? "text-blue-600 border-blue-300" : ""}>
+                  {(selectedAppointment as any).is_external_event ? (
+                    <>
+                      <CalendarSync className="w-3 h-3 mr-1" />
+                      Google Calendar
+                    </>
+                  ) : selectedAppointment.call_id ? (
                     <>
                       <Bot className="w-3 h-3 mr-1" />
                       Koya (AI)
@@ -1091,6 +1194,11 @@ export function AppointmentsClient({
                     </>
                   )}
                 </Badge>
+                {(selectedAppointment as any).is_external_event && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This event is synced from your Google Calendar and can only be edited there.
+                  </p>
+                )}
               </div>
 
               {/* Notes - Line 715 */}
@@ -1104,7 +1212,7 @@ export function AppointmentsClient({
               )}
 
               {/* Actions - Line 716 */}
-              {selectedAppointment.status === "confirmed" && (
+              {selectedAppointment.status === "confirmed" && !(selectedAppointment as any).is_external_event && (
                 <div className="space-y-3 pt-4 border-t">
                   <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
                     Actions
@@ -1154,7 +1262,7 @@ export function AppointmentsClient({
               )}
 
               {/* Reschedule button */}
-              {selectedAppointment.status === "confirmed" && (
+              {selectedAppointment.status === "confirmed" && !(selectedAppointment as any).is_external_event && (
                 <div className="pt-2">
                   <Button
                     variant="outline"

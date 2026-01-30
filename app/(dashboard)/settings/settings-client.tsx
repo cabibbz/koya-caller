@@ -22,6 +22,7 @@ import {
   Save,
   Loader2,
   CheckCircle,
+  Check,
   Phone,
   Mic,
   Globe,
@@ -44,6 +45,8 @@ import {
   Volume2,
   Headphones,
   Zap,
+  Plus,
+  Search,
 } from "lucide-react";
 import {
   Button,
@@ -502,6 +505,234 @@ export function SettingsClient({
   });
   const [advancedRetellModified, setAdvancedRetellModified] = useState(false);
 
+  // Phone number search/provision state
+  interface AvailablePhoneNumber {
+    phoneNumber: string;
+    friendlyName: string;
+    locality?: string;
+    region?: string;
+  }
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>(initialPhoneNumbers);
+  const [phoneAreaCode, setPhoneAreaCode] = useState("");
+  const [phoneSearching, setPhoneSearching] = useState(false);
+  const [phoneAvailableNumbers, setPhoneAvailableNumbers] = useState<AvailablePhoneNumber[]>([]);
+  const [phoneSelectedNumber, setPhoneSelectedNumber] = useState<string | null>(null);
+  const [phoneProvisioning, setPhoneProvisioning] = useState(false);
+  const [phoneHasSearched, setPhoneHasSearched] = useState(false);
+  const [phoneShowSearch, setPhoneShowSearch] = useState(false);
+
+  // AI Agent configuration state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [agentConfigured, setAgentConfigured] = useState<boolean>(!!((initialAiConfig as any)?.retell_agent_id));
+  const [creatingAgent, setCreatingAgent] = useState(false);
+
+  // Configuration status state
+  interface ConfigCheck {
+    name: string;
+    configured: boolean;
+    value?: string | boolean | number | null;
+    message: string;
+    fix?: string;
+  }
+  interface ConfigStatus {
+    summary: {
+      allCriticalConfigured: boolean;
+      allEnvConfigured: boolean;
+      criticalMissing: string[];
+      envMissing: string[];
+      canMakeCalls: boolean;
+      canReceiveCalls: boolean;
+    };
+    checks: ConfigCheck[];
+  }
+  const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
+  const [checkingConfig, setCheckingConfig] = useState(false);
+  const [configChecked, setConfigChecked] = useState(false);
+
+  // Check configuration function
+  const handleCheckConfig = async () => {
+    setCheckingConfig(true);
+    try {
+      const response = await fetch("/api/dashboard/config/status");
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to check configuration");
+      }
+
+      setConfigStatus(data.data);
+      setConfigChecked(true);
+
+      // Also update agentConfigured based on actual database status
+      const agentCheck = data.data.checks.find((c: ConfigCheck) => c.name === "Retell Agent ID (Database)");
+      if (agentCheck) {
+        setAgentConfigured(agentCheck.configured);
+      }
+    } catch (error) {
+      toast({
+        title: "Configuration Check Failed",
+        description: error instanceof Error ? error.message : "Failed to check configuration",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckingConfig(false);
+    }
+  };
+
+  // Auto-check configuration when AI settings tab is active
+  useEffect(() => {
+    if (activeTab === "ai-settings" && !configChecked && !checkingConfig) {
+      handleCheckConfig();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Create AI Agent function
+  const handleCreateAgent = async () => {
+    setCreatingAgent(true);
+    try {
+      const response = await fetch("/api/retell/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: _businessId,
+          voiceId: voiceSettings.voiceId || "11labs-Grace",
+          personality: voiceSettings.personality || "professional",
+          spanishEnabled: languageSettings.spanishEnabled,
+          languageMode: languageSettings.languageMode,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("[Settings] Create agent response:", data);
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || JSON.stringify(data) || "Failed to create AI agent");
+      }
+
+      toast({
+        title: "AI Agent Created",
+        description: data.mock
+          ? "Agent created in mock mode (configure Retell API key for production)"
+          : "Your AI agent has been configured and is ready to handle calls.",
+        variant: "success",
+      });
+
+      setAgentConfigured(true);
+      // Refresh config status
+      setConfigChecked(false);
+      handleCheckConfig();
+    } catch (error) {
+      console.error("[Settings] Create agent error:", error);
+      toast({
+        title: "Failed to Create Agent",
+        description: error instanceof Error ? error.message : "Failed to create AI agent",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingAgent(false);
+    }
+  };
+
+  // Phone number search function
+  const handlePhoneSearch = async () => {
+    if (!phoneAreaCode || phoneAreaCode.length !== 3) {
+      toast({ title: "Invalid Area Code", description: "Please enter a valid 3-digit area code", variant: "destructive" });
+      return;
+    }
+
+    setPhoneSearching(true);
+    setPhoneAvailableNumbers([]);
+    setPhoneHasSearched(true);
+
+    try {
+      const response = await fetch("/api/twilio/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ areaCode: phoneAreaCode }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to search for numbers");
+      }
+
+      setPhoneAvailableNumbers(data.numbers || []);
+
+      if (data.numbers?.length === 0) {
+        toast({ title: "No Numbers Available", description: "No numbers available in that area code. Try a different one." });
+      }
+    } catch (error) {
+      toast({ title: "Search Failed", description: error instanceof Error ? error.message : "Failed to search for numbers", variant: "destructive" });
+    } finally {
+      setPhoneSearching(false);
+    }
+  };
+
+  // Phone number provision function
+  const handlePhoneProvision = async () => {
+    if (!phoneSelectedNumber) {
+      toast({ title: "No Selection", description: "Please select a phone number", variant: "destructive" });
+      return;
+    }
+
+    setPhoneProvisioning(true);
+
+    try {
+      const response = await fetch("/api/twilio/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: phoneSelectedNumber,
+          businessId: _businessId,
+          setupType: "direct",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to provision phone number");
+      }
+
+      toast({ title: "Success", description: "Phone number provisioned successfully!", variant: "success" });
+
+      // Add the new phone number to state and reset search
+      setPhoneNumbers([{
+        id: data.phoneNumberId,
+        business_id: _businessId,
+        number: data.phoneNumber,
+        twilio_sid: data.sid,
+        setup_type: "direct",
+        forwarded_from: null,
+        carrier: null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+      }, ...phoneNumbers.map(p => ({ ...p, is_active: false }))]);
+
+      // Reset search state
+      setPhoneShowSearch(false);
+      setPhoneAreaCode("");
+      setPhoneAvailableNumbers([]);
+      setPhoneSelectedNumber(null);
+      setPhoneHasSearched(false);
+    } catch (error) {
+      toast({ title: "Provisioning Failed", description: error instanceof Error ? error.message : "Failed to provision phone number", variant: "destructive" });
+    } finally {
+      setPhoneProvisioning(false);
+    }
+  };
+
+  // Format phone for display
+  const formatPhoneDisplay = (phone: string): string => {
+    if (phone.startsWith("+1") && phone.length === 12) {
+      const digits = phone.substring(2);
+      return `(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}`;
+    }
+    return phone;
+  };
+
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
@@ -512,15 +743,16 @@ export function SettingsClient({
     };
   }, []);
 
-  // Handle OAuth callback params (calendar tab)
+  // Handle URL tab param and OAuth callback
   useEffect(() => {
     const success = searchParams.get("success");
     const urlError = searchParams.get("error");
     const tab = searchParams.get("tab");
 
-    // Auto-switch to calendar tab if coming from OAuth callback
-    if (tab === "calendar") {
-      setActiveTab("calendar");
+    // Auto-switch to specified tab from URL
+    const validTabs: Tab[] = ["call-handling", "ai-settings", "outbound", "voice", "language", "availability", "calendar", "notifications", "sms-templates", "phone-billing", "payments", "integrations", "privacy"];
+    if (tab && validTabs.includes(tab as Tab)) {
+      setActiveTab(tab as Tab);
     }
 
     if (success) {
@@ -1105,24 +1337,26 @@ export function SettingsClient({
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                activeTab === tab.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="flex gap-2 border-b border-border pb-2 min-w-max">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Call Handling Tab */}
@@ -1458,6 +1692,123 @@ export function SettingsClient({
                 Configure how Koya thinks, listens, and responds to callers. These settings work together to create a natural conversation experience.
               </CardDescription>
             </CardHeader>
+          </Card>
+
+          {/* AI Agent Status Card */}
+          {!agentConfigured && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  <strong>AI Agent Not Configured.</strong> Your AI agent needs to be set up before you can make or receive calls.
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleCreateAgent}
+                  disabled={creatingAgent}
+                  className="ml-4"
+                >
+                  {creatingAgent ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-2" />
+                      Configure AI Agent
+                    </>
+                  )}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {agentConfigured && (
+            <Alert>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertDescription>
+                <strong>AI Agent Active.</strong> Your AI is configured and ready to handle calls.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Configuration Status Check */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Configuration Status</CardTitle>
+                  <CardDescription>Check if all required settings are configured correctly</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCheckConfig}
+                  disabled={checkingConfig}
+                >
+                  {checkingConfig ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4 mr-2" />
+                      Check Config
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+            {configChecked && configStatus && (
+              <CardContent>
+                {/* Summary */}
+                <div className={`p-3 rounded-lg mb-4 ${
+                  configStatus.summary.canMakeCalls
+                    ? "bg-green-500/10 border border-green-500/20"
+                    : "bg-red-500/10 border border-red-500/20"
+                }`}>
+                  <p className={`font-medium ${configStatus.summary.canMakeCalls ? "text-green-600" : "text-red-600"}`}>
+                    {configStatus.summary.canMakeCalls
+                      ? "All critical configurations are set. You can make and receive calls."
+                      : `Missing critical configuration: ${configStatus.summary.criticalMissing.join(", ")}`}
+                  </p>
+                  {!configStatus.summary.allEnvConfigured && (
+                    <p className="text-sm text-amber-600 mt-1">
+                      Note: Some ENV variables are not set ({configStatus.summary.envMissing.join(", ")}). System may be running in mock mode.
+                    </p>
+                  )}
+                </div>
+
+                {/* Detailed Checks */}
+                <div className="space-y-2">
+                  {configStatus.checks.map((check, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-start gap-3 p-2 rounded-lg ${
+                        check.configured ? "bg-muted/30" : "bg-red-500/5"
+                      }`}
+                    >
+                      {check.configured ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${!check.configured && "text-red-600"}`}>
+                          {check.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{check.message}</p>
+                        {check.fix && (
+                          <p className="text-xs text-amber-600 mt-0.5">{check.fix}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            )}
           </Card>
 
           {/* AI Intelligence Section */}
@@ -3192,16 +3543,17 @@ export function SettingsClient({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {initialPhoneNumbers.length > 0 ? (
-                <div className="space-y-4">
-                  {initialPhoneNumbers.map((phone) => (
+              {/* Existing Phone Numbers */}
+              {phoneNumbers.length > 0 && (
+                <div className="space-y-4 mb-6">
+                  {phoneNumbers.map((phone) => (
                     <div key={phone.id} className="flex items-center justify-between rounded-lg border p-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                           <Phone className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium font-mono">{phone.number}</p>
+                          <p className="font-medium font-mono">{formatPhoneDisplay(phone.number)}</p>
                           <p className="text-sm text-muted-foreground capitalize">
                             {phone.setup_type === "forwarded" ? `Forwarded from ${phone.forwarded_from}` : "Direct"}
                           </p>
@@ -3213,7 +3565,10 @@ export function SettingsClient({
                     </div>
                   ))}
                 </div>
-              ) : (
+              )}
+
+              {/* No Phone Numbers - Show Setup Options */}
+              {phoneNumbers.length === 0 && !phoneShowSearch && (
                 <div className="rounded-lg border border-dashed p-6 text-center">
                   <Phone className="mx-auto h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-muted-foreground">
@@ -3222,7 +3577,9 @@ export function SettingsClient({
                   <div className="mt-4 flex flex-col gap-2 items-center">
                     <Button
                       variant="default"
+                      disabled={phoneProvisioning}
                       onClick={async () => {
+                        setPhoneProvisioning(true);
                         try {
                           const res = await fetch("/api/twilio/configure", {
                             method: "POST",
@@ -3239,7 +3596,7 @@ export function SettingsClient({
                           } else {
                             toast({
                               title: "Configuration failed",
-                              description: data.message || data.error || "Failed to configure phone number",
+                              description: data.message || data.error || "Failed to configure phone number. Make sure TWILIO_PHONE_NUMBER is set.",
                               variant: "destructive",
                             });
                           }
@@ -3249,19 +3606,166 @@ export function SettingsClient({
                             description: "Failed to configure phone number",
                             variant: "destructive",
                           });
+                        } finally {
+                          setPhoneProvisioning(false);
                         }
                       }}
                     >
-                      Use Existing Twilio Number
+                      {phoneProvisioning ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Configuring...
+                        </>
+                      ) : (
+                        "Use Existing Twilio Number"
+                      )}
                     </Button>
                     <span className="text-xs text-muted-foreground">or</span>
                     <Button
                       variant="outline"
-                      onClick={() => window.location.href = "/onboarding?step=8"}
+                      onClick={() => setPhoneShowSearch(true)}
                     >
                       Get New Phone Number
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Phone Number Search UI */}
+              {(phoneShowSearch || phoneNumbers.length > 0) && (
+                <div className="space-y-4">
+                  {/* Add Number Button (when numbers exist) */}
+                  {phoneNumbers.length > 0 && !phoneShowSearch && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setPhoneShowSearch(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Another Number
+                    </Button>
+                  )}
+
+                  {/* Search Panel */}
+                  {phoneShowSearch && (
+                    <div className="rounded-lg border p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">Get a New Phone Number</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPhoneShowSearch(false);
+                            setPhoneAreaCode("");
+                            setPhoneAvailableNumbers([]);
+                            setPhoneSelectedNumber(null);
+                            setPhoneHasSearched(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+
+                      {/* Area Code Input */}
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Enter your area code
+                        </label>
+                        <div className="flex gap-2">
+                          <Input
+                            type="text"
+                            placeholder="e.g., 415"
+                            maxLength={3}
+                            value={phoneAreaCode}
+                            onChange={(e) => setPhoneAreaCode(e.target.value.replace(/\D/g, ""))}
+                            onKeyDown={(e) => e.key === "Enter" && handlePhoneSearch()}
+                            className="text-center text-lg font-mono w-24"
+                          />
+                          <Button
+                            onClick={handlePhoneSearch}
+                            disabled={phoneSearching || phoneAreaCode.length !== 3}
+                          >
+                            {phoneSearching ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Search className="w-4 h-4 mr-2" />
+                                Search
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          We&apos;ll find available phone numbers in your area
+                        </p>
+                      </div>
+
+                      {/* Available Numbers */}
+                      {(phoneAvailableNumbers.length > 0 || phoneHasSearched) && (
+                        <div>
+                          {phoneAvailableNumbers.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium mb-3">
+                                Available numbers ({phoneAvailableNumbers.length})
+                              </p>
+                              {phoneAvailableNumbers.map((phone) => (
+                                <div
+                                  key={phone.phoneNumber}
+                                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                                    phoneSelectedNumber === phone.phoneNumber
+                                      ? "border-primary ring-1 ring-primary bg-primary/5"
+                                      : "hover:border-primary/50"
+                                  }`}
+                                  onClick={() => setPhoneSelectedNumber(phone.phoneNumber)}
+                                >
+                                  <div>
+                                    <p className="font-mono text-lg">
+                                      {formatPhoneDisplay(phone.phoneNumber)}
+                                    </p>
+                                    {phone.locality && (
+                                      <p className="text-sm text-muted-foreground">
+                                        {phone.locality}, {phone.region}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {phoneSelectedNumber === phone.phoneNumber && (
+                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                                      <Check className="w-4 h-4 text-primary-foreground" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+
+                              {/* Provision Button */}
+                              <Button
+                                className="w-full mt-4"
+                                disabled={!phoneSelectedNumber || phoneProvisioning}
+                                onClick={handlePhoneProvision}
+                              >
+                                {phoneProvisioning ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    Setting up your number...
+                                  </>
+                                ) : (
+                                  "Get This Number"
+                                )}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 p-3 rounded-lg border border-orange-500/50 bg-orange-500/5">
+                              <AlertCircle className="w-5 h-5 text-orange-500" />
+                              <div>
+                                <p className="font-medium">No numbers available</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Try a different area code
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

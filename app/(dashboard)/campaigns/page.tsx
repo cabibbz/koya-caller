@@ -1,6 +1,6 @@
 /**
  * Campaigns Page
- * List all outbound calling campaigns
+ * List all email and outbound calling campaigns
  */
 
 import { Metadata } from "next";
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
   title: "Campaigns",
-  description: "Manage outbound calling campaigns",
+  description: "Manage email and outbound calling campaigns",
 };
 
 export const dynamic = "force-dynamic";

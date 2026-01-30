@@ -277,9 +277,11 @@ export async function POST(request: NextRequest) {
       llmId: agent.llm_id,
     });
 
-  } catch (_error) {
+  } catch (error) {
+    console.error("[Retell Agent] Failed to create agent:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to create agent" },
+      { error: `Failed to create agent: ${errorMessage}` },
       { status: 500 }
     );
   }

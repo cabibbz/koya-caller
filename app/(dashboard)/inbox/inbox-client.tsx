@@ -27,11 +27,9 @@ import {
   Reply,
   ChevronLeft,
   Plus,
-  Users,
   Sparkles,
   ChevronDown,
 } from "lucide-react";
-import { MassEmailComposer } from "@/components/inbox/mass-email-composer";
 import { toast } from "@/hooks/use-toast";
 
 const PURIFY_CONFIG = {
@@ -94,7 +92,6 @@ export function InboxClient() {
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [showCompose, setShowCompose] = useState(false);
-  const [showMassEmail, setShowMassEmail] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
 
   // Compose state
@@ -306,13 +303,6 @@ export function InboxClient() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
-      {/* Mass Email Modal */}
-      <MassEmailComposer
-        isOpen={showMassEmail}
-        onClose={() => setShowMassEmail(false)}
-        onSuccess={() => fetchMessages(search, 0)}
-      />
-
       {/* Compose Modal */}
       {showCompose && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -476,11 +466,7 @@ export function InboxClient() {
             <div className="flex gap-2">
               <Button className="flex-1" onClick={() => handleCompose()}>
                 <Plus className="w-4 h-4 mr-2" />
-                New
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setShowMassEmail(true)}>
-                <Users className="w-4 h-4 mr-2" />
-                Mass Email
+                New Email
               </Button>
             </div>
             <div className="flex gap-2">

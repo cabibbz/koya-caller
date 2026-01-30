@@ -84,38 +84,63 @@ export async function createRetellLLM(options: {
       begin_message: options.beginMessage,
     };
 
+    const baseUrl = getBaseUrl();
+    const isLocalhost = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+    console.log(`[Retell LLM] Base URL: ${baseUrl}, isLocalhost: ${isLocalhost}`);
+
     // Add custom tools if provided
+    // Note: In localhost mode, only add transfer_call (built-in) since custom webhook URLs won't work
     if (options.functions) {
-      llmConfig.general_tools = options.functions.map((fn) => {
-        // Configure transfer_call as Retell's built-in transfer tool type
-        if (fn.name === "transfer_call") {
+      const filteredFunctions = options.functions.filter((fn) => {
+        // In localhost mode, only include built-in transfer_call, skip custom webhook functions
+        if (isLocalhost && fn.name !== "transfer_call") {
+          logWarning("Retell LLM", `Skipping function '${fn.name}' in localhost mode (requires public webhook URL)`);
+          return false;
+        }
+        return true;
+      });
+
+      console.log(`[Retell LLM] Functions after filter: ${filteredFunctions.map(f => f.name).join(', ')}`);
+
+      llmConfig.general_tools = filteredFunctions
+        .map((fn) => {
+          // Configure transfer_call as Retell's built-in transfer tool type
+          if (fn.name === "transfer_call") {
+            return {
+              type: "transfer_call",
+              name: fn.name,
+              description: fn.description,
+              // Transfer destination - use dynamic variable populated at call time
+              transfer_destination: {
+                type: "predefined",
+                number: "{{transfer_number}}",
+              },
+              // Transfer option - cold transfer (direct handoff)
+              transfer_option: {
+                type: "cold_transfer",
+              },
+              // Message to speak while transferring
+              speak_during_execution: true,
+              execution_message_description: "I'm transferring you now. Please hold.",
+            };
+          }
+          // All other functions use custom webhook
           return {
-            type: "transfer_call",
+            type: "custom",
             name: fn.name,
             description: fn.description,
-            // Use dynamic variable for transfer number - populated at call time
-            number: "{{transfer_number}}",
-            // Message to speak while transferring
-            speak_during_transfer: "I'm transferring you now. Please hold.",
-            speak_after_transfer: false,
+            parameters: fn.parameters,
+            speak_after_execution: true,
+            url: `${baseUrl}/api/retell/function`,
           };
-        }
-        // All other functions use custom webhook
-        return {
-          type: "custom",
-          name: fn.name,
-          description: fn.description,
-          parameters: fn.parameters,
-          speak_after_execution: true,
-          url: `${getBaseUrl()}/api/retell/function`,
-        };
-      });
+        });
     }
 
     const llm = await client.llm.create(llmConfig);
 
     return { llm_id: llm.llm_id };
   } catch (error) {
+    logError("Retell createLLM", `Failed to create LLM: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
 }
@@ -159,6 +184,9 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
     // Then create the agent with voice settings
     // Spec Reference: Lines 1284-1293 (Multilingual agent configuration)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Retell SDK types are incomplete for newer API features
+    const baseUrl = getBaseUrl();
+    const isLocalhost = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+
     const agentConfig: any = {
       response_engine: {
         type: "retell-llm",
@@ -168,44 +196,46 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       agent_name: `${params.businessName} - ${params.aiName}`,
       // Enable call recording for replay functionality
       enable_recording: true,
-      // Set webhook URL for call events
-      webhook_url: `${getBaseUrl()}/api/retell/webhook`,
+      // Only set webhook URL if not localhost (Retell rejects localhost URLs)
+      // In development, use ngrok or similar and set NEXT_PUBLIC_APP_URL
+      ...(isLocalhost ? {} : { webhook_url: `${baseUrl}/api/retell/webhook` }),
       // Enable post-call analysis for summary generation
+      // Note: Retell API types are: string, boolean, number
       post_call_analysis_data: [
         {
-          type: "call_summary",
+          type: "string",
           name: "call_summary",
           description: "A brief summary of what the caller wanted and the outcome of the call",
         },
         {
-          type: "custom",
+          type: "string",
           name: "customer_name",
           description: "The name of the caller if provided",
         },
         {
-          type: "custom",
+          type: "string",
           name: "customer_phone",
           description: "The phone number of the caller if provided",
         },
         {
-          type: "custom",
+          type: "string",
           name: "customer_email",
           description: "The email address of the caller if provided",
         },
         {
-          type: "custom",
+          type: "string",
           name: "service_name",
           description: "The service the caller inquired about or booked",
         },
         {
-          type: "custom",
+          type: "string",
           name: "appointment_date",
           description: "The date and time of any appointment booked (ISO format)",
         },
         {
-          type: "custom",
+          type: "boolean",
           name: "appointment_booked",
-          description: "Whether an appointment was booked (true/false)",
+          description: "Whether an appointment was booked",
         },
       ],
     };
@@ -265,6 +295,7 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
       created_at: new Date().toISOString(),
     };
   } catch (error) {
+    logError("Retell createAgent", `Failed to create agent: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
 }

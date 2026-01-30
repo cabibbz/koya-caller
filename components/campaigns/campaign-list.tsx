@@ -25,6 +25,8 @@ import {
   TrendingUp,
   Activity,
   Zap,
+  Mail,
+  Send,
 } from "lucide-react";
 import {
   Button,
@@ -55,13 +57,18 @@ interface Campaign {
   name: string;
   description: string | null;
   status: "draft" | "scheduled" | "active" | "running" | "paused" | "completed";
-  type: "reminder" | "followup" | "custom";
+  type: "reminder" | "followup" | "custom" | "email" | "appointment_reminder" | "follow_up" | "marketing";
   scheduled_start: string | null;
   scheduled_end: string | null;
   target_contacts: number;
   calls_completed: number;
   calls_successful: number;
   calls_failed: number;
+  settings?: {
+    emails_sent?: number;
+    emails_failed?: number;
+    total_contacts?: number;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -88,13 +95,19 @@ const getStatusColor = (status: Campaign["status"]) => {
 };
 
 const getTypeLabel = (type: Campaign["type"]) => {
-  const labels = {
+  const labels: Record<string, string> = {
+    email: "Email Campaign",
     reminder: "Appointment Reminder",
+    appointment_reminder: "Appointment Reminder",
     followup: "Follow-up",
+    follow_up: "Follow-up",
+    marketing: "Marketing",
     custom: "Custom Campaign",
   };
   return labels[type] || type;
 };
+
+const isEmailCampaign = (type: Campaign["type"]) => type === "email";
 
 const formatDate = (date: string | null) => {
   if (!date) return "Not scheduled";
@@ -307,7 +320,7 @@ export function CampaignList({ initialCampaigns = [], initialTotal = 0 }: Campai
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Campaigns</h1>
           <p className="text-muted-foreground">
-            Manage outbound calling campaigns
+            Manage email and outbound calling campaigns
           </p>
         </div>
         <Link href="/campaigns/create">
@@ -408,8 +421,10 @@ export function CampaignList({ initialCampaigns = [], initialTotal = 0 }: Campai
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="reminder">Appointment Reminder</SelectItem>
-            <SelectItem value="followup">Follow-up</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="appointment_reminder">Appointment Reminder</SelectItem>
+            <SelectItem value="follow_up">Follow-up</SelectItem>
+            <SelectItem value="marketing">Marketing</SelectItem>
             <SelectItem value="custom">Custom</SelectItem>
           </SelectContent>
         </Select>
@@ -432,10 +447,10 @@ export function CampaignList({ initialCampaigns = [], initialTotal = 0 }: Campai
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
-              <Phone className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <Send className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No campaigns yet</h3>
               <p className="text-muted-foreground mb-4">
-                Create your first outbound calling campaign to reach your customers.
+                Create email or calling campaigns to reach your customers at scale.
               </p>
               <Link href="/campaigns/create">
                 <Button>
@@ -493,25 +508,50 @@ export function CampaignList({ initialCampaigns = [], initialTotal = 0 }: Campai
                         <Users className="h-4 w-4" />
                         <span>{campaign.target_contacts ?? 0} contacts</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <Phone className="h-4 w-4" />
-                        <span>{campaign.calls_completed ?? 0} calls made</span>
-                      </div>
-                      {(campaign.calls_completed ?? 0) > 0 && (
+                      {isEmailCampaign(campaign.type) ? (
                         <>
-                          <div className="flex items-center gap-1.5 text-green-600">
-                            <CheckCircle2 className="h-4 w-4" />
-                            <span>{campaign.calls_successful ?? 0} successful</span>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                            <span>{campaign.settings?.emails_sent ?? 0} emails sent</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-red-600">
-                            <XCircle className="h-4 w-4" />
-                            <span>{campaign.calls_failed ?? 0} failed</span>
+                          {(campaign.settings?.emails_sent ?? 0) > 0 && (
+                            <>
+                              <div className="flex items-center gap-1.5 text-green-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>{(campaign.settings?.emails_sent ?? 0) - (campaign.settings?.emails_failed ?? 0)} delivered</span>
+                              </div>
+                              {(campaign.settings?.emails_failed ?? 0) > 0 && (
+                                <div className="flex items-center gap-1.5 text-red-600">
+                                  <XCircle className="h-4 w-4" />
+                                  <span>{campaign.settings?.emails_failed ?? 0} failed</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                            <span>{campaign.calls_completed ?? 0} calls made</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground border-l pl-4">
-                            <span>
-                              {Math.round(((campaign.calls_successful ?? 0) / (campaign.calls_completed ?? 1)) * 100)}% success rate
-                            </span>
-                          </div>
+                          {(campaign.calls_completed ?? 0) > 0 && (
+                            <>
+                              <div className="flex items-center gap-1.5 text-green-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>{campaign.calls_successful ?? 0} successful</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-red-600">
+                                <XCircle className="h-4 w-4" />
+                                <span>{campaign.calls_failed ?? 0} failed</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground border-l pl-4">
+                                <span>
+                                  {Math.round(((campaign.calls_successful ?? 0) / (campaign.calls_completed ?? 1)) * 100)}% success rate
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -555,21 +595,24 @@ export function CampaignList({ initialCampaigns = [], initialTotal = 0 }: Campai
                     )}
                     {(campaign.status === "active" || campaign.status === "running") && (
                       <>
-                        <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => handleProcessCalls(campaign.id)}
-                          disabled={actionLoading === `process-${campaign.id}`}
-                        >
-                          {actionLoading === `process-${campaign.id}` ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Zap className="h-4 w-4 mr-1" />
-                              Process Calls
-                            </>
-                          )}
-                        </Button>
+                        {/* Process Calls button - only for call campaigns */}
+                        {!isEmailCampaign(campaign.type) && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleProcessCalls(campaign.id)}
+                            disabled={actionLoading === `process-${campaign.id}`}
+                          >
+                            {actionLoading === `process-${campaign.id}` ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Zap className="h-4 w-4 mr-1" />
+                                Process Calls
+                              </>
+                            )}
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="secondary"

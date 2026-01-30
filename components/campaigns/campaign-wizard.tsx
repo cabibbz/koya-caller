@@ -5,7 +5,7 @@
  * Step-by-step campaign creation workflow
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Phone,
@@ -16,11 +16,13 @@ import {
   Calendar,
   Users,
   MessageSquare,
-  Settings,
   AlertCircle,
   Mail,
   Sparkles,
   ChevronDown,
+  Megaphone,
+  Clock,
+  PhoneCall,
 } from "lucide-react";
 import {
   Button,
@@ -41,6 +43,7 @@ import {
   SelectItem,
   Alert,
   AlertDescription,
+  Badge,
 } from "@/components/ui";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -56,10 +59,22 @@ interface Contact {
   email?: string;
 }
 
+interface PhoneNumber {
+  id: string;
+  number: string;
+  is_active: boolean;
+  setup_type?: string;
+}
+
+type CampaignChannel = "email" | "call";
+type CallPurpose = "reminder" | "follow_up" | "marketing";
+
 interface CampaignData {
   name: string;
   description: string;
-  type: "appointment_reminder" | "follow_up" | "marketing" | "custom" | "email";
+  channel: CampaignChannel;
+  call_purpose: CallPurpose;
+  from_number: string;
   scheduled_start: string;
   scheduled_end: string;
   custom_message: string;
@@ -70,55 +85,42 @@ interface CampaignData {
     retry_failed: boolean;
     max_retries: number;
   };
-  // Email-specific fields
   email_subject: string;
   email_body: string;
 }
 
-// AI personality traits that get added to the prompt
+// AI personality traits for call campaigns
 const AI_TRAITS = [
-  {
-    id: "persistent",
-    name: "Persistent",
-    description: "Keeps trying to close the sale, handles objections confidently",
-    prompt: "Be persistent and confident. When the customer raises objections, acknowledge them but redirect to the value proposition. Don't give up easily - try at least 2-3 different approaches before accepting a 'no'. Use phrases like 'I understand, but consider this...' and 'Many customers felt the same way until they saw the benefits.'",
-  },
   {
     id: "friendly",
     name: "Friendly",
-    description: "Warm, casual, and builds rapport quickly",
-    prompt: "Be warm and friendly. Use casual language and build rapport quickly. Smile through your voice. Use the customer's name naturally. Share brief relatable comments and show genuine interest in them as a person, not just a sale.",
+    description: "Warm and builds rapport",
+    prompt: "Be warm and friendly. Use casual language and build rapport quickly. Smile through your voice. Use the customer's name naturally.",
   },
   {
     id: "professional",
     name: "Professional",
-    description: "Business-like, formal, and to the point",
-    prompt: "Maintain a professional and business-like tone throughout the call. Be concise and respect the customer's time. Stick to the facts and value proposition. Avoid overly casual language or jokes.",
+    description: "Business-like and to the point",
+    prompt: "Maintain a professional and business-like tone. Be concise and respect the customer's time. Stick to the facts.",
   },
   {
     id: "empathetic",
     name: "Empathetic",
-    description: "Understanding, patient, and listens actively",
-    prompt: "Be highly empathetic and patient. Listen actively to customer concerns and acknowledge their feelings. Use phrases like 'I completely understand' and 'That makes sense.' Take your time and never rush the customer.",
+    description: "Understanding and patient",
+    prompt: "Be highly empathetic and patient. Listen actively to customer concerns and acknowledge their feelings.",
   },
   {
-    id: "urgent",
-    name: "Creates Urgency",
-    description: "Emphasizes limited time offers and scarcity",
-    prompt: "Create a sense of urgency without being pushy. Mention limited-time offers, availability constraints, or upcoming price changes when relevant. Use phrases like 'This offer is only available until...' and 'Spots are filling up quickly.'",
-  },
-  {
-    id: "consultative",
-    name: "Consultative",
-    description: "Asks questions and provides tailored solutions",
-    prompt: "Take a consultative approach. Ask questions to understand the customer's specific needs and pain points before presenting solutions. Tailor your pitch based on what they share. Position yourself as a helpful advisor, not a salesperson.",
+    id: "persuasive",
+    name: "Persuasive",
+    description: "Handles objections confidently",
+    prompt: "Be confident when handling objections. Redirect to the value proposition. Use phrases like 'I understand, but consider this...'",
   },
 ];
 
 const STEPS = [
-  { id: 1, title: "Basics", icon: Settings, description: "Name and type" },
-  { id: 2, title: "Audience", icon: Users, description: "Select contacts" },
-  { id: 3, title: "Message", icon: MessageSquare, description: "Customize message" },
+  { id: 1, title: "Type", icon: Megaphone, description: "Choose campaign type" },
+  { id: 2, title: "Audience", icon: Users, description: "Select recipients" },
+  { id: 3, title: "Content", icon: MessageSquare, description: "Create your message" },
   { id: 4, title: "Schedule", icon: Calendar, description: "Set timing" },
   { id: 5, title: "Review", icon: Check, description: "Confirm and launch" },
 ];
@@ -126,11 +128,13 @@ const STEPS = [
 const INITIAL_DATA: CampaignData = {
   name: "",
   description: "",
-  type: "appointment_reminder",
+  channel: "email",
+  call_purpose: "reminder",
+  from_number: "",
   scheduled_start: "",
   scheduled_end: "",
   custom_message: "",
-  ai_traits: [],
+  ai_traits: ["friendly"],
   contact_ids: [],
   settings: {
     daily_limit: 100,
@@ -154,6 +158,10 @@ export function CampaignWizard() {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Phone numbers state for call campaigns
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
+  const [loadingPhoneNumbers, setLoadingPhoneNumbers] = useState(false);
+
   // AI Generation state for email campaigns
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -168,21 +176,65 @@ export function CampaignWizard() {
   const fetchContacts = async () => {
     setLoadingContacts(true);
     try {
-      const response = await fetch("/api/dashboard/contacts?limit=200");
+      const response = await fetch("/api/dashboard/contacts?limit=500");
       const result = await response.json();
       if (result.success) {
         setContacts(result.data.contacts || []);
       }
     } catch {
-      // Silently fail - contacts list will remain empty
+      // Silently fail
     } finally {
       setLoadingContacts(false);
     }
   };
 
+  const fetchPhoneNumbers = async () => {
+    setLoadingPhoneNumbers(true);
+    try {
+      const response = await fetch("/api/dashboard/phone-numbers");
+      const result = await response.json();
+      if (result.success && result.data) {
+        // The API returns all numbers, filter for active ones
+        const activeNumbers = result.data.filter((p: PhoneNumber) => p.is_active);
+        setPhoneNumbers(activeNumbers);
+        // Auto-select first phone number if available
+        if (activeNumbers.length > 0 && !data.from_number) {
+          updateData("from_number", activeNumbers[0].number);
+        }
+      }
+    } catch {
+      // Silently fail - user will see "no phone numbers" message
+    } finally {
+      setLoadingPhoneNumbers(false);
+    }
+  };
+
   useEffect(() => {
     fetchContacts();
+    fetchPhoneNumbers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Filter contacts based on campaign channel
+  const availableContacts = useMemo(() => {
+    return contacts.filter((contact) => {
+      if (data.channel === "email") {
+        return contact.email && contact.email.trim() !== "";
+      } else {
+        return contact.phone_number && contact.phone_number.trim() !== "";
+      }
+    });
+  }, [contacts, data.channel]);
+
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery) return availableContacts;
+    const query = searchQuery.toLowerCase();
+    return availableContacts.filter((contact) =>
+      contact.name?.toLowerCase().includes(query) ||
+      contact.phone_number?.includes(query) ||
+      contact.email?.toLowerCase().includes(query)
+    );
+  }, [availableContacts, searchQuery]);
 
   // =============================================================================
   // Handlers
@@ -224,6 +276,12 @@ export function CampaignWizard() {
     }));
   };
 
+  // Clear contact selection when channel changes
+  const handleChannelChange = (channel: CampaignChannel) => {
+    updateData("channel", channel);
+    updateData("contact_ids", []);
+  };
+
   const handleGenerateAi = async () => {
     if (!aiPrompt.trim() || aiPrompt.trim().length < 10) {
       toast({
@@ -253,7 +311,6 @@ export function CampaignWizard() {
         throw new Error(result.error || "Failed to generate email");
       }
 
-      // Populate the email subject and body fields
       setData((prev) => ({
         ...prev,
         email_subject: result.subject,
@@ -281,17 +338,20 @@ export function CampaignWizard() {
   const canProceed = () => {
     switch (currentStep) {
       case 1:
+        // For call campaigns, require a phone number
+        if (data.channel === "call") {
+          return data.name.trim().length > 0 && data.from_number.trim().length > 0;
+        }
         return data.name.trim().length > 0;
       case 2:
         return data.contact_ids.length > 0;
       case 3:
-        // Email campaigns require subject and body
-        if (data.type === "email") {
+        if (data.channel === "email") {
           return data.email_subject.trim().length > 0 && data.email_body.trim().length > 0;
         }
-        return true; // Call campaign message is optional
+        return true;
       case 4:
-        return true; // Schedule is optional (can start immediately)
+        return true;
       default:
         return true;
     }
@@ -312,7 +372,7 @@ export function CampaignWizard() {
   const handleSave = async (startImmediately: boolean = false) => {
     setSaving(true);
     try {
-      // Build the full AI instructions from traits + custom message (for call campaigns)
+      // Build AI instructions from traits + custom message (for call campaigns)
       const traitInstructions = (data.ai_traits || [])
         .map((traitId) => AI_TRAITS.find((t) => t.id === traitId)?.prompt)
         .filter(Boolean)
@@ -322,24 +382,31 @@ export function CampaignWizard() {
         .filter(Boolean)
         .join("\n\n---\n\n");
 
-      // Build the request body with email data if it's an email campaign
+      // Map channel + purpose to API type
+      let apiType: string;
+      if (data.channel === "email") {
+        apiType = "email";
+      } else {
+        apiType = data.call_purpose === "reminder" ? "appointment_reminder" : data.call_purpose;
+      }
+
       const requestBody: Record<string, unknown> = {
         name: data.name,
         description: data.description,
-        type: data.type,
+        type: apiType,
         scheduled_start: data.scheduled_start || null,
         scheduled_end: data.scheduled_end || null,
         contact_ids: data.contact_ids,
       };
 
-      if (data.type === "email") {
-        // Email campaign: include email-specific fields
+      if (data.channel === "email") {
         requestBody.settings = {
           email_subject: data.email_subject,
           email_body: data.email_body,
         };
       } else {
-        // Call campaign: include AI traits and settings
+        // Include from_number for call campaigns
+        requestBody.from_number = data.from_number || null;
         requestBody.custom_message = fullInstructions || null;
         requestBody.settings = {
           ...data.settings,
@@ -359,19 +426,45 @@ export function CampaignWizard() {
         throw new Error(result.error || "Failed to create campaign");
       }
 
-      // If starting immediately, trigger the start action
       if (startImmediately && result.data?.id) {
+        // Start the campaign
         await fetch(`/api/dashboard/campaigns/${result.data.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "start" }),
         });
+
+        // For call campaigns, auto-process the queue to begin making calls
+        if (data.channel === "call") {
+          // Small delay to ensure queue is populated
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          const processResponse = await fetch(`/api/dashboard/campaigns/${result.data.id}/process`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (!processResponse.ok) {
+            const processResult = await processResponse.json();
+            // Show warning but don't fail - campaign is still created
+            const errorMessage = processResult.error?.message || processResult.error || "Campaign started but calls may need manual processing.";
+            toast({
+              title: "Campaign Started with Warning",
+              description: errorMessage,
+              variant: "destructive",
+            });
+            router.push("/campaigns");
+            return;
+          }
+        }
       }
 
       toast({
         title: "Success",
         description: startImmediately
-          ? "Campaign created and started!"
+          ? data.channel === "call"
+            ? "Campaign started! Calls are being processed."
+            : "Campaign created and started!"
           : "Campaign created successfully",
         variant: "success",
       });
@@ -389,148 +482,240 @@ export function CampaignWizard() {
   };
 
   // =============================================================================
-  // Filtered Contacts
-  // =============================================================================
-
-  const filteredContacts = contacts.filter((contact) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      contact.name?.toLowerCase().includes(query) ||
-      contact.phone_number?.includes(query)
-    );
-  });
-
-  // =============================================================================
   // Render Steps
   // =============================================================================
 
   const renderStep = () => {
     switch (currentStep) {
+      // =========================================================================
+      // STEP 1: Campaign Type
+      // =========================================================================
       case 1:
         return (
           <div className="space-y-6">
+            {/* Campaign Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Campaign Name *</Label>
               <Input
                 id="name"
-                placeholder="e.g., January Appointment Reminders"
+                placeholder="e.g., January Newsletter, Appointment Reminders"
                 value={data.name}
                 onChange={(e) => updateData("name", e.target.value)}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Optional description of this campaign..."
-                value={data.description}
-                onChange={(e) => updateData("description", e.target.value)}
-                rows={3}
-              />
-            </div>
-
+            {/* Channel Selection - Clear Two Options */}
             <div className="space-y-3">
-              <Label>Campaign Type *</Label>
+              <Label>How do you want to reach your contacts? *</Label>
               <div className="grid grid-cols-2 gap-4">
+                {/* Email Campaign */}
                 <button
                   type="button"
-                  onClick={() => updateData("type", "email")}
+                  onClick={() => handleChannelChange("email")}
                   className={cn(
-                    "flex flex-col items-center justify-center p-4 border rounded-lg cursor-pointer transition-colors",
-                    data.type === "email"
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
+                    "relative flex flex-col items-center p-6 border-2 rounded-xl transition-all",
+                    data.channel === "email"
+                      ? "border-primary bg-primary/5 shadow-md"
+                      : "border-border hover:border-primary/50 hover:bg-muted/50"
                   )}
                 >
-                  <Mail className="h-8 w-8 mb-2 text-primary" />
-                  <span className="font-medium">Email</span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    Mass email campaign
+                  <div className={cn(
+                    "w-14 h-14 rounded-full flex items-center justify-center mb-3",
+                    data.channel === "email" ? "bg-primary/10" : "bg-muted"
+                  )}>
+                    <Mail className={cn(
+                      "h-7 w-7",
+                      data.channel === "email" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <span className="font-semibold text-lg">Email</span>
+                  <span className="text-sm text-muted-foreground text-center mt-1">
+                    Send emails to your contacts
                   </span>
+                  {data.channel === "email" && (
+                    <div className="absolute top-3 right-3">
+                      <Check className="h-5 w-5 text-primary" />
+                    </div>
+                  )}
                 </button>
 
+                {/* Phone Call Campaign */}
                 <button
                   type="button"
-                  onClick={() => updateData("type", "appointment_reminder")}
+                  onClick={() => handleChannelChange("call")}
                   className={cn(
-                    "flex flex-col items-center justify-center p-4 border rounded-lg cursor-pointer transition-colors",
-                    data.type === "appointment_reminder"
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
+                    "relative flex flex-col items-center p-6 border-2 rounded-xl transition-all",
+                    data.channel === "call"
+                      ? "border-primary bg-primary/5 shadow-md"
+                      : "border-border hover:border-primary/50 hover:bg-muted/50"
                   )}
                 >
-                  <Calendar className="h-8 w-8 mb-2 text-primary" />
-                  <span className="font-medium">Reminder</span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    Appointment reminders
+                  <div className={cn(
+                    "w-14 h-14 rounded-full flex items-center justify-center mb-3",
+                    data.channel === "call" ? "bg-primary/10" : "bg-muted"
+                  )}>
+                    <PhoneCall className={cn(
+                      "h-7 w-7",
+                      data.channel === "call" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <span className="font-semibold text-lg">Phone Call</span>
+                  <span className="text-sm text-muted-foreground text-center mt-1">
+                    AI calls your contacts
                   </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => updateData("type", "follow_up")}
-                  className={cn(
-                    "flex flex-col items-center justify-center p-4 border rounded-lg cursor-pointer transition-colors",
-                    data.type === "follow_up"
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
+                  {data.channel === "call" && (
+                    <div className="absolute top-3 right-3">
+                      <Check className="h-5 w-5 text-primary" />
+                    </div>
                   )}
-                >
-                  <Phone className="h-8 w-8 mb-2 text-primary" />
-                  <span className="font-medium">Follow-up</span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    Post-visit follow-ups
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => updateData("type", "marketing")}
-                  className={cn(
-                    "flex flex-col items-center justify-center p-4 border rounded-lg cursor-pointer transition-colors",
-                    data.type === "marketing"
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
-                  )}
-                >
-                  <MessageSquare className="h-8 w-8 mb-2 text-primary" />
-                  <span className="font-medium">Marketing</span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    Promotional outreach
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => updateData("type", "custom")}
-                  className={cn(
-                    "flex flex-col items-center justify-center p-4 border rounded-lg cursor-pointer transition-colors",
-                    data.type === "custom"
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/50"
-                  )}
-                >
-                  <Settings className="h-8 w-8 mb-2 text-primary" />
-                  <span className="font-medium">Custom</span>
-                  <span className="text-xs text-muted-foreground text-center">
-                    Custom campaign
-                  </span>
                 </button>
               </div>
+            </div>
+
+            {/* Call Purpose - Only shown for call campaigns */}
+            {data.channel === "call" && (
+              <div className="space-y-3 pt-2">
+                <Label>What&apos;s the purpose of these calls?</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => updateData("call_purpose", "reminder")}
+                    className={cn(
+                      "flex flex-col items-center p-4 border rounded-lg transition-all",
+                      data.call_purpose === "reminder"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <Clock className={cn(
+                      "h-5 w-5 mb-2",
+                      data.call_purpose === "reminder" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                    <span className="font-medium text-sm">Reminders</span>
+                    <span className="text-xs text-muted-foreground text-center">
+                      Appointment reminders
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateData("call_purpose", "follow_up")}
+                    className={cn(
+                      "flex flex-col items-center p-4 border rounded-lg transition-all",
+                      data.call_purpose === "follow_up"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <Phone className={cn(
+                      "h-5 w-5 mb-2",
+                      data.call_purpose === "follow_up" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                    <span className="font-medium text-sm">Follow-ups</span>
+                    <span className="text-xs text-muted-foreground text-center">
+                      Check-in after visits
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateData("call_purpose", "marketing")}
+                    className={cn(
+                      "flex flex-col items-center p-4 border rounded-lg transition-all",
+                      data.call_purpose === "marketing"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <Megaphone className={cn(
+                      "h-5 w-5 mb-2",
+                      data.call_purpose === "marketing" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                    <span className="font-medium text-sm">Marketing</span>
+                    <span className="text-xs text-muted-foreground text-center">
+                      Promotions & offers
+                    </span>
+                  </button>
+                </div>
+
+                {/* Phone Number Selection */}
+                <div className="space-y-2 pt-4 border-t mt-4">
+                  <Label>Outbound Phone Number *</Label>
+                  {loadingPhoneNumbers ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading phone numbers...
+                    </div>
+                  ) : phoneNumbers.length === 0 ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="flex items-center justify-between gap-4">
+                        <span>No active phone numbers found. You need to add a phone number to make calls.</span>
+                        <a
+                          href="/settings?tab=phone-billing"
+                          className="text-sm font-medium underline whitespace-nowrap hover:no-underline"
+                        >
+                          Go to Settings
+                        </a>
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      <Select
+                        value={data.from_number}
+                        onValueChange={(v) => updateData("from_number", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a phone number" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {phoneNumbers.map((phone) => (
+                            <SelectItem key={phone.id} value={phone.number}>
+                              {phone.number}
+                              {phone.setup_type && (
+                                <span className="text-muted-foreground ml-2">
+                                  ({phone.setup_type})
+                                </span>
+                              )}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        This number will be used for all outbound calls in this campaign.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Optional Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description (optional)</Label>
+              <Textarea
+                id="description"
+                placeholder="Add notes about this campaign..."
+                value={data.description}
+                onChange={(e) => updateData("description", e.target.value)}
+                rows={2}
+              />
             </div>
           </div>
         );
 
+      // =========================================================================
+      // STEP 2: Audience Selection
+      // =========================================================================
       case 2:
         return (
           <div className="space-y-4">
+            {/* Header with count */}
             <div className="flex items-center justify-between">
               <div>
-                <Label>Select Contacts</Label>
+                <Label className="text-base">Select Recipients</Label>
                 <p className="text-sm text-muted-foreground">
-                  {data.contact_ids.length} contact{data.contact_ids.length !== 1 ? "s" : ""} selected
+                  {data.contact_ids.length} of {availableContacts.length} contacts selected
                 </p>
               </div>
               <div className="flex gap-2">
@@ -538,53 +723,94 @@ export function CampaignWizard() {
                   Select All
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={deselectAllContacts}>
-                  Deselect All
+                  Clear
                 </Button>
               </div>
             </div>
 
+            {/* Info about filtered contacts */}
+            {data.channel === "email" && contacts.length > availableContacts.length && (
+              <Alert>
+                <Mail className="h-4 w-4" />
+                <AlertDescription>
+                  Showing {availableContacts.length} contacts with email addresses.
+                  {contacts.length - availableContacts.length} contacts without email are hidden.
+                </AlertDescription>
+              </Alert>
+            )}
+            {data.channel === "call" && contacts.length > availableContacts.length && (
+              <Alert>
+                <Phone className="h-4 w-4" />
+                <AlertDescription>
+                  Showing {availableContacts.length} contacts with phone numbers.
+                  {contacts.length - availableContacts.length} contacts without phone are hidden.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Search */}
             <Input
               placeholder="Search contacts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
 
+            {/* Contact List */}
             {loadingContacts ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredContacts.length === 0 ? (
-              <Alert>
+            ) : availableContacts.length === 0 ? (
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  No contacts found. Add contacts to your database first.
+                  {data.channel === "email"
+                    ? "No contacts with email addresses found. Add emails to your contacts first."
+                    : "No contacts with phone numbers found. Add phone numbers to your contacts first."}
                 </AlertDescription>
               </Alert>
+            ) : filteredContacts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No contacts match your search.
+              </div>
             ) : (
-              <div className="max-h-[400px] overflow-y-auto border rounded-lg divide-y">
-                {filteredContacts.map((contact) => (
-                  <label
-                    key={contact.id}
-                    className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={data.contact_ids.includes(contact.id)}
-                      onCheckedChange={() => toggleContact(contact.id)}
-                    />
-                    <div className="flex-1">
-                      <p className="font-medium">{contact.name || "Unknown"}</p>
-                      <p className="text-sm text-muted-foreground">{contact.phone_number}</p>
-                    </div>
-                  </label>
-                ))}
+              <div className="max-h-[350px] overflow-y-auto border rounded-lg divide-y">
+                {filteredContacts.map((contact) => {
+                  const isSelected = data.contact_ids.includes(contact.id);
+                  return (
+                    <label
+                      key={contact.id}
+                      className={cn(
+                        "flex items-center gap-3 p-3 cursor-pointer transition-colors",
+                        isSelected ? "bg-primary/5" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleContact(contact.id)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{contact.name || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {data.channel === "email" ? contact.email : contact.phone_number}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <Badge variant="secondary" className="text-xs">Selected</Badge>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
         );
 
+      // =========================================================================
+      // STEP 3: Message Content
+      // =========================================================================
       case 3:
-        // Show different content for email vs call campaigns
-        if (data.type === "email") {
+        if (data.channel === "email") {
           return (
             <div className="space-y-6">
               {/* AI Generation Panel */}
@@ -594,24 +820,24 @@ export function CampaignWizard() {
                   onClick={() => setShowAiPanel(!showAiPanel)}
                   className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <Sparkles className="w-5 h-5 text-purple-500" />
                     <div className="text-left">
                       <span className="font-medium">Generate with AI</span>
                       <p className="text-xs text-muted-foreground">
-                        Let AI help you write a professional email
+                        Let AI write your email
                       </p>
                     </div>
                   </div>
-                  <ChevronDown className={`w-5 h-5 transition-transform ${showAiPanel ? "rotate-180" : ""}`} />
+                  <ChevronDown className={cn("w-5 h-5 transition-transform", showAiPanel && "rotate-180")} />
                 </button>
 
                 {showAiPanel && (
                   <div className="p-4 border-t space-y-4 bg-muted/30">
                     <div>
-                      <Label>Describe what you want to say</Label>
+                      <Label>What should the email say?</Label>
                       <Textarea
-                        placeholder="e.g., Announce our new summer sale with 30% off all services. Include a sense of urgency and invite them to book..."
+                        placeholder="e.g., Announce our summer sale with 20% off. Create urgency and invite them to book..."
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         rows={3}
@@ -621,11 +847,8 @@ export function CampaignWizard() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label>Tone</Label>
-                        <Select
-                          value={aiTone}
-                          onValueChange={(v: string) => setAiTone(v as typeof aiTone)}
-                        >
+                        <Label className="text-sm">Tone</Label>
+                        <Select value={aiTone} onValueChange={(v: string) => setAiTone(v as typeof aiTone)}>
                           <SelectTrigger className="mt-1">
                             <SelectValue />
                           </SelectTrigger>
@@ -638,11 +861,8 @@ export function CampaignWizard() {
                         </Select>
                       </div>
                       <div>
-                        <Label>Purpose</Label>
-                        <Select
-                          value={aiPurpose}
-                          onValueChange={(v: string) => setAiPurpose(v as typeof aiPurpose)}
-                        >
+                        <Label className="text-sm">Purpose</Label>
+                        <Select value={aiPurpose} onValueChange={(v: string) => setAiPurpose(v as typeof aiPurpose)}>
                           <SelectTrigger className="mt-1">
                             <SelectValue />
                           </SelectTrigger>
@@ -682,58 +902,50 @@ export function CampaignWizard() {
 
               {/* Email Subject */}
               <div className="space-y-2">
-                <Label htmlFor="email-subject">Email Subject *</Label>
+                <Label htmlFor="email-subject">Subject Line *</Label>
                 <Input
                   id="email-subject"
-                  placeholder="Enter your email subject line..."
+                  placeholder="Enter a compelling subject line..."
                   value={data.email_subject}
                   onChange={(e) => updateData("email_subject", e.target.value)}
                 />
-                <p className="text-sm text-muted-foreground">
-                  Make it compelling to increase open rates
-                </p>
               </div>
 
               {/* Email Body */}
               <div className="space-y-2">
-                <Label htmlFor="email-body">Email Message *</Label>
+                <Label htmlFor="email-body">Email Body *</Label>
                 <Textarea
                   id="email-body"
-                  placeholder="Write your email message here...
-
-You can use line breaks for formatting."
+                  placeholder="Write your email message here..."
                   value={data.email_body}
                   onChange={(e) => updateData("email_body", e.target.value)}
                   rows={10}
-                  className="min-h-[250px]"
+                  className="min-h-[200px]"
                 />
-                <p className="text-sm text-muted-foreground">
-                  This message will be sent to all selected contacts. Each email is sent individually.
+                <p className="text-xs text-muted-foreground">
+                  Each email is sent individually to maintain deliverability.
                 </p>
               </div>
-
-              <Alert>
-                <Mail className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Note:</strong> Emails will be sent from your connected email account.
-                  Make sure you have an email account connected in Connections.
-                </AlertDescription>
-              </Alert>
             </div>
           );
         }
 
-        // Call campaign: show AI traits
+        // Call campaign content
         return (
           <div className="space-y-6">
-            {/* AI Personality Traits */}
+            <Alert>
+              <Phone className="h-4 w-4" />
+              <AlertDescription>
+                {data.call_purpose === "reminder" && "The AI will remind contacts of their upcoming appointments and offer to reschedule if needed."}
+                {data.call_purpose === "follow_up" && "The AI will check on customer satisfaction and offer additional services."}
+                {data.call_purpose === "marketing" && "The AI will present your offer and handle objections professionally."}
+              </AlertDescription>
+            </Alert>
+
+            {/* AI Personality */}
             <div className="space-y-3">
-              <div>
-                <Label className="text-base font-medium">AI Personality Traits</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Select traits to shape how the AI interacts with customers
-                </p>
-              </div>
+              <Label className="text-base">AI Personality</Label>
+              <p className="text-sm text-muted-foreground">How should the AI sound on calls?</p>
               <div className="grid grid-cols-2 gap-3">
                 {AI_TRAITS.map((trait) => (
                   <label
@@ -756,7 +968,7 @@ You can use line breaks for formatting."
                       }}
                       className="mt-0.5"
                     />
-                    <div className="flex-1">
+                    <div>
                       <p className="font-medium text-sm">{trait.name}</p>
                       <p className="text-xs text-muted-foreground">{trait.description}</p>
                     </div>
@@ -767,31 +979,34 @@ You can use line breaks for formatting."
 
             {/* Custom Instructions */}
             <div className="space-y-2">
-              <Label htmlFor="message">Additional Instructions</Label>
+              <Label htmlFor="message">Additional Instructions (optional)</Label>
               <Textarea
                 id="message"
-                placeholder="Give specific instructions for your AI. For example: 'Mention our 20% discount for new customers' or 'Ask if they need help with scheduling a follow-up appointment'."
+                placeholder="e.g., Mention our 20% discount for returning customers. Ask if they'd like to schedule a follow-up."
                 value={data.custom_message}
                 onChange={(e) => updateData("custom_message", e.target.value)}
-                rows={5}
+                rows={4}
               />
-              <p className="text-sm text-muted-foreground">
-                Add specific talking points, offers to mention, or questions to ask. The AI will incorporate these into the conversation naturally.
+              <p className="text-xs text-muted-foreground">
+                Add specific talking points or offers for the AI to mention.
               </p>
             </div>
-
-            <Alert>
-              <MessageSquare className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Tip:</strong> For {data.type === "appointment_reminder" ? "reminder" : data.type === "follow_up" ? "follow-up" : data.type} campaigns, the AI already knows to {data.type === "appointment_reminder" ? "confirm appointment details and handle rescheduling" : data.type === "follow_up" ? "check on customer satisfaction and offer additional services" : data.type === "marketing" ? "present your offer and handle objections" : "follow your instructions"}. Add anything extra here.
-              </AlertDescription>
-            </Alert>
           </div>
         );
 
+      // =========================================================================
+      // STEP 4: Schedule
+      // =========================================================================
       case 4:
         return (
           <div className="space-y-6">
+            <Alert>
+              <Calendar className="h-4 w-4" />
+              <AlertDescription>
+                Leave the start time empty to begin immediately when you launch the campaign.
+              </AlertDescription>
+            </Alert>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start">Start Date & Time</Label>
@@ -801,12 +1016,9 @@ You can use line breaks for formatting."
                   value={data.scheduled_start}
                   onChange={(e) => updateData("scheduled_start", e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to start immediately when activated
-                </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="end">End Date & Time</Label>
+                <Label htmlFor="end">End Date & Time (optional)</Label>
                 <Input
                   id="end"
                   type="datetime-local"
@@ -814,16 +1026,13 @@ You can use line breaks for formatting."
                   onChange={(e) => updateData("scheduled_end", e.target.value)}
                   min={data.scheduled_start}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Optional end date for the campaign
-                </p>
               </div>
             </div>
 
-            {/* Call campaign settings - not shown for email */}
-            {data.type !== "email" && (
+            {/* Call campaign specific settings */}
+            {data.channel === "call" && (
               <div className="space-y-4 pt-4 border-t">
-                <Label className="text-base font-medium">Campaign Settings</Label>
+                <Label className="text-base">Call Settings</Label>
 
                 <div className="space-y-2">
                   <Label htmlFor="daily-limit">Daily Call Limit</Label>
@@ -837,29 +1046,29 @@ You can use line breaks for formatting."
                     className="w-32"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Maximum calls to make per day (1-500)
+                    Maximum calls per day (1-500)
                   </p>
                 </div>
 
-                <div className="flex items-start space-x-3 pt-2">
+                <div className="flex items-start gap-3">
                   <Checkbox
                     id="retry"
                     checked={data.settings.retry_failed}
                     onCheckedChange={(checked) => updateSettings("retry_failed", checked === true)}
                   />
-                  <div className="space-y-1">
+                  <div>
                     <label htmlFor="retry" className="text-sm font-medium cursor-pointer">
                       Retry failed calls
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Automatically retry calls that fail due to no answer or busy signal
+                      Automatically retry if no answer or busy
                     </p>
                   </div>
                 </div>
 
                 {data.settings.retry_failed && (
-                  <div className="space-y-2 pl-6">
-                    <Label htmlFor="max-retries">Maximum Retries</Label>
+                  <div className="pl-6 space-y-2">
+                    <Label htmlFor="max-retries">Max Retries</Label>
                     <Select
                       value={String(data.settings.max_retries)}
                       onValueChange={(v: string) => updateSettings("max_retries", parseInt(v))}
@@ -877,114 +1086,125 @@ You can use line breaks for formatting."
                 )}
               </div>
             )}
-
-            {/* Email campaign info */}
-            {data.type === "email" && (
-              <Alert className="mt-4">
-                <Mail className="h-4 w-4" />
-                <AlertDescription>
-                  Emails will be sent individually to each contact. This respects email provider
-                  limits and ensures better deliverability.
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         );
 
+      // =========================================================================
+      // STEP 5: Review
+      // =========================================================================
       case 5:
         return (
           <div className="space-y-6">
             <Alert>
               <Check className="h-4 w-4" />
               <AlertDescription>
-                Review your campaign settings below before creating.
+                Review your campaign before launching.
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+            <div className="space-y-4 divide-y">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4 pb-4">
+                <div>
                   <p className="text-sm text-muted-foreground">Campaign Name</p>
                   <p className="font-medium">{data.name}</p>
                 </div>
-                <div className="space-y-1">
+                <div>
                   <p className="text-sm text-muted-foreground">Type</p>
                   <p className="font-medium">
-                    {data.type === "email" ? "Email Campaign" :
-                     data.type === "appointment_reminder" ? "Appointment Reminder" :
-                     data.type === "follow_up" ? "Follow-up" :
-                     data.type === "marketing" ? "Marketing" : "Custom"}
+                    {data.channel === "email" ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail className="h-4 w-4" /> Email Campaign
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <PhoneCall className="h-4 w-4" />
+                        {data.call_purpose === "reminder" && "Reminder Calls"}
+                        {data.call_purpose === "follow_up" && "Follow-up Calls"}
+                        {data.call_purpose === "marketing" && "Marketing Calls"}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
 
-              {data.description && (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Description</p>
-                  <p>{data.description}</p>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Target Audience</p>
+              {/* Audience */}
+              <div className="py-4">
+                <p className="text-sm text-muted-foreground">Recipients</p>
                 <p className="font-medium">
                   {data.contact_ids.length} contact{data.contact_ids.length !== 1 ? "s" : ""}
                 </p>
               </div>
 
-              {/* Email campaign details */}
-              {data.type === "email" && (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Email Subject</p>
+              {/* Email Content */}
+              {data.channel === "email" && (
+                <div className="py-4 space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Subject</p>
                     <p className="font-medium">{data.email_subject}</p>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Email Message</p>
-                    <p className="text-sm bg-muted p-3 rounded whitespace-pre-wrap max-h-32 overflow-auto">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Message Preview</p>
+                    <div className="mt-1 p-3 bg-muted rounded-md text-sm max-h-32 overflow-auto whitespace-pre-wrap">
                       {data.email_body}
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {/* Call campaign: AI traits */}
-              {data.type !== "email" && (data.ai_traits || []).length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">AI Personality</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(data.ai_traits || []).map((traitId) => {
-                      const trait = AI_TRAITS.find((t) => t.id === traitId);
-                      return trait ? (
-                        <span
-                          key={traitId}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary"
-                        >
-                          {trait.name}
-                        </span>
-                      ) : null;
-                    })}
+                    </div>
                   </div>
                 </div>
               )}
 
-              {data.type !== "email" && data.custom_message && (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Additional Instructions</p>
-                  <p className="text-sm bg-muted p-3 rounded">{data.custom_message}</p>
+              {/* Call Settings */}
+              {data.channel === "call" && (
+                <div className="py-4 space-y-3">
+                  {data.from_number && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Outbound Number</p>
+                      <p className="font-medium">{data.from_number}</p>
+                    </div>
+                  )}
+                  {(data.ai_traits || []).length > 0 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">AI Personality</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {(data.ai_traits || []).map((traitId) => {
+                          const trait = AI_TRAITS.find((t) => t.id === traitId);
+                          return trait ? (
+                            <Badge key={traitId} variant="secondary">{trait.name}</Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {data.custom_message && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Additional Instructions</p>
+                      <p className="text-sm mt-1 p-3 bg-muted rounded-md">{data.custom_message}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Settings</p>
+                    <ul className="text-sm mt-1 space-y-1">
+                      <li>Daily limit: {data.settings.daily_limit} calls</li>
+                      <li>
+                        {data.settings.retry_failed
+                          ? `Retry failed calls (up to ${data.settings.max_retries}x)`
+                          : "No automatic retries"}
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+              {/* Schedule */}
+              <div className="pt-4 grid grid-cols-2 gap-4">
+                <div>
                   <p className="text-sm text-muted-foreground">Start</p>
                   <p className="font-medium">
                     {data.scheduled_start
                       ? new Date(data.scheduled_start).toLocaleString()
-                      : "Immediately when activated"}
+                      : "Immediately when launched"}
                   </p>
                 </div>
-                <div className="space-y-1">
+                <div>
                   <p className="text-sm text-muted-foreground">End</p>
                   <p className="font-medium">
                     {data.scheduled_end
@@ -993,21 +1213,6 @@ You can use line breaks for formatting."
                   </p>
                 </div>
               </div>
-
-              {/* Call campaign settings */}
-              {data.type !== "email" && (
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Settings</p>
-                  <ul className="text-sm space-y-1">
-                    <li>Daily limit: {data.settings.daily_limit} calls</li>
-                    <li>
-                      {data.settings.retry_failed
-                        ? `Retry failed calls (up to ${data.settings.max_retries} times)`
-                        : "No automatic retries"}
-                    </li>
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
         );
@@ -1027,11 +1232,11 @@ You can use line breaks for formatting."
       <div className="mb-8">
         <Button type="button" variant="ghost" onClick={() => router.push("/campaigns")} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Outbound
+          Back to Campaigns
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">Create Campaign</h1>
         <p className="text-muted-foreground">
-          Set up a new outbound calling campaign
+          Reach your contacts via email or phone
         </p>
       </div>
 
@@ -1056,11 +1261,7 @@ You can use line breaks for formatting."
                         : "border-muted-foreground/30 text-muted-foreground"
                     )}
                   >
-                    {isCompleted ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <Icon className="h-5 w-5" />
-                    )}
+                    {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                   </div>
                   <span
                     className={cn(
@@ -1074,7 +1275,7 @@ You can use line breaks for formatting."
                 {index < STEPS.length - 1 && (
                   <div
                     className={cn(
-                      "h-0.5 w-16 mx-2",
+                      "h-0.5 w-12 sm:w-16 mx-2",
                       isCompleted ? "bg-primary" : "bg-muted-foreground/30"
                     )}
                   />
@@ -1111,9 +1312,7 @@ You can use line breaks for formatting."
                   onClick={() => handleSave(false)}
                   disabled={saving}
                 >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : null}
+                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Save as Draft
                 </Button>
                 <Button
@@ -1126,7 +1325,7 @@ You can use line breaks for formatting."
                   ) : (
                     <Check className="h-4 w-4 mr-2" />
                   )}
-                  Create & Start
+                  {data.channel === "email" ? "Send Emails" : "Start Calling"}
                 </Button>
               </>
             ) : (

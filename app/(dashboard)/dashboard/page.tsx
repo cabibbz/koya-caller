@@ -214,6 +214,12 @@ async function DashboardContent({ searchParams }: { searchParams: { [key: string
   const calendarIntegration = results[12].status === 'fulfilled' ? results[12].value : null
 
   // Build checklist data
+  // Calendar can be connected via access_token (legacy) OR grant_id (Nylas)
+  const isCalendarConnected =
+    calendarIntegration !== null &&
+    calendarIntegration.provider !== "built_in" &&
+    (calendarIntegration.access_token !== null || calendarIntegration.grant_id !== null);
+
   const checklistData: ChecklistData = {
     businessName: business.name,
     phoneNumber: phoneNumber !== null && phoneNumber.is_active,
@@ -221,10 +227,7 @@ async function DashboardContent({ searchParams }: { searchParams: { [key: string
     servicesCount: services.length,
     faqsCount: faqs.length,
     voiceId: aiConfig?.voice_id ?? null,
-    calendarConnected:
-      calendarIntegration !== null &&
-      calendarIntegration.provider !== "built_in" &&
-      calendarIntegration.access_token !== null,
+    calendarConnected: isCalendarConnected,
     hasTestCall: recentCalls.length > 0,
   }
 
