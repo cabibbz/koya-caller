@@ -146,10 +146,10 @@ async function handlePost(
           await adminSupabase
             .from("outbound_call_queue")
             .update({
-              status: "completed",
+              status: "calling",  // Keep as "calling" until webhook updates with final outcome
               call_id: callResult.callId,
               retell_call_id: callResult.retellCallId,
-              outcome: "initiated",
+              outcome: "initiated",  // Will be updated by webhook when call ends
               attempt_count: (item.attempt_count || 0) + 1,
             })
             .eq("id", item.id);

@@ -272,6 +272,29 @@ export async function createAgent(params: AgentCreateParams): Promise<AgentRespo
 /**
  * Update an existing Retell agent
  */
+/**
+ * Update an agent's webhook URL to point to current app URL
+ */
+export async function updateAgentWebhookUrl(agentId: string): Promise<boolean> {
+  const client = getRetellClient();
+  if (!client) {
+    return true;
+  }
+
+  try {
+    const webhookUrl = `${getBaseUrl()}/api/retell/webhook`;
+    console.log(`[Retell] Updating agent ${agentId} webhook URL to: ${webhookUrl}`);
+    await client.agent.update(agentId, {
+      webhook_url: webhookUrl,
+    });
+    console.log(`[Retell] Successfully updated webhook URL for agent ${agentId}`);
+    return true;
+  } catch (error) {
+    console.error(`[Retell] Failed to update webhook URL:`, error);
+    return false;
+  }
+}
+
 export async function updateAgent(
   agentId: string,
   updates: Partial<AgentCreateParams>

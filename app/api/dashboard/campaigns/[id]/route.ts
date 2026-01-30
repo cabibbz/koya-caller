@@ -87,33 +87,58 @@ async function handleGet(
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", id);
 
-    const { count: completedCount } = await anySupabase
+    // Count calls that actually connected and had a positive outcome
+    // Successful outcomes: booked, transferred, message_taken, completed, answered
+    const { count: successfulCount } = await anySupabase
       .from("outbound_call_queue")
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", id)
-      .eq("status", "completed");
+      .eq("status", "completed")
+      .in("outcome", ["booked", "transferred", "message_taken", "completed", "answered"]);
 
-    const { count: failedCount } = await anySupabase
+    // Count calls that failed or had negative outcomes
+    // Failed statuses: failed, dnc_blocked, no_answer
+    // Failed outcomes: no_answer, voicemail, busy, rejected, error, invalid_number
+    const { count: failedStatusCount } = await anySupabase
       .from("outbound_call_queue")
       .select("*", { count: "exact", head: true })
       .eq("campaign_id", id)
-      .in("status", ["failed", "dnc_blocked"]);
+      .in("status", ["failed", "dnc_blocked", "no_answer"]);
+
+    const { count: failedOutcomeCount } = await anySupabase
+      .from("outbound_call_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("campaign_id", id)
+      .eq("status", "completed")
+      .in("outcome", ["no_answer", "voicemail", "busy", "rejected", "error", "invalid_number", "hung_up"]);
+
+    // Count calls still in progress (calling status)
+    const { count: inProgressCount } = await anySupabase
+      .from("outbound_call_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("campaign_id", id)
+      .eq("status", "calling");
 
     const total = queueCount || 0;
-    const completed = completedCount || 0;
-    const failed = failedCount || 0;
+    const successful = successfulCount || 0;
+    const failed = (failedStatusCount || 0) + (failedOutcomeCount || 0);
+    const inProgress = inProgressCount || 0;
+    const completed = successful + failed;
 
     return success({
       ...campaign,
       target_contacts: total,
-      calls_completed: completed + failed,
-      calls_successful: completed,
+      calls_completed: completed,
+      calls_successful: successful,
       calls_failed: failed,
+      calls_in_progress: inProgress,
       queue_stats: {
         total,
         completed,
+        successful,
         failed,
-        pending: total - completed - failed,
+        in_progress: inProgress,
+        pending: total - completed - inProgress,
       },
     });
   } catch (error) {
@@ -381,7 +406,7 @@ async function handleDelete(
 // =============================================================================
 
 interface CampaignActionRequest {
-  action: "start" | "pause" | "resume" | "cancel";
+  action: "start" | "pause" | "resume" | "cancel" | "reset";
 }
 
 async function handlePost(
@@ -418,8 +443,8 @@ async function handlePost(
 
     const body: CampaignActionRequest = await request.json();
 
-    if (!body.action || !["start", "pause", "resume", "cancel"].includes(body.action)) {
-      return errors.badRequest("Action must be: start, pause, resume, or cancel");
+    if (!body.action || !["start", "pause", "resume", "cancel", "reset"].includes(body.action)) {
+      return errors.badRequest("Action must be: start, pause, resume, cancel, or reset");
     }
 
     // Validate state transitions
@@ -429,6 +454,7 @@ async function handlePost(
       pause: ["running"],
       resume: ["paused"],
       cancel: ["running", "paused", "scheduled"],
+      reset: ["completed", "cancelled"],
     };
 
     if (!validTransitions[body.action].includes(existingCampaign.status)) {
@@ -443,6 +469,7 @@ async function handlePost(
       pause: "paused",
       resume: "running",
       cancel: "cancelled",
+      reset: "draft",
     };
 
     const newStatus = statusMap[body.action];
@@ -463,6 +490,12 @@ async function handlePost(
     // Set completed_at when cancelling
     if (body.action === "cancel") {
       updateData.completed_at = new Date().toISOString();
+    }
+
+    // Clear started_at and completed_at when resetting
+    if (body.action === "reset") {
+      updateData.started_at = null;
+      updateData.completed_at = null;
     }
 
     const { data: campaign, error: updateError } = await adminSupabase
@@ -617,15 +650,23 @@ async function handlePost(
         }
 
         if (contactIds.length > 0) {
-          // Fetch contact details from caller_profiles table
-          const { data: contacts } = await adminSupabase
-            .from("caller_profiles")
-            .select("id, name, phone_number, email")
-            .in("id", contactIds);
+          // Check if queue items already exist for this campaign (e.g., after a reset)
+          const { count: existingQueueCount } = await adminSupabase
+            .from("outbound_call_queue")
+            .select("*", { count: "exact", head: true })
+            .eq("campaign_id", id);
 
-          if (contacts && contacts.length > 0) {
-            // Create queue items for each contact
-            const queueItems = contacts.map(
+          // Only create new queue items if none exist
+          if ((existingQueueCount || 0) === 0) {
+            // Fetch contact details from caller_profiles table
+            const { data: contacts } = await adminSupabase
+              .from("caller_profiles")
+              .select("id, name, phone_number, email")
+              .in("id", contactIds);
+
+            if (contacts && contacts.length > 0) {
+              // Create queue items for each contact
+              const queueItems = contacts.map(
               (contact: { id: string; name: string; phone_number: string; email?: string }) => ({
                 business_id: business.id,
                 campaign_id: id,
@@ -669,6 +710,12 @@ async function handlePost(
                 `Added ${queueItems.length} contacts to call queue for campaign ${id}`
               );
             }
+            }
+          } else {
+            logInfo(
+              "Campaign Start",
+              `Queue items already exist for campaign ${id}, skipping creation`
+            );
           }
         }
       }
@@ -681,6 +728,21 @@ async function handlePost(
         .update({ status: "cancelled" })
         .eq("campaign_id", id)
         .in("status", ["pending", "scheduled"]);
+    }
+
+    // If resetting, reset all queue items back to pending
+    if (body.action === "reset") {
+      await adminSupabase
+        .from("outbound_call_queue")
+        .update({
+          status: "pending",
+          attempt_count: 0,
+          last_attempt_at: null,
+          call_id: null,
+          result: null,
+          error_message: null,
+        })
+        .eq("campaign_id", id);
     }
 
     logInfo(

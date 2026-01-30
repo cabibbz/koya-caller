@@ -959,6 +959,12 @@ function mapOutcomeToOutboundOutcome(
       case "error":
       case "system_error":
         return "error";
+      case "user_hangup":
+        // User hung up - only count as successful if a positive action happened
+        if (outcome === "booked" || outcome === "transferred" || outcome === "message") {
+          break; // Fall through to outcome mapping below
+        }
+        return "hung_up";
     }
   }
 

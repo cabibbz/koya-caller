@@ -22,6 +22,7 @@ import {
   Loader2,
   MoreVertical,
   Edit,
+  RotateCcw,
 } from "lucide-react";
 import {
   Button,
@@ -50,7 +51,7 @@ interface Campaign {
   id: string;
   name: string;
   description: string | null;
-  status: "draft" | "scheduled" | "active" | "paused" | "completed";
+  status: "draft" | "scheduled" | "active" | "running" | "paused" | "completed" | "cancelled";
   type: "reminder" | "followup" | "custom";
   scheduled_start: string | null;
   scheduled_end: string | null;
@@ -73,12 +74,14 @@ interface CampaignDetailProps {
 // =============================================================================
 
 const getStatusColor = (status: Campaign["status"]) => {
-  const colors = {
+  const colors: Record<string, string> = {
     draft: "bg-gray-500/10 text-gray-600",
     scheduled: "bg-blue-500/10 text-blue-600",
     active: "bg-green-500/10 text-green-600",
+    running: "bg-green-500/10 text-green-600",
     paused: "bg-yellow-500/10 text-yellow-600",
     completed: "bg-purple-500/10 text-purple-600",
+    cancelled: "bg-red-500/10 text-red-600",
   };
   return colors[status] || colors.draft;
 };
@@ -217,7 +220,7 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
               Start Campaign
             </Button>
           )}
-          {campaign.status === "active" && (
+          {(campaign.status === "active" || campaign.status === "running") && (
             <Button variant="secondary" onClick={() => handleAction("pause")} disabled={actionLoading}>
               {actionLoading ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -237,6 +240,16 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
               Resume
             </Button>
           )}
+          {(campaign.status === "completed" || campaign.status === "cancelled") && (
+            <Button onClick={() => handleAction("reset")} disabled={actionLoading}>
+              {actionLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-2" />
+              )}
+              Reset Campaign
+            </Button>
+          )}
 
           {/* More actions */}
           <DropdownMenu>
@@ -246,7 +259,7 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {campaign.status !== "active" && campaign.status !== "completed" && (
+              {campaign.status !== "active" && campaign.status !== "running" && campaign.status !== "completed" && (
                 <DropdownMenuItem asChild>
                   <Link href={`/campaigns/${campaign.id}/edit`}>
                     <Edit className="h-4 w-4 mr-2" />
@@ -254,7 +267,7 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
                   </Link>
                 </DropdownMenuItem>
               )}
-              {(campaign.status === "active" || campaign.status === "paused") && (
+              {(campaign.status === "active" || campaign.status === "running" || campaign.status === "paused") && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -266,7 +279,7 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
                   </DropdownMenuItem>
                 </>
               )}
-              {campaign.status !== "active" && (
+              {campaign.status !== "active" && campaign.status !== "running" && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
@@ -428,7 +441,7 @@ export function CampaignDetail({ campaign: initialCampaign }: CampaignDetailProp
             <QueueDashboard
               campaignId={campaign.id}
               showHeader={false}
-              defaultAutoRefresh={campaign.status === "active"}
+              defaultAutoRefresh={campaign.status === "active" || campaign.status === "running"}
             />
           </CardContent>
         </Card>

@@ -40,6 +40,7 @@ import {
   PlayCircle,
   Upload,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 import {
   Button,
@@ -92,7 +93,7 @@ interface Campaign {
   id: string;
   name: string;
   description: string | null;
-  status: "draft" | "scheduled" | "active" | "running" | "paused" | "completed";
+  status: "draft" | "scheduled" | "active" | "running" | "paused" | "completed" | "cancelled";
   type: "reminder" | "followup" | "custom" | "appointment_reminder" | "follow_up" | "marketing";
   scheduled_start: string | null;
   scheduled_end: string | null;
@@ -161,13 +162,14 @@ interface Agent {
 // =============================================================================
 
 const getStatusColor = (status: Campaign["status"]) => {
-  const colors = {
+  const colors: Record<string, string> = {
     draft: "bg-gray-500/10 text-gray-600 border-gray-200",
     scheduled: "bg-blue-500/10 text-blue-600 border-blue-200",
     active: "bg-green-500/10 text-green-600 border-green-200",
     running: "bg-green-500/10 text-green-600 border-green-200",
     paused: "bg-yellow-500/10 text-yellow-600 border-yellow-200",
     completed: "bg-purple-500/10 text-purple-600 border-purple-200",
+    cancelled: "bg-red-500/10 text-red-600 border-red-200",
   };
   return colors[status] || colors.draft;
 };
@@ -1046,6 +1048,23 @@ export function OutboundClient() {
                               <>
                                 <Play className="h-3 w-3 mr-1" />
                                 Resume
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {(campaign.status === "completed" || campaign.status === "cancelled") && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleCampaignAction(campaign.id, "reset")}
+                            disabled={campaignActionLoading === campaign.id}
+                          >
+                            {campaignActionLoading === campaign.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                Reset
                               </>
                             )}
                           </Button>

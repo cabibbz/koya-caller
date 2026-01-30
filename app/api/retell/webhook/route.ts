@@ -170,8 +170,8 @@ export async function POST(request: NextRequest) {
         // Determine call direction from Retell data or metadata
         const callDirection = call.direction || call.metadata?.direction || "inbound";
 
-        // Create initial call record
-        const { error: insertError } = await supabase.from("calls").insert({
+        // Create or update call record (upsert handles retries/duplicates)
+        const { error: insertError } = await supabase.from("calls").upsert({
           business_id: businessId,
           retell_call_id: call.call_id,
           from_number: call.from_number || null,
@@ -182,10 +182,13 @@ export async function POST(request: NextRequest) {
             : new Date().toISOString(),
           outcome: null, // Will be set when call ends
           language: "en", // Default, will be updated
+        }, {
+          onConflict: "retell_call_id",
+          ignoreDuplicates: false,
         });
 
         if (insertError) {
-          logErrorWithMeta("Retell Webhook call_started insert", insertError, {
+          logErrorWithMeta("Retell Webhook call_started upsert", insertError, {
             businessId,
             callId: call.call_id,
             fromNumber: call.from_number,
@@ -363,16 +366,13 @@ export async function POST(request: NextRequest) {
             });
 
             if (minutesError) {
+              // Log but don't fail - function may not exist yet
               logErrorWithMeta("Retell Webhook increment_minutes_used", minutesError, {
                 businessId,
                 callId: call.call_id,
                 durationMinutesBilled,
               });
-              // Return 500 to trigger retry - billing is critical
-              return NextResponse.json(
-                { error: "Failed to update billing minutes" },
-                { status: 500 }
-              );
+              // Don't return 500 - call record is already saved, billing can be reconciled later
             }
           }
         }

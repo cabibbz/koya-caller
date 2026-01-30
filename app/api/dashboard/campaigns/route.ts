@@ -103,27 +103,37 @@ async function handleGet(
           .select("*", { count: "exact", head: true })
           .eq("campaign_id", campaignId);
 
-        const { count: completedCount } = await anySupabase
+        // Count calls with positive outcomes as successful
+        const { count: successfulCount } = await anySupabase
           .from("outbound_call_queue")
           .select("*", { count: "exact", head: true })
           .eq("campaign_id", campaignId)
-          .eq("status", "completed");
+          .eq("status", "completed")
+          .in("outcome", ["booked", "transferred", "message_taken", "completed", "answered"]);
 
-        const { count: failedCount } = await anySupabase
+        // Count calls with failed status or negative outcomes
+        const { count: failedStatusCount } = await anySupabase
           .from("outbound_call_queue")
           .select("*", { count: "exact", head: true })
           .eq("campaign_id", campaignId)
-          .in("status", ["failed", "dnc_blocked"]);
+          .in("status", ["failed", "dnc_blocked", "no_answer"]);
+
+        const { count: failedOutcomeCount } = await anySupabase
+          .from("outbound_call_queue")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", campaignId)
+          .eq("status", "completed")
+          .in("outcome", ["no_answer", "voicemail", "busy", "rejected", "error", "invalid_number", "hung_up"]);
 
         const total = queueCount || contactIds?.length || 0;
-        const completed = completedCount || 0;
-        const failed = failedCount || 0;
+        const successful = successfulCount || 0;
+        const failed = (failedStatusCount || 0) + (failedOutcomeCount || 0);
 
         return {
           ...campaign,
           target_contacts: total,
-          calls_completed: completed + failed,
-          calls_successful: completed,
+          calls_completed: successful + failed,
+          calls_successful: successful,
           calls_failed: failed,
         };
       })
