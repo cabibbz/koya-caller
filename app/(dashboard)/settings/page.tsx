@@ -59,7 +59,8 @@ export default async function SettingsPage() {
       .from("calendar_integrations")
       .select("*")
       .eq("business_id", business.id)
-      .single(),
+      .eq("provider", "built_in")
+      .maybeSingle(),
     supabase
       .from("notification_settings")
       .select("*")

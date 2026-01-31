@@ -175,7 +175,6 @@ const DEFAULT_VOICE_SETTINGS = {
 };
 
 const DEFAULT_CALENDAR_SETTINGS = {
-  provider: "built_in" as const,
   defaultDurationMinutes: 60,
   bufferMinutes: 0,
   advanceBookingDays: 14,
@@ -398,23 +397,23 @@ export function SettingsClient({
   });
   const [languageSettingsModified, setLanguageSettingsModified] = useState(false);
 
-  // Calendar state
+  // Calendar state - now supports multiple calendars
+  interface ConnectedCalendar {
+    id: string;
+    provider: string;
+    email: string | null;
+    isPrimary: boolean;
+    connectedAt: string;
+  }
+  const [connectedCalendars, setConnectedCalendars] = useState<ConnectedCalendar[]>([]);
   const [calendarSettings, setCalendarSettings] = useState({
-    provider: initialCalendarIntegration?.provider || "built_in",
     defaultDurationMinutes: initialCalendarIntegration?.default_duration_minutes || 60,
     bufferMinutes: initialCalendarIntegration?.buffer_minutes || 0,
     advanceBookingDays: initialCalendarIntegration?.advance_booking_days || 14,
     requireEmail: initialCalendarIntegration?.require_email ?? false,
   });
   const [calendarSettingsModified, setCalendarSettingsModified] = useState(false);
-  const [calendarConnected, setCalendarConnected] = useState(
-    (initialCalendarIntegration?.provider !== "built_in" &&
-    !!initialCalendarIntegration?.access_token) ||
-    !!initialCalendarIntegration?.grant_id
-  );
-  const [calendarEmail, setCalendarEmail] = useState<string | null>(
-    initialCalendarIntegration?.grant_email || null
-  );
+  const [calendarsLoading, setCalendarsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -743,6 +742,35 @@ export function SettingsClient({
     };
   }, []);
 
+  // Fetch connected calendars
+  const fetchCalendars = async () => {
+    try {
+      const response = await fetch("/api/dashboard/settings/calendar");
+      if (response.ok) {
+        const data = await response.json();
+        setConnectedCalendars(data.calendars || []);
+        // Update settings from API response
+        if (data.settings) {
+          setCalendarSettings({
+            defaultDurationMinutes: data.settings.default_duration_minutes || 60,
+            bufferMinutes: data.settings.buffer_minutes || 0,
+            advanceBookingDays: data.settings.advance_booking_days || 14,
+            requireEmail: data.settings.require_email || false,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch calendars:", error);
+    } finally {
+      setCalendarsLoading(false);
+    }
+  };
+
+  // Fetch calendars on mount
+  useEffect(() => {
+    fetchCalendars();
+  }, []);
+
   // Handle URL tab param and OAuth callback
   useEffect(() => {
     const success = searchParams.get("success");
@@ -757,7 +785,8 @@ export function SettingsClient({
 
     if (success) {
       setSuccessMessage(success);
-      setCalendarConnected(true);
+      // Refresh the calendar list to show the new connection
+      fetchCalendars();
       // Clear URL params after reading
       router.replace("/settings?tab=calendar", { scroll: false });
       // Clear success after 5 seconds
@@ -822,12 +851,12 @@ export function SettingsClient({
     }
   };
 
-  // Disconnect calendar
-  const handleDisconnectCalendar = async () => {
+  // Disconnect a specific calendar
+  const handleDisconnectCalendar = async (provider: string) => {
     setSaving(true);
 
     try {
-      const response = await fetch("/api/dashboard/settings/calendar", {
+      const response = await fetch(`/api/dashboard/settings/calendar?provider=${provider}`, {
         method: "DELETE",
       });
 
@@ -836,13 +865,42 @@ export function SettingsClient({
         throw new Error(data.error || "Failed to disconnect");
       }
 
-      setCalendarSettings((prev) => ({ ...prev, provider: "built_in" }));
-      setCalendarConnected(false);
-      setCalendarEmail(null);
-      toast({ title: "Calendar disconnected", variant: "success" });
+      // Refresh calendar list
+      await fetchCalendars();
+      toast({ title: `${provider === "google" ? "Google" : "Outlook"} calendar disconnected`, variant: "success" });
     } catch (err) {
       toast({
         title: "Failed to disconnect calendar",
+        description: err instanceof Error ? err.message : "Please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Set a calendar as primary
+  const handleSetPrimary = async (provider: string) => {
+    setSaving(true);
+
+    try {
+      const response = await fetch("/api/dashboard/settings/calendar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setPrimary", provider }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to set primary calendar");
+      }
+
+      // Refresh calendar list
+      await fetchCalendars();
+      toast({ title: `${provider === "google" ? "Google" : "Outlook"} set as primary calendar`, variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Failed to set primary calendar",
         description: err instanceof Error ? err.message : "Please try again",
         variant: "destructive"
       });
@@ -2844,57 +2902,124 @@ export function SettingsClient({
             <div className="space-y-4">
               <h3 className="text-lg font-medium">{t("calendar.provider")}</h3>
 
-              {/* Connected State */}
-              {calendarConnected && calendarSettings.provider !== "built_in" && (
-                <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                      <div>
-                        <h4 className="font-medium text-green-400">
-                          Calendar Connected
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          {calendarEmail ? `Syncing with ${calendarEmail}` : "Your appointments will sync automatically"}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDisconnectCalendar}
-                      disabled={saving}
-                      className="text-red-400 border-red-400/30 hover:bg-red-500/10"
-                    >
-                      {saving ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Unlink className="w-4 h-4 mr-2" />
-                      )}
-                      Disconnect
-                    </Button>
-                  </div>
+              {/* Loading State */}
+              {calendarsLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading calendars...
                 </div>
               )}
 
-              {/* Connect Calendar */}
-              {!calendarConnected && (
+              {/* Connected Calendars List */}
+              {!calendarsLoading && connectedCalendars.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Connect your Google or Outlook calendar to sync appointments automatically.
-                  </p>
-                  <Button
-                    onClick={handleConnectCalendar}
-                    disabled={isConnecting}
-                    className="w-full sm:w-auto"
-                  >
-                    {isConnecting ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Calendar className="w-4 h-4 mr-2" />
-                    )}
-                    {isConnecting ? "Connecting..." : "Connect Calendar"}
-                  </Button>
+                  {connectedCalendars.map((cal) => (
+                    <div
+                      key={cal.id}
+                      className="rounded-lg border border-green-500/30 bg-green-500/10 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-background">
+                            {cal.provider === "google" ? (
+                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M11.5 3v8.5H3V3h8.5zm0 18H3v-8.5h8.5V21zm1-18H21v8.5h-8.5V3zm8.5 9.5V21h-8.5v-8.5H21z" fill="#00A4EF"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-green-400">
+                                {cal.provider === "google" ? "Google Calendar" : "Outlook Calendar"}
+                              </h4>
+                              {cal.isPrimary && (
+                                <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                                  Primary
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {cal.email || "Connected"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {!cal.isPrimary && connectedCalendars.length > 1 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetPrimary(cal.provider)}
+                              disabled={saving}
+                            >
+                              Set as Primary
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDisconnectCalendar(cal.provider)}
+                            disabled={saving}
+                            className="text-red-400 border-red-400/30 hover:bg-red-500/10"
+                          >
+                            {saving ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Unlink className="w-4 h-4 mr-2" />
+                            )}
+                            Disconnect
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Connect Calendar Button */}
+              {!calendarsLoading && (
+                <div className="space-y-3">
+                  {connectedCalendars.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Connect your Google or Outlook calendar to sync appointments automatically.
+                    </p>
+                  )}
+                  {connectedCalendars.length > 0 && connectedCalendars.length < 2 && (
+                    <p className="text-sm text-muted-foreground">
+                      You can connect both Google and Outlook calendars to check availability across all of them.
+                    </p>
+                  )}
+                  {connectedCalendars.length < 2 && (
+                    <Button
+                      onClick={handleConnectCalendar}
+                      disabled={isConnecting}
+                      variant={connectedCalendars.length > 0 ? "outline" : "default"}
+                      className="w-full sm:w-auto"
+                    >
+                      {isConnecting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Calendar className="w-4 h-4 mr-2" />
+                      )}
+                      {isConnecting
+                        ? "Connecting..."
+                        : connectedCalendars.length > 0
+                          ? "Connect Another Calendar"
+                          : "Connect Calendar"}
+                    </Button>
+                  )}
+                  {connectedCalendars.length >= 2 && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      Both Google and Outlook calendars are connected.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

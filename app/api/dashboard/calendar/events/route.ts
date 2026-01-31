@@ -1,21 +1,21 @@
 /**
  * Calendar Events API
- * GET /api/dashboard/calendar/events — list events from Nylas
+ * GET /api/dashboard/calendar/events — list events from ALL connected calendars (Nylas)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/auth-middleware";
-import { getNylasGrant, getCalendarEvents } from "@/lib/nylas/calendar";
+import { getAllNylasGrants, getCalendarEventsFromAllGrants } from "@/lib/nylas/calendar";
 import { logError } from "@/lib/logging";
 
 export const dynamic = "force-dynamic";
 
 export const GET = withAuth(async (request: NextRequest, { business }) => {
-  const grant = await getNylasGrant(business.id);
-  if (!grant) {
+  const grants = await getAllNylasGrants(business.id);
+  if (grants.length === 0) {
     return NextResponse.json(
-      { error: "No calendar connected" },
-      { status: 400 }
+      { error: "No calendar connected", events: [] },
+      { status: 200 } // Return 200 with empty events instead of error
     );
   }
 
@@ -31,29 +31,24 @@ export const GET = withAuth(async (request: NextRequest, { business }) => {
   }
 
   try {
-    const events = await getCalendarEvents(
-      grant.grantId,
-      grant.calendarId || "primary",
+    // Fetch events from ALL connected calendars
+    const events = await getCalendarEventsFromAllGrants(
+      business.id,
       parseInt(startParam),
       parseInt(endParam)
     );
 
-    const mapped = events.map((e: any) => {
-      const when = (e as any).when || {};
-      return {
-        id: e.id,
-        title: (e as any).title || "",
-        description: (e as any).description || "",
-        start: when.startTime ? when.startTime * 1000 : 0,
-        end: when.endTime ? when.endTime * 1000 : 0,
-        location: (e as any).location || "",
-        status: (e as any).status || "confirmed",
-        participants: (e as any).participants || [],
-        conferencing: (e as any).conferencing || null,
-      };
-    });
+    // Include connected calendar info in response
+    const connectedCalendars = grants.map(g => ({
+      provider: g.grantProvider,
+      email: g.grantEmail,
+      isPrimary: g.isPrimary,
+    }));
 
-    return NextResponse.json({ events: mapped });
+    return NextResponse.json({
+      events,
+      connectedCalendars,
+    });
   } catch (err) {
     logError("Calendar Events API", err);
     return NextResponse.json(

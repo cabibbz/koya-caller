@@ -3,10 +3,10 @@
  * Session 18: Dashboard - Settings
  * Spec Reference: Part 7, Lines 780-790
  *
- * GET /api/dashboard/settings/calendar - Get calendar settings
+ * GET /api/dashboard/settings/calendar - Get ALL connected calendars
  * PUT /api/dashboard/settings/calendar - Update calendar settings
- * POST /api/dashboard/settings/calendar - Initiate OAuth flow (stub)
- * DELETE /api/dashboard/settings/calendar - Disconnect calendar
+ * POST /api/dashboard/settings/calendar - Initiate OAuth flow / Set primary
+ * DELETE /api/dashboard/settings/calendar - Disconnect calendar (specific provider or all)
  */
 
 import { NextRequest } from "next/server";
@@ -20,6 +20,11 @@ import { logError, logInfo } from "@/lib/logging";
 import { sendCalendarDisconnectEmail } from "@/lib/email";
 import { getDashboardUrl } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getCalendarIntegrations,
+  disconnectNylasGrant,
+  setPrimaryCalendar,
+} from "@/lib/nylas/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -27,40 +32,50 @@ const VALID_PROVIDERS = ["google", "outlook", "built_in"];
 
 async function handleGet(
   _request: NextRequest,
-  { business, supabase }: BusinessAuthContext
+  { business }: BusinessAuthContext
 ) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: calendarIntegration } = await (supabase as any)
+    const adminClient = createAdminClient() as any;
+
+    // Get ALL calendar integrations for this business
+    const { data: integrations, error } = await adminClient
       .from("calendar_integrations")
       .select("*")
       .eq("business_id", business.id)
+      .not("grant_id", "is", null)
+      .eq("grant_status", "active");
+
+    if (error) {
+      logError("Settings Calendar GET", error);
+    }
+
+    // Also get any built_in record for settings
+    const { data: builtInRecord } = await adminClient
+      .from("calendar_integrations")
+      .select("default_duration_minutes, buffer_minutes, advance_booking_days, require_email")
+      .eq("business_id", business.id)
+      .eq("provider", "built_in")
       .single();
 
-    // Determine if calendar is connected (check both Nylas grant and legacy tokens)
-    const hasNylasGrant = !!calendarIntegration?.grant_id && calendarIntegration.grant_status === "active";
-    const hasLegacyToken = !!calendarIntegration?.access_token;
-    const isConnected =
-      calendarIntegration?.provider &&
-      calendarIntegration.provider !== "built_in" &&
-      (hasNylasGrant || hasLegacyToken);
-
-    // Check if legacy token is expired (Nylas handles its own token refresh)
-    const tokenExpired = !hasNylasGrant &&
-      calendarIntegration?.token_expires_at &&
-      new Date(calendarIntegration.token_expires_at) < new Date();
+    // Format connected calendars
+    const connectedCalendars = (integrations || []).map((cal: any) => ({
+      id: cal.id,
+      provider: cal.provider,
+      email: cal.grant_email,
+      isPrimary: cal.is_primary || false,
+      connectedAt: cal.created_at,
+    }));
 
     return success({
-      ...(calendarIntegration || {
-        provider: "built_in",
-        connected: false,
-        default_duration_minutes: 60,
-        buffer_minutes: 0,
-        advance_booking_days: 14,
-        require_email: false,
-      }),
-      connected: isConnected && !tokenExpired,
-      tokenExpired: isConnected && tokenExpired,
+      calendars: connectedCalendars,
+      hasConnectedCalendar: connectedCalendars.length > 0,
+      // Booking settings (from built_in record or defaults)
+      settings: {
+        default_duration_minutes: builtInRecord?.default_duration_minutes || 60,
+        buffer_minutes: builtInRecord?.buffer_minutes || 0,
+        advance_booking_days: builtInRecord?.advance_booking_days || 14,
+        require_email: builtInRecord?.require_email || false,
+      },
     });
   } catch (error) {
     logError("Settings Calendar GET", error);
@@ -70,15 +85,16 @@ async function handleGet(
 
 async function handlePut(
   request: NextRequest,
-  { business, supabase }: BusinessAuthContext
+  { business }: BusinessAuthContext
 ) {
   try {
     const body = await request.json();
     const { defaultDurationMinutes, bufferMinutes, advanceBookingDays, requireEmail } = body;
 
-    // Update calendar settings
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: calendarIntegration, error: updateError } = await (supabase as any)
+    const adminClient = createAdminClient() as any;
+
+    // Update or create built_in record for settings
+    const { data: settings, error: updateError } = await adminClient
       .from("calendar_integrations")
       .upsert(
         {
@@ -90,16 +106,25 @@ async function handlePut(
           require_email: requireEmail ?? false,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "business_id" }
+        { onConflict: "business_id,provider" }
       )
       .select()
       .single();
 
     if (updateError) {
+      logError("Settings Calendar PUT", updateError);
       return errors.internalError("Failed to update calendar settings");
     }
 
-    return success(calendarIntegration);
+    return success({
+      message: "Settings updated",
+      settings: {
+        default_duration_minutes: settings.default_duration_minutes,
+        buffer_minutes: settings.buffer_minutes,
+        advance_booking_days: settings.advance_booking_days,
+        require_email: settings.require_email,
+      },
+    });
   } catch (error) {
     logError("Settings Calendar PUT", error);
     return errors.internalError("Failed to update calendar settings");
@@ -108,11 +133,17 @@ async function handlePut(
 
 async function handlePost(
   request: NextRequest,
-  { business, supabase }: BusinessAuthContext
+  { business }: BusinessAuthContext
 ) {
   try {
     const body = await request.json();
-    const { provider, returnUrl } = body;
+    const { provider, returnUrl, action } = body;
+
+    // Set primary calendar action
+    if (action === "setPrimary" && provider) {
+      await setPrimaryCalendar(business.id, provider);
+      return success({ message: `${provider} set as primary calendar` });
+    }
 
     if (!provider || !VALID_PROVIDERS.includes(provider)) {
       return errors.badRequest("Invalid provider. Must be: google, outlook, or built_in");
@@ -136,30 +167,7 @@ async function handlePost(
       });
     }
 
-    // Switch to built-in calendar
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: calendarIntegration, error: updateError } = await (supabase as any)
-      .from("calendar_integrations")
-      .upsert(
-        {
-          business_id: business.id,
-          provider: "built_in",
-          access_token: null,
-          refresh_token: null,
-          token_expires_at: null,
-          calendar_id: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "business_id" }
-      )
-      .select()
-      .single();
-
-    if (updateError) {
-      return errors.internalError("Failed to update calendar provider");
-    }
-
-    return success(calendarIntegration);
+    return success({ message: "Use initiateUrl for OAuth providers" });
   } catch (error) {
     logError("Settings Calendar POST", error);
     return errors.internalError("Failed to initiate calendar connection");
@@ -167,70 +175,46 @@ async function handlePost(
 }
 
 async function handleDelete(
-  _request: NextRequest,
-  { business, supabase, user }: BusinessAuthContext
+  request: NextRequest,
+  { business, user }: BusinessAuthContext
 ) {
   try {
-    // Get current provider before disconnecting (for email notification)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase RLS type inference
-    const { data: existingIntegration } = await (supabase as any)
-      .from("calendar_integrations")
-      .select("provider")
-      .eq("business_id", business.id)
-      .single();
+    const { searchParams } = new URL(request.url);
+    const provider = searchParams.get("provider"); // Optional: disconnect specific provider
 
-    const previousProvider = existingIntegration?.provider;
+    if (provider) {
+      // Disconnect specific provider
+      await disconnectNylasGrant(business.id, provider);
 
-    // Reset to built-in calendar — clear both legacy tokens and Nylas grant
-    // Use admin client to bypass RLS for Nylas grant columns
-    const adminClient = createAdminClient() as any;
-    const { data: calendarIntegration, error: updateError } = await adminClient
-      .from("calendar_integrations")
-      .upsert(
-        {
-          business_id: business.id,
-          provider: "built_in",
-          access_token: null,
-          refresh_token: null,
-          token_expires_at: null,
-          calendar_id: null,
-          grant_id: null,
-          grant_email: null,
-          grant_provider: null,
-          grant_status: "revoked",
-          nylas_calendar_id: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "business_id" }
-      )
-      .select()
-      .single();
+      logInfo("Calendar DELETE", `Disconnected ${provider} for business ${business.id}`);
 
-    if (updateError) {
-      logError("Calendar DELETE upsert", updateError);
-      return errors.internalError("Failed to disconnect calendar");
-    }
+      // Send email notification
+      if (provider === "google" || provider === "outlook" || provider === "microsoft") {
+        await sendCalendarDisconnectEmail({
+          to: user.email || "",
+          businessName: business.name,
+          provider: provider === "microsoft" ? "outlook" : provider,
+          reason: "manual",
+          reconnectUrl: getDashboardUrl("/settings?tab=calendar"),
+        }).catch((emailError) => {
+          logError("Calendar disconnect email", emailError);
+        });
+      }
 
-    logInfo("Calendar DELETE", `Disconnected ${previousProvider} for business ${business.id}`);
+      return success({
+        message: `${provider} calendar disconnected`,
+        provider,
+      });
+    } else {
+      // Disconnect ALL calendars
+      await disconnectNylasGrant(business.id);
 
-    // Send email notification if disconnecting from Google or Outlook
-    if (previousProvider === "google" || previousProvider === "outlook") {
-      await sendCalendarDisconnectEmail({
-        to: user.email || "",
-        businessName: business.name,
-        provider: previousProvider,
-        reason: "manual",
-        reconnectUrl: getDashboardUrl("/settings?tab=calendar"),
-      }).catch((emailError) => {
-        // Log but don't fail the request if email fails
-        logError("Calendar disconnect email", emailError);
+      logInfo("Calendar DELETE", `Disconnected all calendars for business ${business.id}`);
+
+      return success({
+        message: "All calendars disconnected",
       });
     }
-
-    return success({
-      message: "Calendar disconnected",
-      ...calendarIntegration,
-    });
   } catch (error) {
     logError("Settings Calendar DELETE", error);
     return errors.internalError("Failed to disconnect calendar");
