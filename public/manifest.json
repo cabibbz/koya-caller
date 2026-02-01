@@ -1,0 +1,9 @@
+{
+  "name": "Koya Caller",
+  "short_name": "Koya",
+  "description": "AI-powered phone receptionist for small businesses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#3B82F6"
+}
